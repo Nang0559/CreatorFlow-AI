@@ -1,0 +1,137 @@
+@page "/style-profiles"
+@inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
+
+<PageTitle>Phong cách riêng · CreatorFlow</PageTitle>
+<header class="page-header">
+    <div><p class="eyebrow">CREATOR IDENTITY</p><h1>Hồ sơ phong cách riêng</h1>
+        <p class="muted">Tích lũy bằng chứng từ nhiều thử nghiệm. Một video thắng chưa đủ để biến thành quy tắc cố định.</p></div>
+    <button class="primary" @onclick="LoadAsync">Làm mới</button>
+</header>
+@if (!Api.IsConfigured) { <section class="notice"><strong>Chưa kết nối API</strong><p>Cần cấu hình CreatorFlowApi ở server Web.</p></section> }
+@if (!string.IsNullOrWhiteSpace(error)) { <section class="notice"><strong>Thông báo</strong><p>@error</p></section> }
+
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">PROFILE</p><h2>Tạo hồ sơ người sáng tạo</h2></div></div>
+    <div class="trend-form">
+        <label>Profile key<input @bind="profileKey" placeholder="creator-main" /></label>
+        <label>Tên hồ sơ<input @bind="displayName" placeholder="Tên kênh / thương hiệu" /></label>
+        <label>Định vị nội dung<input @bind="positioning" placeholder="Ví dụ: review gia dụng thực tế cho gia đình Việt" /></label>
+    </div>
+    <button class="primary" disabled="@(!Api.IsConfigured || busy)" @onclick="CreateAsync">Tạo hồ sơ</button>
+</section>
+
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">LEARNING EVIDENCE</p><h2>Hồ sơ và bằng chứng phong cách</h2></div><span class="status">@profiles.Count hồ sơ</span></div>
+    <label class="profile-select">Chọn hồ sơ
+        <select value="@selectedProfileId" @onchange="SelectProfileAsync">
+            <option value="">-- Chọn hồ sơ --</option>
+            @foreach (var p in profiles) { <option value="@p.Id">@p.DisplayName · @p.EvidenceCount bằng chứng</option> }
+        </select>
+    </label>
+    @if (selectedProfile is not null)
+    {
+        <div class="profile-summary">
+            <h3>@selectedProfile.DisplayName</h3><p>@selectedProfile.Positioning</p>
+            <label>Style summary<textarea @bind="styleSummary" rows="3" placeholder="Các đặc điểm lặp lại đã được xác nhận qua nhiều thử nghiệm"></textarea></label>
+            <button class="secondary" disabled="@busy" @onclick="SaveGuidanceAsync">Lưu định hướng</button>
+        </div>
+        <div class="learn-row">
+            <label>Thử nghiệm đã đánh giá
+                <select @bind="selectedExperimentId">
+                    <option value="">-- Chọn thử nghiệm --</option>
+                    @foreach (var e in evaluatedExperiments.Where(x => x.WinningVariantId.HasValue))
+                    { <option value="@e.Id">@e.Name · @e.Variants.FirstOrDefault(v => v.Id == e.WinningVariantId)?.Name</option> }
+                </select>
+            </label>
+            <button class="primary" disabled="@busy || string.IsNullOrWhiteSpace(selectedExperimentId)" @onclick="LearnAsync">Học từ phương án thắng</button>
+        </div>
+        <h3>Lịch sử bằng chứng (@selectedProfile.Evidence.Length)</h3>
+        @foreach (var evidence in selectedProfile.Evidence.OrderByDescending(x => x.LearnedAt))
+        {
+            <article class="evidence-card">
+                <div class="panel-heading"><strong>@evidence.ExperimentName · @evidence.VariantName</strong><span class="status">Đã xác nhận</span></div>
+                <p><b>Hook:</b> @evidence.Hook</p><p><b>Cách nói:</b> @evidence.SpeakingStyle</p><p><b>Nhịp dựng:</b> @evidence.EditPacing</p><p><b>Âm thanh:</b> @evidence.AudioApproach</p>
+                <div class="variant-stats"><span>@evidence.Views.ToString("N0") views</span><span>@(evidence.EngagementRate?.ToString("0.00") ?? "—")% tương tác</span><span>@evidence.FollowsGained follows</span><span>@evidence.ProductClicks clicks</span><span>@evidence.Orders orders</span></div>
+            </article>
+        }
+    }
+</section>
+
+@code {
+    private List<CreatorFlow.Web.Services.CreatorStyleProfileItem> profiles = [];
+    private List<CreatorFlow.Web.Services.StyleExperimentItem> evaluatedExperiments = [];
+    private CreatorFlow.Web.Services.CreatorStyleProfileDetail? selectedProfile;
+    private string profileKey = "creator-main", displayName = "", positioning = "", styleSummary = "";
+    private string selectedProfileId = "", selectedExperimentId = "", error = "";
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (!Api.IsConfigured) return;
+        try
+        {
+            error = "";
+            profiles = await Api.GetAsync<List<CreatorFlow.Web.Services.CreatorStyleProfileItem>>("/api/v1/style-profiles?take=100") ?? [];
+            evaluatedExperiments = await Api.GetAsync<List<CreatorFlow.Web.Services.StyleExperimentItem>>("/api/v1/style-experiments?status=Evaluated&take=100") ?? [];
+            if (string.IsNullOrWhiteSpace(selectedProfileId) && profiles.Count > 0) selectedProfileId = profiles[0].Id.ToString();
+            if (!string.IsNullOrWhiteSpace(selectedProfileId)) await LoadSelectedAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task SelectProfileAsync(ChangeEventArgs args)
+    {
+        selectedProfileId = args.Value?.ToString() ?? "";
+        await LoadSelectedAsync();
+    }
+
+    private async Task LoadSelectedAsync()
+    {
+        selectedProfile = await Api.GetAsync<CreatorFlow.Web.Services.CreatorStyleProfileDetail>($"/api/v1/style-profiles/{selectedProfileId}");
+        styleSummary = selectedProfile?.StyleSummary ?? "";
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            busy = true; error = "";
+            var created = await Api.PostAsync<object, CreatorFlow.Web.Services.CreatorStyleProfileItem>(
+                "/api/v1/style-profiles", new { profileKey, displayName, positioning });
+            if (created is not null) selectedProfileId = created.Id.ToString();
+            await LoadAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task SaveGuidanceAsync()
+    {
+        if (selectedProfile is null) return;
+        try
+        {
+            busy = true;
+            await Api.PutNoContentAsync($"/api/v1/style-profiles/{selectedProfile.Id}/guidance",
+                new { displayName = selectedProfile.DisplayName, positioning = selectedProfile.Positioning, styleSummary });
+            await LoadAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task LearnAsync()
+    {
+        if (selectedProfile is null || !Guid.TryParse(selectedExperimentId, out var experimentId)) return;
+        try
+        {
+            busy = true; error = "";
+            await Api.PostAsync<object, object>($"/api/v1/style-profiles/{selectedProfile.Id}/learn/{experimentId}", new { });
+            selectedExperimentId = "";
+            await LoadAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}
