@@ -20,8 +20,9 @@ app.UseExceptionHandler();
 app.MapHealthChecks("/health");
 app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.2.0" }));
 
-app.MapGet("/api/v1/content-projects", async (int? skip, int? take, ListContentProjectsHandler? handler, CancellationToken cancellationToken) =>
+app.MapGet("/api/v1/content-projects", async (int? skip, int? take, HttpContext context, CancellationToken cancellationToken) =>
 {
+    var handler = context.RequestServices.GetService<ListContentProjectsHandler>();
     if (handler is null)
         return Results.Problem("SQL Server is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
     var page = Math.Max(0, skip ?? 0);
@@ -32,8 +33,9 @@ app.MapGet("/api/v1/content-projects", async (int? skip, int? take, ListContentP
     return Results.Ok(items);
 });
 
-app.MapPost("/api/v1/content-projects", async (CreateContentProjectRequest request, CreateContentProjectHandler? handler, CancellationToken cancellationToken) =>
+app.MapPost("/api/v1/content-projects", async (CreateContentProjectRequest request, HttpContext context, CancellationToken cancellationToken) =>
 {
+    var handler = context.RequestServices.GetService<CreateContentProjectHandler>();
     if (handler is null)
         return Results.Problem("SQL Server is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
     if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 200)
