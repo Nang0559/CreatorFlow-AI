@@ -24,7 +24,7 @@ All `/api/v1/*` endpoints require the `X-CreatorFlow-Api-Key` header. Configure 
 ## Douyin video candidates
 
 - `GET /api/v1/douyin/videos?status=Candidate&discoveryMethod=TopicExplore`
-- `POST /api/v1/douyin/videos` with Douyin video ID, HTTPS source URL, optional source channel and `discoveryMethod` (`FollowedChannel`, `TopicExplore`, `Manual`).
+- `POST /api/v1/douyin/videos` with Douyin video ID, HTTPS source URL, optional `sourceChannelId`, optional `contentTopicId` and `discoveryMethod` (`FollowedChannel`, `TopicExplore`, `Manual`).
 - `POST /api/v1/douyin/videos/{id}/select`
 - `POST /api/v1/douyin/videos/{id}/reject`
 - `POST /api/v1/douyin/videos/{id}/queue`
