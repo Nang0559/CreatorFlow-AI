@@ -1,6 +1,7 @@
 using CreatorFlow.Api.Security;
 using CreatorFlow.Application.Content;
-using CreatorFlow.Domain.Discovery;\nusing CreatorFlow.Domain.Content;
+using CreatorFlow.Domain.Discovery;
+using CreatorFlow.Domain.Content;
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
