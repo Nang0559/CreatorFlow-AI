@@ -38,7 +38,8 @@
         <section class="evidence-card">
             <div class="panel-heading">
                 <div><h3>AI Style Learning</h3><p class="muted">Phân tích các phương án thắng và thua qua nhiều thử nghiệm, tách riêng theo chủ đề.</p></div>
-                <button class="primary" disabled="@busy" @onclick="AnalyzeStyleAsync">Phân tích dữ liệu</button>\n                <button class="secondary" disabled="@busy || selectedProfile.Evidence.Length < 2" @onclick="SynthesizeWithAiAsync">LLM tự tổng hợp phong cách</button>
+                <button class="primary" disabled="@busy" @onclick="AnalyzeStyleAsync">Phân tích dữ liệu</button>
+                <button class="secondary" disabled="@busy || selectedProfile.Evidence.Length < 2" @onclick="SynthesizeWithAiAsync">LLM tự tổng hợp phong cách</button>
             </div>
             @if (learningAnalysis is not null)
             {
@@ -104,7 +105,8 @@
     private List<CreatorFlow.Web.Services.CreatorStyleProfileItem> profiles = [];
     private List<CreatorFlow.Web.Services.StyleExperimentItem> evaluatedExperiments = [];
     private CreatorFlow.Web.Services.CreatorStyleProfileDetail? selectedProfile;
-    private CreatorFlow.Web.Services.StyleLearningAnalysisItem? learningAnalysis;\n    private CreatorFlow.Web.Services.AiLearningSynthesisResponse? aiSynthesis;
+    private CreatorFlow.Web.Services.StyleLearningAnalysisItem? learningAnalysis;
+    private CreatorFlow.Web.Services.AiLearningSynthesisResponse? aiSynthesis;
     private string profileKey = "creator-main", displayName = "", positioning = "", styleSummary = "";
     private string selectedProfileId = "", selectedExperimentId = "", error = "";
     private bool busy;
