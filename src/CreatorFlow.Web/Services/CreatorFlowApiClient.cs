@@ -77,3 +77,16 @@ public sealed record StyleVariantItem(Guid Id, string Name, string Hook, string 
     string AudioApproach, string Script, string Status, long Views, long Likes, long Comments, long Shares,
     long Saves, long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds,
     decimal? VideoDurationSeconds, decimal? EngagementRate, DateTimeOffset? PublishedAt, DateTimeOffset? MeasuredAt);
+
+
+public sealed record AiAnalyzeRequest(string Text, string Language = "vi", string? Topic = null,
+    string? CreatorPositioning = null);
+public sealed record AiAnalyzeResponse(string Language, string Summary, string[] Topics, string AudienceIntent,
+    string[] StoryMechanisms, string[] HookPatterns, string[] LocalizationOpportunities,
+    string[] ElementsToAvoidCopying, bool RequiresHumanReview);
+public sealed record AiGenerateVariantsRequest(string SourceAnalysis, string Topic, string CreatorPositioning,
+    string StyleSummary = "", string? ProductContext = null, int VariantCount = 3, int TargetDurationSeconds = 45);
+public sealed record AiGeneratedVariant(string Name, string CreativeAngle, string Hook, string SpeakingStyle,
+    string EditPacing, string AudioApproach, string Script, string[] ShotPlan, string CallToAction);
+public sealed record AiGenerateVariantsResponse(string Topic, string Language, AiGeneratedVariant[] Variants,
+    string[] DifferentiationNotes, bool RequiresHumanReview);
