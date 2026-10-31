@@ -42,6 +42,7 @@
     {
         <article class="experiment-item">
             <div class="panel-heading"><div><h3>@experiment.Name</h3><p class="muted">@experiment.Hypothesis</p></div><span class="status">@experiment.Status</span></div>
+            @if (experiment.Status == "Draft") { <button class="secondary" disabled="@busy" @onclick="() => StartAsync(experiment.Id)">Bắt đầu thử nghiệm</button> }
             <div class="variant-grid">
                 @foreach (var variant in experiment.Variants)
                 {
@@ -49,9 +50,38 @@
                         <strong>@variant.Name</strong><span class="status">@variant.Status</span>
                         <p><b>Hook:</b> @variant.Hook</p><p><b>Cách nói:</b> @variant.SpeakingStyle</p><p><b>Nhịp dựng:</b> @variant.EditPacing</p><p><b>Âm thanh:</b> @variant.AudioApproach</p>
                         <div class="variant-stats"><span>@variant.Views.ToString("N0") views</span><span>@(variant.EngagementRate?.ToString("0.00") ?? "—")% tương tác</span><span>@variant.FollowsGained follows</span><span>@variant.Orders orders</span></div>
+                        @if (variant.Status == "Draft") { <button class="secondary" disabled="@busy" @onclick="() => MarkReadyAsync(experiment.Id, variant.Id)">Đánh dấu sẵn sàng</button> }
+                        @if (variant.Status == "Ready") { <button class="secondary" disabled="@busy" @onclick="() => MarkPublishedAsync(experiment.Id, variant.Id)">Đã đăng video này</button> }
+                        @if (variant.Status == "Published")
+                        {
+                            <div class="metrics-editor">
+                                <label>Views<input type="number" min="0" @bind="GetMetrics(variant.Id).Views" /></label>
+                                <label>Likes<input type="number" min="0" @bind="GetMetrics(variant.Id).Likes" /></label>
+                                <label>Comments<input type="number" min="0" @bind="GetMetrics(variant.Id).Comments" /></label>
+                                <label>Shares<input type="number" min="0" @bind="GetMetrics(variant.Id).Shares" /></label>
+                                <label>Saves<input type="number" min="0" @bind="GetMetrics(variant.Id).Saves" /></label>
+                                <label>Follows<input type="number" min="0" @bind="GetMetrics(variant.Id).FollowsGained" /></label>
+                                <label>Product clicks<input type="number" min="0" @bind="GetMetrics(variant.Id).ProductClicks" /></label>
+                                <label>Orders<input type="number" min="0" @bind="GetMetrics(variant.Id).Orders" /></label>
+                                <label>Avg watch (s)<input type="number" min="0" step="0.1" @bind="GetMetrics(variant.Id).AverageWatchSeconds" /></label>
+                                <label>Duration (s)<input type="number" min="0" step="0.1" @bind="GetMetrics(variant.Id).VideoDurationSeconds" /></label>
+                            </div>
+                            <button class="secondary" disabled="@busy" @onclick="() => MeasureAsync(experiment.Id, variant.Id)">Lưu số liệu</button>
+                        }
                     </div>
                 }
             </div>
+            @if (experiment.Status == "Running" && experiment.Variants.All(x => x.Status == "Measured"))
+            {
+                <div class="learn-row">
+                    <label>Chọn phương án thắng
+                        <select @bind="winnerSelections[experiment.Id]">
+                            @foreach (var v in experiment.Variants) { <option value="@v.Id">@v.Name</option> }
+                        </select>
+                    </label>
+                    <button class="primary" disabled="@busy" @onclick="() => EvaluateAsync(experiment.Id)">Đánh giá thử nghiệm</button>
+                </div>
+            }
             @if (experiment.WinningVariantId.HasValue) { <p class="winner">Phương án thắng: @experiment.Variants.FirstOrDefault(x => x.Id == experiment.WinningVariantId)?.Name</p> }
         </article>
     }
@@ -67,14 +97,63 @@
     private int variantCount = 2;
     private bool busy;
     private string error = "";
+    private Dictionary<Guid, MetricsInput> metricInputs = [];
+    private Dictionary<Guid, string> winnerSelections = [];
+
+    private MetricsInput GetMetrics(Guid id)
+    {
+        if (!metricInputs.TryGetValue(id, out var value)) metricInputs[id] = value = new MetricsInput();
+        return value;
+    }
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
         if (!Api.IsConfigured) return;
-        try { error = ""; experiments = await Api.GetAsync<List<CreatorFlow.Web.Services.StyleExperimentItem>>("/api/v1/style-experiments?take=100") ?? []; }
+        try
+        {
+            error = "";
+            experiments = await Api.GetAsync<List<CreatorFlow.Web.Services.StyleExperimentItem>>("/api/v1/style-experiments?take=100") ?? [];
+            foreach (var e in experiments)
+            {
+                if (!winnerSelections.ContainsKey(e.Id) && e.Variants.Length > 0) winnerSelections[e.Id] = e.Variants[0].Id.ToString();
+                foreach (var v in e.Variants) GetMetrics(v.Id);
+            }
+        }
         catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task StartAsync(Guid id) => await RunActionAsync($"/api/v1/style-experiments/{id}/start");
+    private async Task MarkReadyAsync(Guid id, Guid variantId) => await RunActionAsync($"/api/v1/style-experiments/{id}/variants/{variantId}/ready");
+    private async Task MarkPublishedAsync(Guid id, Guid variantId) => await RunActionAsync($"/api/v1/style-experiments/{id}/variants/{variantId}/publish");
+
+    private async Task MeasureAsync(Guid id, Guid variantId)
+    {
+        var m = GetMetrics(variantId);
+        await RunActionAsync($"/api/v1/style-experiments/{id}/variants/{variantId}/measure",
+            new { views = m.Views, likes = m.Likes, comments = m.Comments, shares = m.Shares, saves = m.Saves,
+                followsGained = m.FollowsGained, productClicks = m.ProductClicks, orders = m.Orders,
+                averageWatchSeconds = m.AverageWatchSeconds, videoDurationSeconds = m.VideoDurationSeconds });
+    }
+
+    private async Task EvaluateAsync(Guid id)
+    {
+        if (Guid.TryParse(winnerSelections.GetValueOrDefault(id), out var winner))
+            await RunActionAsync($"/api/v1/style-experiments/{id}/evaluate", new { winningVariantId = winner });
+    }
+
+    private async Task RunActionAsync(string path, object? payload = null)
+    {
+        try
+        {
+            busy = true; error = "";
+            if (payload is null) await Api.PostNoContentAsync(path, new { });
+            else await Api.PostNoContentAsync(path, payload);
+            await LoadAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
     }
 
     private async Task CreateAsync()
@@ -95,6 +174,20 @@
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
+    }
+
+    private sealed class MetricsInput
+    {
+        public long Views { get; set; }
+        public long Likes { get; set; }
+        public long Comments { get; set; }
+        public long Shares { get; set; }
+        public long Saves { get; set; }
+        public long FollowsGained { get; set; }
+        public long ProductClicks { get; set; }
+        public long Orders { get; set; }
+        public decimal? AverageWatchSeconds { get; set; }
+        public decimal? VideoDurationSeconds { get; set; }
     }
 
     private sealed class VariantInput
