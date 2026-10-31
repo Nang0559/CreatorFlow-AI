@@ -8,13 +8,41 @@ builder.Services.AddHealthChecks();
 
 var connectionString = builder.Configuration.GetConnectionString("CreatorFlow");
 if (!string.IsNullOrWhiteSpace(connectionString))
+{
     builder.Services.AddDbContext<CreatorFlowDbContext>(options => options.UseSqlServer(connectionString));
+    builder.Services.AddScoped<IContentProjectRepository, EfContentProjectRepository>();
+    builder.Services.AddScoped<CreateContentProjectHandler>();
+    builder.Services.AddScoped<ListContentProjectsHandler>();
+}
 
 var app = builder.Build();
 app.UseExceptionHandler();
 app.MapHealthChecks("/health");
-app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.1.0" }));
-app.MapGet("/api/v1/content-projects", () => Results.Ok(Array.Empty<ContentProjectDto>()));
+app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.2.0" }));
+
+app.MapGet("/api/v1/content-projects", async (int? skip, int? take, ListContentProjectsHandler? handler, CancellationToken cancellationToken) =>
+{
+    if (handler is null)
+        return Results.Problem("SQL Server is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+    var page = Math.Max(0, skip ?? 0);
+    var size = take ?? 20;
+    if (size is < 1 or > 100)
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["take"] = ["The page size must be between 1 and 100."] });
+    var items = await handler.HandleAsync(page, size, cancellationToken);
+    return Results.Ok(items);
+});
+
+app.MapPost("/api/v1/content-projects", async (CreateContentProjectRequest request, CreateContentProjectHandler? handler, CancellationToken cancellationToken) =>
+{
+    if (handler is null)
+        return Results.Problem("SQL Server is not configured.", statusCode: StatusCodes.Status503ServiceUnavailable);
+    if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 200)
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["title"] = ["Title is required and must be at most 200 characters."] });
+    var created = await handler.HandleAsync(new CreateContentProjectCommand(request.Title), cancellationToken);
+    return Results.Created($"/api/v1/content-projects/{created.Id}", created);
+});
+
 app.Run();
 
+public sealed record CreateContentProjectRequest(string Title);
 public partial class Program;
