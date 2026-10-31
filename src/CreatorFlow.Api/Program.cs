@@ -296,7 +296,7 @@ styleLab.MapGet("/", async (string? status, int? skip, int? take, CreatorFlowDbC
     var size = take ?? 50;
     if (size is < 1 or > 100) return Results.ValidationProblem(new Dictionary<string, string[]> { ["take"] = ["Must be between 1 and 100."] });
     var items = await query.OrderByDescending(x => x.UpdatedAt).Skip(page).Take(size)
-        .Select(x => new StyleExperimentResponse(x.Id, x.ContentProjectId, x.Name, x.Hypothesis, x.Status.ToString(),
+        .Select(x => new StyleExperimentResponse(x.Id, x.ContentProjectId, x.Name, x.Hypothesis, x.Topic, x.Status.ToString(),
             x.WinningVariantId, x.Variants.OrderBy(v => v.Name).Select(v => new StyleVariantResponse(v.Id,
                 v.Name, v.Hook, v.SpeakingStyle, v.EditPacing, v.AudioApproach, v.Script, v.Status.ToString(),
                 v.Views, v.Likes, v.Comments, v.Shares, v.Saves, v.FollowsGained, v.ProductClicks, v.Orders,
@@ -313,7 +313,7 @@ styleLab.MapPost("/", async (CreateStyleExperimentRequest request, CreatorFlowDb
     {
         var experiment = StyleExperiment.Create(request.Name, request.Hypothesis,
             request.Variants.Select(x => new StyleVariantDraft(x.Name, x.Hook, x.SpeakingStyle,
-                x.EditPacing, x.AudioApproach, x.Script, x.CreativeNotes)), DateTimeOffset.UtcNow, request.ContentProjectId);
+                x.EditPacing, x.AudioApproach, x.Script, x.CreativeNotes)), DateTimeOffset.UtcNow, request.ContentProjectId, request.Topic);
         db.StyleExperiments.Add(experiment);
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/style-experiments/{experiment.Id}", new { experiment.Id, experiment.Name, status = experiment.Status.ToString(), variantCount = experiment.Variants.Count });
@@ -336,6 +336,19 @@ styleLab.MapPost("/{id:guid}/evaluate", async (Guid id, EvaluateStyleExperimentR
 
 // Creator style profiles accumulate confirmed winning patterns as traceable evidence.
 var styleProfiles = app.MapGroup("/api/v1/style-profiles").RequireAuthorization();
+styleProfiles.MapGet("/{id:guid}/learning-analysis", async (Guid id, string? topic, long? minimumViewsPerVariant, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (!await db.CreatorStyleProfiles.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+    var minimumViews = minimumViewsPerVariant ?? 100;
+    if (minimumViews < 0 || minimumViews > 1000000000)
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["minimumViewsPerVariant"] = ["Must be between 0 and 1,000,000,000."] });
+    if (topic?.Trim().Length > 200)
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["topic"] = ["Topic cannot exceed 200 characters."] });
+    var experiments = await db.StyleExperiments.AsNoTracking().Include(x => x.Variants)
+        .Where(x => x.Status == StyleExperimentStatus.Evaluated).ToArrayAsync(ct);
+    return Results.Ok(StyleLearningEngine.Analyze(experiments, topic, minimumViews));
+});
 styleProfiles.MapGet("/", async (int? skip, int? take, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
@@ -465,12 +478,12 @@ public sealed record VietnamTrendResponse(Guid Id, string Kind, string Platform,
     long Views, long Likes, long Comments, long Shares, long Saves, DateTimeOffset? PublishedAt, DateTimeOffset ObservedAt);
 public sealed record CreateStyleVariantRequest(string Name, string Hook, string SpeakingStyle, string EditPacing,
     string AudioApproach, string Script, string? CreativeNotes);
-public sealed record CreateStyleExperimentRequest(string Name, string Hypothesis, Guid? ContentProjectId, List<CreateStyleVariantRequest> Variants);
+public sealed record CreateStyleExperimentRequest(string Name, string Hypothesis, Guid? ContentProjectId, List<CreateStyleVariantRequest> Variants, string? Topic = null);
 public sealed record RecordStyleVariantMetricsRequest(long Views, long Likes, long Comments, long Shares, long Saves,
     long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds, decimal? VideoDurationSeconds);
 public sealed record EvaluateStyleExperimentRequest(Guid WinningVariantId);
 public sealed record StyleExperimentResponse(Guid Id, Guid? ContentProjectId, string Name, string Hypothesis,
-    string Status, Guid? WinningVariantId, StyleVariantResponse[] Variants);
+    string? Topic, string Status, Guid? WinningVariantId, StyleVariantResponse[] Variants);
 public sealed record StyleVariantResponse(Guid Id, string Name, string Hook, string SpeakingStyle, string EditPacing,
     string AudioApproach, string Script, string Status, long Views, long Likes, long Comments, long Shares, long Saves,
     long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds, decimal? VideoDurationSeconds,
