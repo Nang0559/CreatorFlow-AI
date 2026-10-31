@@ -14,7 +14,7 @@ The service does not claim video understanding from pixels/audio. The current an
 ## 2. Runtime topology
 
 ```text
-Creator Web / .NET API (server-side caller; integration pending)
+Creator Web -> authenticated .NET API proxy (implemented; Blazor controls pending)
                  |
                  | X-CreatorFlow-AI-Key
                  v
@@ -26,7 +26,7 @@ Creator Web / .NET API (server-side caller; integration pending)
        Configured LLM provider and model
 ```
 
-The AI service is not exposed directly to browser code. The service-to-service credential and provider key remain server-side.
+The AI service is not exposed directly to browser code. The .NET API forwards authenticated requests using a separate service credential; both the service-to-service credential and provider key remain server-side.
 
 ## 3. Configuration
 
@@ -74,7 +74,7 @@ The fake adapter is test-only. Production requests instantiate the real OpenAI-c
 - No trained ML model, feature store, model registry, model artifact persistence, retraining schedule, drift detection or champion/challenger rollout.
 - No prompt registry/version persistence or provider cost/latency telemetry.
 - No SQL persistence of AI analysis, generated scripts or learning proposals.
-- No .NET API/Web orchestration or creator-facing AI generation workflow.
+- The .NET API proxy is implemented, but no Blazor UI orchestration, SQL persistence or creator-facing approval workflow is wired yet.
 - No source-video ingestion, STT, visual scene understanding, audio/music analysis, translation alignment, TTS or FFmpeg rendering.
 - No Douyin/TikTok live connector, automatic publishing or metric synchronization.
 
