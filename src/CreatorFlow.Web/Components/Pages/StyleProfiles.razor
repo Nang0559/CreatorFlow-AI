@@ -78,6 +78,20 @@
                 <p class="muted">Đây chỉ là bản nháp. Hồ sơ chưa thay đổi cho đến khi bạn kiểm tra và bấm “Lưu định hướng”.</p>
                 <details><summary>Phương pháp và giới hạn</summary><p class="muted">@learningAnalysis.Methodology</p></details>
             }
+            @if (aiSynthesis is not null)
+            {
+                <div class="notice">
+                    <strong>Đề xuất học phong cách từ LLM</strong>
+                    <p>@aiSynthesis.ProposedStyleSummary</p>
+                    <p><b>Điểm mạnh lặp lại:</b> @string.Join(" · ", aiSynthesis.RecurringStrengths)</p>
+                    <p><b>Bằng chứng mâu thuẫn:</b> @string.Join(" · ", aiSynthesis.ConflictingEvidence)</p>
+                    <p><b>Độ chưa chắc chắn:</b> @aiSynthesis.Uncertainty</p>
+                    <h4>Thử nghiệm tiếp theo AI đề xuất</h4>
+                    @foreach (var idea in aiSynthesis.NextExperiments) { <p>• @idea</p> }
+                    <p class="muted">Dựa trên @aiSynthesis.CitedExperimentIds.Length thử nghiệm: @string.Join(", ", aiSynthesis.CitedExperimentIds). Đây là bản nháp, không tự động ghi đè hồ sơ.</p>
+                    <button class="secondary" disabled="@busy" @onclick="UseAiSummary">Đưa đề xuất AI vào bản nháp</button>
+                </div>
+            }
         </section>
         <div class="learn-row">
             <label>Thử nghiệm đã đánh giá
