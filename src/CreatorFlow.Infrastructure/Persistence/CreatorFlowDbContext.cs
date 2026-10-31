@@ -1,5 +1,6 @@
 using CreatorFlow.Domain.Content;
-using CreatorFlow.Domain.Discovery;\nusing CreatorFlow.Domain.Content;
+using CreatorFlow.Domain.Discovery;
+using CreatorFlow.Domain.Content;
 using Microsoft.EntityFrameworkCore;
 
 namespace CreatorFlow.Infrastructure.Persistence;
