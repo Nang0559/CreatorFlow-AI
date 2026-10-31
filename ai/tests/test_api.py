@@ -56,11 +56,11 @@ def test_analyze_calls_llm_and_requires_review(monkeypatch) -> None:
     })
     app.dependency_overrides[get_llm_client] = lambda: fake
     try:
-        response = client.post("/v1/analyze", headers=headers, json={"text": "Reference transcript"})
+        response = client.post("/v1/analyze", headers=headers, json={"text": "Reference transcript", "topic": "đồ gia dụng", "creatorPositioning": "reviewer thực tế"})
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 200
-    assert response.json()["requires_human_review"] is True
+    assert response.json()["requiresHumanReview"] is True
     assert len(fake.calls) == 1
 
 
@@ -79,8 +79,8 @@ def test_variant_generation_enforces_requested_count(monkeypatch) -> None:
     app.dependency_overrides[get_llm_client] = lambda: fake
     try:
         response = client.post("/v1/style-lab/generate-variants", headers=headers, json={
-            "source_analysis": "Audience wants a faster routine", "topic": "đồ gia dụng",
-            "creator_positioning": "Người dùng thử sản phẩm thực tế", "variant_count": 3,
+            "sourceAnalysis": "Audience wants a faster routine", "topic": "đồ gia dụng",
+            "creatorPositioning": "Người dùng thử sản phẩm thực tế", "variantCount": 3,
         })
     finally:
         app.dependency_overrides.clear()
@@ -95,8 +95,8 @@ def test_variant_generation_rejects_wrong_count(monkeypatch) -> None:
     app.dependency_overrides[get_llm_client] = lambda: fake
     try:
         response = client.post("/v1/style-lab/generate-variants", headers=headers, json={
-            "source_analysis": "analysis", "topic": "test", "creator_positioning": "creator",
-            "variant_count": 2,
+            "sourceAnalysis": "analysis", "topic": "test", "creatorPositioning": "creator",
+            "variantCount": 2,
         })
     finally:
         app.dependency_overrides.clear()
