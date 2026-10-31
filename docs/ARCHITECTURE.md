@@ -23,3 +23,14 @@ Idea or permitted source -> rights/provenance check -> trend/context analysis ->
 - Add outbox/inbox patterns with durable queue integration.
 
 The bootstrap does not claim queue, authentication, storage, actual model calls, or publishing are implemented.
+
+
+## As-built design reference
+
+The detailed current-state design is maintained under [docs/design](design/README.md):
+- [System overview](design/SYSTEM_OVERVIEW.md)
+- [Data model](design/DATA_MODEL.md)
+- [Style Lab and Style Learning](design/STYLE_LAB_AND_LEARNING.md)
+- [As-built status and gaps](design/AS_BUILT_STATUS.md)
+
+Important implementation boundary: the Style Learning API currently analyzes the evaluated experiment pool after checking that the requested profile exists. It does not yet scope evidence to that profile/account. The result is advisory and read-only; persisted proposal approval and immutable profile versions are not implemented.
