@@ -16,7 +16,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 | Manual metrics and winner confirmation | Metrics API and evaluation endpoint | Implemented |
 | Creator style profile | Profile API, UI, domain and SQL | Implemented |
 | Winner evidence import | Learn endpoint, evidence snapshot and unique profile/experiment index | Implemented with duplicate protection |
-| Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; not ML |\n| LLM runtime | OpenAI-compatible provider adapter, structured contracts, authenticated FastAPI endpoints and mock-provider tests | Implemented service capability; provider credentials and app integration required |
+| Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; not ML |\n| LLM runtime | OpenAI-compatible provider adapter, structured contracts, authenticated FastAPI endpoints, tests and authenticated .NET API proxy | Implemented service/API capability; provider credentials required; Blazor integration pending |
 | Human edit before guidance save | Draft-to-editor workflow | Manual review; no persisted approval/version |
 
 ## Not implemented / do not represent as complete
@@ -33,7 +33,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Multi-user identity, role/tenant model, per-profile ownership and audit actor.
 - Persisted style proposal approval/rejection and profile version history.
 - Profile-scoped style learning; current analysis reads the global evaluated experiment pool.
-- Trained ML prediction, durable model registry/retraining and KPI/retention-aware optimization.\n- LLM invocation from the Blazor/API workflow, prompt registry, persisted AI outputs and approval/version workflow.
+- Trained ML prediction, durable model registry/retraining and KPI/retention-aware optimization.\n- Blazor invocation of AI proxy routes, prompt registry, persisted AI outputs and approval/version workflow.
 - Production evaluation datasets and end-to-end connector tests.
 
 ## Acceptance gates before production
