@@ -58,3 +58,18 @@ Create an experiment linked optionally to a content project with exactly 2 or 3 
 - `POST /api/v1/style-experiments/{id}/evaluate` with `winningVariantId`.
 
 An experiment cannot start until every variant is ready, and cannot be evaluated until every variant has been published and measured. Engagement rate is descriptive; the creator explicitly selects the winner after considering the stated hypothesis and the wider performance evidence.
+
+
+## Creator style profiles
+
+A profile is keyed by a stable creator/account key and keeps creator positioning, editable style guidance and evidence from evaluated experiments.
+
+- `GET /api/v1/style-profiles?skip=0&take=50`
+- `POST /api/v1/style-profiles` with `profileKey`, `displayName` and optional `positioning`.
+- `GET /api/v1/style-profiles/{id}` returns guidance and its evidence history.
+- `PUT /api/v1/style-profiles/{id}/guidance` updates `displayName`, `positioning` and `styleSummary`.
+- `POST /api/v1/style-profiles/{id}/learn/{experimentId}` imports the confirmed winning variant from an evaluated experiment.
+
+Learning is deliberately explicit and idempotent per profile/experiment: only an evaluated experiment with a measured winning variant can be added, and the same experiment cannot be added twice to one profile. Each evidence row snapshots the winning hook, speaking style, edit pacing, audio approach and measured performance. The profile's written style summary remains creator-editable; evidence is not automatically promoted into permanent rules after one win. A later AI synthesis step should identify recurring traits across multiple experiments and propose changes for creator approval.
+
+`ProfileKey` is an application-level owner key, not an authentication identity. The current API-key authentication is a bootstrap service credential; multi-user authorization and ownership isolation must be implemented before exposing multiple creators' profiles in a shared deployment.
