@@ -84,3 +84,10 @@ Returns a read-only analysis of evaluated experiments, including repeated winnin
 New style experiments may include an optional `topic` string (maximum 200 characters). Historical experiments retain a NULL topic until explicitly classified; no topic is inferred from their names.
 
 The endpoint is advisory only. It does not mutate `CreatorStyleProfiles.StyleSummary` or create an approval decision.
+
+
+### Style Learning implementation notes
+
+New Style Lab create requests may include an optional `topic` (maximum 200 characters). The Style Profiles UI can request the read-only learning preview and place its suggested summary into the editable Style Summary draft; the creator must review and save it.
+
+The current learning-analysis endpoint checks that the supplied profile ID exists but analyzes the global evaluated experiment pool. It does not yet scope analysis to evidence imported into that profile or enforce tenant ownership. Do not use this route as a multi-creator data isolation boundary. The analysis is deterministic and descriptive, not an LLM verdict; see [design/STYLE_LAB_AND_LEARNING.md](design/STYLE_LAB_AND_LEARNING.md).
