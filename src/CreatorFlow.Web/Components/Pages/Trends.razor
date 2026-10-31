@@ -1,0 +1,83 @@
+@page "/trends"
+@inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
+
+<PageTitle>Xu hướng Việt Nam · CreatorFlow</PageTitle>
+<header class="page-header">
+    <div><p class="eyebrow">VIETNAM TREND INTELLIGENCE</p><h1>Xu hướng Việt Nam</h1>
+        <p class="muted">Theo dõi kênh, video và âm thanh; lưu lịch sử chỉ số để nhận biết xu hướng tăng tốc.</p></div>
+    <button class="primary" @onclick="LoadAsync">Làm mới</button>
+</header>
+
+@if (!Api.IsConfigured)
+{
+    <section class="notice"><strong>Chưa kết nối API</strong><p>Cấu hình CreatorFlowApi:BaseUrl và CreatorFlowApi:ApiKey ở server Web. API key không được gửi xuống trình duyệt.</p></section>
+}
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <section class="notice"><strong>Có lỗi khi tải dữ liệu</strong><p>@error</p></section>
+}
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">OBSERVATIONS</p><h2>Ghi nhận xu hướng mới</h2></div></div>
+    <div class="trend-form">
+        <label>Loại<select @bind="kind"><option>Video</option><option>CreatorChannel</option><option>Sound</option></select></label>
+        <label>Nền tảng<select @bind="platform"><option>TikTokVietnam</option><option>YouTubeShortsVietnam</option><option>FacebookReelsVietnam</option><option>Other</option></select></label>
+        <label>Mã nguồn<input @bind="externalId" placeholder="Video ID / creator ID / sound ID" /></label>
+        <label>Tiêu đề<input @bind="title" placeholder="Tên video, kênh hoặc âm thanh" /></label>
+        <label>Người sáng tạo<input @bind="creator" /></label>
+        <label>URL HTTPS<input @bind="sourceUrl" placeholder="https://..." /></label>
+        <label>Chủ đề<input @bind="topic" placeholder="Ví dụ: gia dụng, làm đẹp" /></label>
+        <label>Tên nhạc<input @bind="soundName" /></label>
+        <label>Lượt xem<input type="number" min="0" @bind="views" /></label>
+        <label>Lượt thích<input type="number" min="0" @bind="likes" /></label>
+        <label>Bình luận<input type="number" min="0" @bind="comments" /></label>
+        <label>Chia sẻ<input type="number" min="0" @bind="shares" /></label>
+        <label>Lưu video<input type="number" min="0" @bind="saves" /></label>
+    </div>
+    <button class="primary" disabled="@(!Api.IsConfigured || busy)" @onclick="CreateAsync">Lưu quan sát</button>
+</section>
+
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">TREND LIBRARY</p><h2>Dữ liệu đã ghi nhận</h2></div><span class="status">@items.Count mục</span></div>
+    @if (items.Count == 0) { <p class="muted">Chưa có dữ liệu xu hướng. Có thể thêm thủ công hoặc tích hợp connector sau.</p> }
+    @foreach (var item in items)
+    {
+        <article class="trend-item">
+            <div><span class="status">@item.Kind · @item.Platform</span><h3>@item.Title</h3><p class="muted">@item.CreatorName · @item.Topic</p><a href="@item.SourceUrl" target="_blank" rel="noopener noreferrer">Mở nguồn ↗</a></div>
+            <div class="trend-metrics"><strong>@item.Views.ToString("N0")</strong><small>Views</small><strong>@item.Likes.ToString("N0")</strong><small>Likes</small><strong>@item.Shares.ToString("N0")</strong><small>Shares</small><small>Ghi nhận @item.ObservedAt.ToLocalTime().ToString("dd/MM HH:mm")</small></div>
+        </article>
+    }
+</section>
+
+@code {
+    private List<CreatorFlow.Web.Services.VietnamTrendItem> items = [];
+    private string error = "";
+    private bool busy;
+    private string kind = "Video", platform = "TikTokVietnam", externalId = "", title = "", creator = "", sourceUrl = "", topic = "", soundName = "";
+    private long views, likes, comments, shares, saves;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (!Api.IsConfigured) return;
+        try { error = ""; items = await Api.GetAsync<List<CreatorFlow.Web.Services.VietnamTrendItem>>("/api/v1/vietnam-trends?take=100") ?? []; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            busy = true; error = "";
+            var request = new { kind, platform, externalId, title, creatorName = creator, sourceUrl, topic,
+                soundName = string.IsNullOrWhiteSpace(soundName) ? null : soundName, soundArtist = (string?)null,
+                views, likes, comments, shares, saves, publishedAt = (DateTimeOffset?)null };
+            await Api.PostAsync<object, object>("/api/v1/vietnam-trends", request);
+            externalId = title = creator = sourceUrl = topic = soundName = "";
+            views = likes = comments = shares = saves = 0;
+            await LoadAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}
