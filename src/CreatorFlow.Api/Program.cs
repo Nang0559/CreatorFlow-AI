@@ -424,6 +424,55 @@ ai.MapPost("/analyze", async (AiAnalyzeRequest request, CreatorFlowAiClient aiCl
 ai.MapPost("/style-lab/generate-variants", async (AiGenerateVariantsRequest request, CreatorFlowAiClient aiClient, CancellationToken ct) =>
     await aiClient.ForwardAsync("/v1/style-lab/generate-variants", request, ct));
 
+
+styleProfiles.MapPost("/{id:guid}/ai-learning-synthesis", async (Guid id, CreatorFlowDbContext? db,
+    CreatorFlowAiClient aiClient, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var profile = await db.CreatorStyleProfiles.AsNoTracking().Include(x => x.Evidence)
+        .SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (profile is null) return Results.NotFound();
+    if (string.IsNullOrWhiteSpace(profile.Positioning))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["positioning"] = ["Set creator positioning before AI learning synthesis."] });
+
+    var evidenceExperimentIds = profile.Evidence.Select(x => x.StyleExperimentId).Distinct().ToArray();
+    var experiments = await db.StyleExperiments.AsNoTracking().Include(x => x.Variants)
+        .Where(x => evidenceExperimentIds.Contains(x.Id) && x.Status == StyleExperimentStatus.Evaluated)
+        .ToArrayAsync(ct);
+    var evidence = new List<AiLearningEvidence>();
+    foreach (var experiment in experiments)
+    {
+        if (!experiment.WinningVariantId.HasValue) continue;
+        var winner = experiment.Variants.SingleOrDefault(x => x.Id == experiment.WinningVariantId.Value);
+        if (winner is null || winner.Status != StyleVariantStatus.Measured) continue;
+        var losers = experiment.Variants.Where(x => x.Id != winner.Id).ToArray();
+        var winningFactors = new[]
+        {
+            $"hook:{winner.Hook}", $"speaking:{winner.SpeakingStyle}",
+            $"pacing:{winner.EditPacing}", $"audio:{winner.AudioApproach}"
+        };
+        var losingFactors = losers.SelectMany(x => new[]
+        {
+            $"hook:{x.Hook}", $"speaking:{x.SpeakingStyle}", $"pacing:{x.EditPacing}", $"audio:{x.AudioApproach}"
+        }).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var metrics = new Dictionary<string, double>
+        {
+            ["views"] = winner.Views, ["likes"] = winner.Likes, ["comments"] = winner.Comments,
+            ["shares"] = winner.Shares, ["saves"] = winner.Saves, ["followsGained"] = winner.FollowsGained,
+            ["productClicks"] = winner.ProductClicks, ["orders"] = winner.Orders
+        };
+        if (winner.AverageWatchSeconds.HasValue) metrics["averageWatchSeconds"] = (double)winner.AverageWatchSeconds.Value;
+        if (winner.VideoDurationSeconds.HasValue) metrics["videoDurationSeconds"] = (double)winner.VideoDurationSeconds.Value;
+        evidence.Add(new AiLearningEvidence(experiment.Id.ToString(), experiment.Topic,
+            winner.Id.ToString(), winningFactors, losingFactors, metrics));
+    }
+    if (evidence.Count < 2)
+        return Results.Conflict(new { error = "At least two evaluated experiments must be imported into this profile before AI synthesis." });
+
+    return await aiClient.ForwardAsync("/v1/learning/synthesize",
+        new AiSynthesizeLearningRequest(profile.ProfileKey, profile.Positioning, profile.StyleSummary, evidence), ct);
+});
+
 app.Run();
 
 static async Task<IResult> ChangeVideoStatus(Guid id, CreatorFlowDbContext? db, CancellationToken ct, Action<DouyinVideoCandidate, DateTimeOffset> transition)
@@ -505,3 +554,8 @@ public sealed record ChannelResponse(Guid Id, string DouyinSecUserId, string Dis
 public sealed record CreateVideoCandidateRequest(string DouyinVideoId, Guid? SourceChannelId, Guid? ContentTopicId, string SourceUrl, string? Title, string DiscoveryMethod, DateTimeOffset? PublishedAt);
 public sealed record VideoCandidateResponse(Guid Id, string DouyinVideoId, Guid? SourceChannelId, Guid? ContentTopicId, string SourceUrl, string Title, string DiscoveryMethod, string Status, DateTimeOffset? PublishedAt, DateTimeOffset DiscoveredAt);
 public partial class Program;
+
+public sealed record AiLearningEvidence(string ExperimentId, string? Topic, string WinningVariantId,
+    string[] WinningFactors, string[] LosingFactors, Dictionary<string, double> Metrics);
+public sealed record AiSynthesizeLearningRequest(string ProfileKey, string CreatorPositioning,
+    string CurrentStyleSummary, List<AiLearningEvidence> Evidence);
