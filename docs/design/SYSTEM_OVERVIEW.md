@@ -5,7 +5,7 @@ CreatorFlow uses Douyin (China) for discovery and TikTok Vietnam for distributio
 
 Intended loop: discover → select → analyze → localize → produce → review → publish → measure → learn.
 
-Only the data foundation, metadata-driven discovery intake, Vietnam trend observations, Style Lab, creator style profiles and deterministic style-learning preview are implemented in this repository. External platform automation and media production remain integration work.
+The repository now includes an actual provider-backed LLM runtime for text analysis, 2–3-variant Vietnamese creative generation and evidence-grounded style synthesis. The SQL-backed data foundation, metadata-driven discovery intake, Vietnam trend observations, Style Lab, creator style profiles and deterministic statistical learning preview also exist. Trained ML, persistence/invocation of LLM results from the creator workflow, external platform automation and media production remain integration work.
 
 ## 2. Logical components
 
@@ -15,7 +15,7 @@ Only the data foundation, metadata-driven discovery intake, Vietnam trend observ
 | API | Authenticated /api/v1 application contract | Minimal API endpoints; API-key bootstrap authentication |
 | Domain | Lifecycle invariants and deterministic style analysis | Implemented for projects, discovery, experiments, profiles and evidence |
 | Infrastructure | SQL Server persistence through EF Core | DbContext mappings and SQL scripts exist |
-| AI service | Provider-neutral AI capabilities | Python service foundation exists; Style Learning is not an LLM model |
+| AI service | LLM-backed source analysis, Vietnamese variant generation and evidence-grounded style synthesis | Python FastAPI service calls a configured OpenAI-compatible chat-completions provider; outputs are schema-validated drafts |
 | Discovery connectors | Douyin account/feed/video ingestion | Not implemented; endpoints accept metadata |
 | Vietnam trend connectors | TikTok Vietnam creator/video/sound ingestion | Not implemented; observations are manual or connector-supplied |
 | Media engine | Download/ingest, transcode, subtitle, voice and render | Not implemented |
@@ -30,7 +30,7 @@ Only the data foundation, metadata-driven discovery intake, Vietnam trend observ
 - Provider/model output is a draft. Creator approval is required for scripts and final publication.
 - Only assets with documented rights/permission may enter production. No unauthorized scraping, watermark removal or platform-policy evasion.
 
-## 4. Implemented workflows
+## 4. AI runtime capabilities\n\nThe Python AI service has an OpenAI-compatible chat-completions adapter configured only through server-side environment variables. It exposes source analysis, structured 2–3-variant generation and evidence-grounded learning synthesis. Service API-key authentication is required; missing configuration fails closed. Provider responses are validated against Pydantic contracts, hallucinated experiment citations are rejected, and all outputs require creator review. The service does not silently substitute mock output. It currently operates as a separate service and is not yet called by the .NET API/Web Style Lab.\n\nThis LLM runtime is not a trained ML model. Persistent ML training, model registry, prediction and retraining require sufficient profile-scoped outcome data and are not yet implemented.\n\n## 5. Implemented workflows
 
 ### 4.1 Discovery metadata
 Creators can maintain topics, followed Douyin source-channel records and discovered video candidates. Candidates preserve discovery method (FollowedChannel, TopicExplore, Manual) and are deduplicated by Douyin video ID. These are metadata/workflow records, not proof Douyin has been queried or a channel actually followed on-platform.
@@ -46,7 +46,7 @@ A style profile stores positioning, editable Style Summary and evidence imported
 
 The Style Learning endpoint analyzes evaluated experiment variants and returns repeated factors and topic breakdowns. It is read-only; it does not persist an approval record or automatically alter profile guidance. The current endpoint verifies that the requested profile exists, but analyzes the evaluated experiment pool rather than a profile-filtered evidence set. This is a known limitation.
 
-## 5. Data and workflow principles
+## 6. Data and workflow principles
 1. Preserve source provenance: URLs, platform identifiers and discovery method.
 2. Separate metadata from media: a URL/candidate is not a downloaded asset.
 3. Preserve counterexamples: losing variants remain in their original experiments.
@@ -56,7 +56,7 @@ The Style Learning endpoint analyzes evaluated experiment variants and returns r
 7. Do not claim causality from observed associations.
 8. Deduplicate platform identities and evidence imports; future jobs/publishing need durable idempotency keys.
 
-## 6. Deployment and schema
+## 7. Deployment and schema
 Apply numbered SQL scripts in order to a dedicated CreatorFlow database:
 - 001_initial.sql
 - 002_content_projects.sql
