@@ -32,6 +32,28 @@ BEGIN
         ON dbo.VietnamTrendSignals(Kind, ObservedAt DESC);
 END;
 
+
+IF OBJECT_ID(N'dbo.VietnamTrendMetricSnapshots', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.VietnamTrendMetricSnapshots
+    (
+        Id uniqueidentifier NOT NULL CONSTRAINT PK_VietnamTrendMetricSnapshots PRIMARY KEY,
+        TrendSignalId uniqueidentifier NOT NULL,
+        Views bigint NOT NULL,
+        Likes bigint NOT NULL,
+        Comments bigint NOT NULL,
+        Shares bigint NOT NULL,
+        Saves bigint NOT NULL,
+        ObservedAt datetimeoffset(7) NOT NULL,
+        CONSTRAINT FK_VietnamTrendMetricSnapshots_TrendSignals FOREIGN KEY (TrendSignalId)
+            REFERENCES dbo.VietnamTrendSignals(Id) ON DELETE CASCADE,
+        CONSTRAINT CK_VietnamTrendMetricSnapshots_Metrics CHECK
+            (Views >= 0 AND Likes >= 0 AND Comments >= 0 AND Shares >= 0 AND Saves >= 0)
+    );
+    CREATE UNIQUE INDEX UX_VietnamTrendMetricSnapshots_Signal_ObservedAt
+        ON dbo.VietnamTrendMetricSnapshots(TrendSignalId, ObservedAt);
+END;
+
 IF OBJECT_ID(N'dbo.StyleExperiments', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.StyleExperiments
