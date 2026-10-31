@@ -1,21 +1,129 @@
+from __future__ import annotations
+
+from typing import Any
+
 from fastapi.testclient import TestClient
-from creatorflow_ai.main import app
+
+from creatorflow_ai.llm import OpenAICompatibleLLM
+from creatorflow_ai.main import app, get_llm_client
 
 client = TestClient(app)
 
 
-def test_health() -> None:
+class FakeLLM:
+    def __init__(self, result: dict[str, Any]):
+        self.result = result
+        self.calls: list[dict[str, Any]] = []
+
+    async def complete_json(self, *, system_prompt: str, user_payload: dict[str, Any]) -> dict[str, Any]:
+        self.calls.append({"system_prompt": system_prompt, "user_payload": user_payload})
+        return self.result
+
+
+def auth(monkeypatch) -> dict[str, str]:
+    monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key")
+    return {"X-CreatorFlow-AI-Key": "test-service-key"}
+
+
+def test_health_is_public() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["status"] == "healthy"
 
 
-def test_analyze_requires_human_review() -> None:
-    response = client.post("/v1/analyze", json={"text": "A creator idea", "language": "en"})
+def test_ready_reports_missing_model_configuration(monkeypatch) -> None:
+    monkeypatch.delenv("CREATORFLOW_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("CREATORFLOW_LLM_MODEL", raising=False)
+    response = client.get("/ready")
     assert response.status_code == 200
+    assert response.json()["ready"] is False
+
+
+def test_ai_routes_require_service_authentication(monkeypatch) -> None:
+    monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key")
+    response = client.post("/v1/analyze", json={"text": "Một ý tưởng"})
+    assert response.status_code == 401
+
+
+def test_analyze_calls_llm_and_requires_review(monkeypatch) -> None:
+    headers = auth(monkeypatch)
+    fake = FakeLLM({
+        "language": "vi", "summary": "Mở đầu bằng một vấn đề quen thuộc.",
+        "topics": ["đồ gia dụng"], "audience_intent": "Tìm giải pháp tiết kiệm thời gian",
+        "story_mechanisms": ["vấn đề - giải pháp - kết quả"],
+        "hook_patterns": ["câu hỏi gợi tò mò"],
+        "localization_opportunities": ["dùng bối cảnh căn hộ Việt Nam"],
+        "elements_to_avoid_copying": ["câu thoại và trình tự cảnh đặc trưng"],
+    })
+    app.dependency_overrides[get_llm_client] = lambda: fake
+    try:
+        response = client.post("/v1/analyze", headers=headers, json={"text": "Reference transcript"})
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["requires_human_review"] is True
+    assert len(fake.calls) == 1
+
+
+def test_variant_generation_enforces_requested_count(monkeypatch) -> None:
+    headers = auth(monkeypatch)
+    fake = FakeLLM({
+        "topic": "đồ gia dụng",
+        "variants": [
+            {"name": f"Phương án {i}", "creative_angle": "Góc kể khác", "hook": "Bạn có gặp vấn đề này?",
+             "speaking_style": "Gần gũi", "edit_pacing": "Nhanh", "audio_approach": "Voice-over",
+             "script": "Kịch bản tiếng Việt.", "shot_plan": ["Cảnh 1"], "call_to_action": "Xem thông tin sản phẩm."}
+            for i in range(1, 4)
+        ],
+        "differentiation_notes": ["Khác nhau về góc tiếp cận"],
+    })
+    app.dependency_overrides[get_llm_client] = lambda: fake
+    try:
+        response = client.post("/v1/style-lab/generate-variants", headers=headers, json={
+            "source_analysis": "Audience wants a faster routine", "topic": "đồ gia dụng",
+            "creator_positioning": "Người dùng thử sản phẩm thực tế", "variant_count": 3,
+        })
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert len(response.json()["variants"]) == 3
     assert response.json()["requires_human_review"] is True
 
 
+def test_variant_generation_rejects_wrong_count(monkeypatch) -> None:
+    headers = auth(monkeypatch)
+    fake = FakeLLM({"topic": "test", "variants": [], "differentiation_notes": []})
+    app.dependency_overrides[get_llm_client] = lambda: fake
+    try:
+        response = client.post("/v1/style-lab/generate-variants", headers=headers, json={
+            "source_analysis": "analysis", "topic": "test", "creator_positioning": "creator",
+            "variant_count": 2,
+        })
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 502
+
+
+def test_learning_synthesis_rejects_fabricated_experiment_citations(monkeypatch) -> None:
+    headers = auth(monkeypatch)
+    fake = FakeLLM({
+        "proposed_style_summary": "Tóm tắt", "recurring_strengths": [], "conflicting_evidence": [],
+        "next_experiments": [], "cited_experiment_ids": ["not-in-evidence"], "uncertainty": "Mẫu còn nhỏ.",
+    })
+    app.dependency_overrides[get_llm_client] = lambda: fake
+    try:
+        response = client.post("/v1/learning/synthesize", headers=headers, json={
+            "profile_key": "creator-vn", "creator_positioning": "Đánh giá sản phẩm",
+            "evidence": [
+                {"experiment_id": "exp-1", "winning_variant_id": "v-1"},
+                {"experiment_id": "exp-2", "winning_variant_id": "v-2"},
+            ],
+        })
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 502
+
+
 def test_analyze_rejects_empty_text() -> None:
-    response = client.post("/v1/analyze", json={"text": ""})
+    response = client.post("/v1/analyze", headers={"X-CreatorFlow-AI-Key": "test"}, json={"text": ""})
     assert response.status_code == 422
