@@ -14,6 +14,9 @@
 - [ ] Provider-neutral LLM adapter and prompt/version registry.
 - [ ] Trend adapters using permitted APIs/data sources.
 - [ ] Script generation, translation, scoring, human review UI.
+- [x] Deterministic, explainable style learning across measured winning and losing variants, with topic-level analysis.
+- [ ] Persisted proposal review/approval and approved-profile versioning.
+- [ ] LLM-assisted style explanation and prompt integration.
 - [ ] Evaluation datasets and regression tests.
 
 ## Phase 3 — Media production
