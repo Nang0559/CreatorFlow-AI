@@ -333,6 +333,75 @@ styleLab.MapPost("/{id:guid}/variants/{variantId:guid}/measure", async (Guid id,
 styleLab.MapPost("/{id:guid}/evaluate", async (Guid id, EvaluateStyleExperimentRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
     await ChangeStyleExperiment(id, db, ct, (experiment, now) => experiment.Evaluate(request.WinningVariantId, now)));
 
+
+// Creator style profiles accumulate confirmed winning patterns as traceable evidence.
+var styleProfiles = app.MapGroup("/api/v1/style-profiles").RequireAuthorization();
+styleProfiles.MapGet("/", async (int? skip, int? take, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var page = Math.Max(0, skip ?? 0);
+    var size = take ?? 50;
+    if (size is < 1 or > 100) return Results.ValidationProblem(new Dictionary<string, string[]> { ["take"] = ["Must be between 1 and 100."] });
+    var items = await db.CreatorStyleProfiles.AsNoTracking().OrderBy(x => x.DisplayName).Skip(page).Take(size)
+        .Select(x => new CreatorStyleProfileListResponse(x.Id, x.ProfileKey, x.DisplayName, x.Positioning,
+            x.StyleSummary, x.Evidence.Count, x.CreatedAt, x.UpdatedAt)).ToArrayAsync(ct);
+    return Results.Ok(items);
+});
+styleProfiles.MapPost("/", async (CreateCreatorStyleProfileRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (await db.CreatorStyleProfiles.AnyAsync(x => x.ProfileKey == request.ProfileKey, ct))
+        return Results.Conflict(new { error = "A style profile already exists for this profile key." });
+    try
+    {
+        var profile = CreatorStyleProfile.Create(request.ProfileKey, request.DisplayName, request.Positioning, DateTimeOffset.UtcNow);
+        db.CreatorStyleProfiles.Add(profile);
+        await db.SaveChangesAsync(ct);
+        return Results.Created($"/api/v1/style-profiles/{profile.Id}",
+            new CreatorStyleProfileListResponse(profile.Id, profile.ProfileKey, profile.DisplayName,
+                profile.Positioning, profile.StyleSummary, 0, profile.CreatedAt, profile.UpdatedAt));
+    }
+    catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["profile"] = [ex.Message] }); }
+});
+styleProfiles.MapGet("/{id:guid}", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var profile = await db.CreatorStyleProfiles.AsNoTracking().Include(x => x.Evidence).SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (profile is null) return Results.NotFound();
+    return Results.Ok(new CreatorStyleProfileResponse(profile.Id, profile.ProfileKey, profile.DisplayName,
+        profile.Positioning, profile.StyleSummary, profile.Evidence.OrderByDescending(x => x.LearnedAt)
+            .Select(ToStyleEvidenceResponse).ToArray(), profile.CreatedAt, profile.UpdatedAt));
+});
+styleProfiles.MapPut("/{id:guid}/guidance", async (Guid id, UpdateCreatorStyleProfileRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var profile = await db.CreatorStyleProfiles.SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (profile is null) return Results.NotFound();
+    try
+    {
+        profile.UpdateGuidance(request.DisplayName, request.Positioning, request.StyleSummary, DateTimeOffset.UtcNow);
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+    catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["profile"] = [ex.Message] }); }
+});
+styleProfiles.MapPost("/{id:guid}/learn/{experimentId:guid}", async (Guid id, Guid experimentId, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var profile = await db.CreatorStyleProfiles.Include(x => x.Evidence).SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (profile is null) return Results.NotFound();
+    var experiment = await db.StyleExperiments.Include(x => x.Variants).SingleOrDefaultAsync(x => x.Id == experimentId, ct);
+    if (experiment is null) return Results.NotFound();
+    try
+    {
+        var evidence = profile.LearnFrom(experiment, DateTimeOffset.UtcNow);
+        db.CreatorStyleEvidence.Add(evidence);
+        await db.SaveChangesAsync(ct);
+        return Results.Created($"/api/v1/style-profiles/{id}", ToStyleEvidenceResponse(evidence));
+    }
+    catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
+});
+
 app.Run();
 
 static async Task<IResult> ChangeVideoStatus(Guid id, CreatorFlowDbContext? db, CancellationToken ct, Action<DouyinVideoCandidate, DateTimeOffset> transition)
@@ -366,6 +435,25 @@ static async Task<IResult> ChangeStyleVariant(Guid id, Guid variantId, CreatorFl
     catch (ArgumentOutOfRangeException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["metrics"] = [ex.Message] }); }
 }
 
+
+static CreatorStyleEvidenceResponse ToStyleEvidenceResponse(CreatorStyleEvidence x) =>
+    new(x.Id, x.StyleExperimentId, x.WinningVariantId, x.ExperimentName, x.VariantName, x.Hook,
+        x.SpeakingStyle, x.EditPacing, x.AudioApproach, x.Views, x.Likes, x.Comments, x.Shares,
+        x.Saves, x.FollowsGained, x.ProductClicks, x.Orders, x.AverageWatchSeconds,
+        x.VideoDurationSeconds, x.EngagementRate, x.LearnedAt);
+
+public sealed record CreateCreatorStyleProfileRequest(string ProfileKey, string DisplayName, string? Positioning);
+public sealed record UpdateCreatorStyleProfileRequest(string DisplayName, string? Positioning, string? StyleSummary);
+public sealed record CreatorStyleProfileListResponse(Guid Id, string ProfileKey, string DisplayName,
+    string Positioning, string StyleSummary, int EvidenceCount, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public sealed record CreatorStyleProfileResponse(Guid Id, string ProfileKey, string DisplayName,
+    string Positioning, string StyleSummary, CreatorStyleEvidenceResponse[] Evidence,
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public sealed record CreatorStyleEvidenceResponse(Guid Id, Guid StyleExperimentId, Guid WinningVariantId,
+    string ExperimentName, string VariantName, string Hook, string SpeakingStyle, string EditPacing,
+    string AudioApproach, long Views, long Likes, long Comments, long Shares, long Saves,
+    long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds,
+    decimal? VideoDurationSeconds, decimal? EngagementRate, DateTimeOffset LearnedAt);
 
 public sealed record CreateContentProjectRequest(string Title);
 public sealed record CreateVietnamTrendRequest(string Kind, string Platform, string ExternalId, string Title,
