@@ -72,6 +72,8 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasIndex(x => new { x.Status, x.UpdatedAt });
             entity.HasMany(x => x.Variants).WithOne().HasForeignKey(x => x.StyleExperimentId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<StyleExperimentVariant>().WithMany().HasForeignKey(x => x.WinningVariantId)
+                .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<ContentProject>().WithMany().HasForeignKey(x => x.ContentProjectId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
