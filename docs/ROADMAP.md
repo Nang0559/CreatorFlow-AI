@@ -2,6 +2,7 @@
 
 ## Phase 0 — Foundation
 - [x] Architecture boundaries and repository conventions.
+- [x] As-built system, data model, Style Lab/Style Learning and implementation-gap design documentation.
 - [ ] Verify CI on GitHub-hosted runners.
 
 ## Phase 1 — Secure project and asset foundation
