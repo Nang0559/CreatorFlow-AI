@@ -85,9 +85,9 @@ BEGIN
             (Views >= 0 AND Likes >= 0 AND Comments >= 0 AND Shares >= 0 AND Saves >= 0
              AND FollowsGained >= 0 AND ProductClicks >= 0 AND Orders >= 0),
         CONSTRAINT CK_StyleExperimentVariants_WatchTime CHECK
-            (AverageWatchSeconds IS NULL OR AverageWatchSeconds >= 0)
-            AND (VideoDurationSeconds IS NULL OR VideoDurationSeconds >= 0)
-            AND (AverageWatchSeconds IS NULL OR VideoDurationSeconds IS NULL OR AverageWatchSeconds <= VideoDurationSeconds)
+            ((AverageWatchSeconds IS NULL OR AverageWatchSeconds >= 0)
+             AND (VideoDurationSeconds IS NULL OR VideoDurationSeconds >= 0)
+             AND (AverageWatchSeconds IS NULL OR VideoDurationSeconds IS NULL OR AverageWatchSeconds <= VideoDurationSeconds))
     );
 END;
 
