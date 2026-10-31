@@ -11,7 +11,7 @@ CreatorFlow AI turns a creator-approved idea or licensed source asset into a rev
 - **Application / Domain**: use cases, policies, and business rules.
 - **Infrastructure**: SQL Server persistence, storage, queues, and provider adapters.
 - **Workers**: durable background orchestration.
-- **AI services**: Python services for trend analysis, content generation, translation, speech, and recommendations.
+- **AI services**: Python FastAPI service with a configurable OpenAI-compatible LLM runtime for source analysis, Vietnamese variant generation and evidence-grounded style synthesis. Trained ML and media speech pipelines are separate follow-on capabilities.
 - **Media engine**: FFmpeg-based, deterministic media processing.
 - **Tests**: unit, integration, and contract tests.
 
@@ -29,4 +29,4 @@ See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md), [docs/ARCHITECTURE.md](d
 
 ## Status
 
-Bootstrap phase. The first commit establishes architecture, contracts, local development conventions, and CI. Provider integrations and production deployment are implemented incrementally behind interfaces.
+Foundation plus first LLM runtime milestone. The Python AI service now makes real provider calls when configured; it fails closed without credentials and returns review-required structured drafts. The runtime is not yet wired into the .NET Style Lab, and trained ML, durable jobs, platform connectors, media rendering and publishing remain outstanding. See [AI Runtime design](docs/design/AI_RUNTIME.md) and [as-built status](docs/design/AS_BUILT_STATUS.md).
