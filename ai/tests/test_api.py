@@ -21,7 +21,7 @@ class FakeLLM:
 
 def auth(monkeypatch) -> dict[str, str]:
     monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key-0123456789abcdef")
-    return {"X-CreatorFlow-AI-Key": "test-service-key"}
+    return {"X-CreatorFlow-AI-Key": "test-service-key-0123456789abcdef"}
 
 
 def test_health_is_public() -> None:
@@ -39,7 +39,7 @@ def test_ready_reports_missing_model_configuration(monkeypatch) -> None:
 
 
 def test_ai_routes_require_service_authentication(monkeypatch) -> None:
-    monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key")
+    monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key-0123456789abcdef")
     response = client.post("/v1/analyze", json={"text": "Một ý tưởng"})
     assert response.status_code == 401
 
@@ -86,7 +86,7 @@ def test_variant_generation_enforces_requested_count(monkeypatch) -> None:
         app.dependency_overrides.clear()
     assert response.status_code == 200
     assert len(response.json()["variants"]) == 3
-    assert response.json()["requires_human_review"] is True
+    assert response.json()["requiresHumanReview"] is True
 
 
 def test_variant_generation_rejects_wrong_count(monkeypatch) -> None:
