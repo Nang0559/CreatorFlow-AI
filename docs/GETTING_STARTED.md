@@ -50,4 +50,9 @@ The interactive Web workspace includes:
 - `/style-lab`: create 2–3 style variants, mark them ready/published, enter performance metrics and evaluate a winner.
 - `/style-profiles`: create a creator style profile, add evaluated winners as evidence and maintain an editable style summary.
 
-Apply SQL scripts in numeric order to the dedicated CreatorFlow database. The new Vietnam trend/style workflow uses scripts `005_vietnam_trends_and_style_lab.sql` and `006_creator_style_profiles.sql` after the earlier foundation scripts.
+Apply SQL scripts in numeric order to the dedicated CreatorFlow database. The Vietnam trend/style workflow uses scripts `005_vietnam_trends_and_style_lab.sql`, `006_creator_style_profiles.sql` and `007_style_learning_topic.sql` after the earlier foundation scripts. Apply all numbered scripts in order (001–007) to the dedicated CreatorFlow database.
+
+
+## Design documentation
+
+Start at [docs/design/README.md](design/README.md) for the as-built system overview, data model, Style Lab/Style Learning design and implementation gaps. These documents distinguish implemented workflows from future platform connectors and production capabilities.
