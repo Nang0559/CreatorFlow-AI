@@ -10,6 +10,7 @@ public sealed class DouyinVideoCandidate
     public Guid Id { get; private set; }
     public string DouyinVideoId { get; private set; } = string.Empty;
     public Guid? SourceChannelId { get; private set; }
+    public Guid? ContentTopicId { get; private set; }
     public string SourceUrl { get; private set; } = string.Empty;
     public string Title { get; private set; } = string.Empty;
     public VideoDiscoveryMethod DiscoveryMethod { get; private set; }
@@ -20,7 +21,7 @@ public sealed class DouyinVideoCandidate
 
     public static DouyinVideoCandidate Create(
         string videoId, Guid? sourceChannelId, string sourceUrl, string? title,
-        VideoDiscoveryMethod discoveryMethod, DateTimeOffset? publishedAt, DateTimeOffset discoveredAt)
+        VideoDiscoveryMethod discoveryMethod, DateTimeOffset? publishedAt, DateTimeOffset discoveredAt, Guid? contentTopicId = null)
     {
         if (string.IsNullOrWhiteSpace(videoId) || videoId.Trim().Length > 160)
             throw new ArgumentException("A valid Douyin video identifier is required.", nameof(videoId));
@@ -33,7 +34,7 @@ public sealed class DouyinVideoCandidate
 
         return new DouyinVideoCandidate
         {
-            Id = Guid.NewGuid(), DouyinVideoId = videoId.Trim(), SourceChannelId = sourceChannelId,
+            Id = Guid.NewGuid(), DouyinVideoId = videoId.Trim(), SourceChannelId = sourceChannelId, ContentTopicId = contentTopicId,
             SourceUrl = uri.ToString(), Title = title?.Trim() ?? string.Empty,
             DiscoveryMethod = discoveryMethod, Status = VideoCandidateStatus.Candidate,
             PublishedAt = publishedAt, DiscoveredAt = discoveredAt, UpdatedAt = discoveredAt
