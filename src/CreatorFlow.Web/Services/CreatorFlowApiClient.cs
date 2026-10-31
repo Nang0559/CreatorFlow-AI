@@ -1,0 +1,70 @@
+using System.Net.Http.Json;
+
+namespace CreatorFlow.Web.Services;
+
+public sealed class CreatorFlowApiClient(HttpClient http)
+{
+    public bool IsConfigured => http.BaseAddress is not null && http.DefaultRequestHeaders.Contains("X-CreatorFlow-Api-Key");
+
+    public async Task<T?> GetAsync<T>(string path, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var response = await http.GetAsync(path, ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
+    }
+
+    public async Task<TResponse?> PostAsync<TRequest, TResponse>(string path, TRequest request, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var response = await http.PostAsJsonAsync(path, request, ct);
+        response.EnsureSuccessStatusCode();
+        if (response.Content.Headers.ContentLength == 0) return default;
+        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
+    }
+
+    public async Task PostNoContentAsync<TRequest>(string path, TRequest request, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var response = await http.PostAsJsonAsync(path, request, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task PutNoContentAsync<TRequest>(string path, TRequest request, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var response = await http.PutAsJsonAsync(path, request, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    private void EnsureConfigured()
+    {
+        if (!IsConfigured)
+            throw new InvalidOperationException("CreatorFlow API chưa được cấu hình. Hãy thiết lập CreatorFlowApi:BaseUrl và CreatorFlowApi:ApiKey ở phía server.");
+    }
+}
+
+public sealed record VietnamTrendItem(Guid Id, string Kind, string Platform, string ExternalId, string Title,
+    string CreatorName, string SourceUrl, string? Topic, string? SoundName, string? SoundArtist,
+    long Views, long Likes, long Comments, long Shares, long Saves, DateTimeOffset? PublishedAt, DateTimeOffset ObservedAt);
+
+public sealed record CreatorStyleProfileItem(Guid Id, string ProfileKey, string DisplayName, string Positioning,
+    string StyleSummary, int EvidenceCount, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+
+public sealed record CreatorStyleEvidenceItem(Guid Id, Guid StyleExperimentId, Guid WinningVariantId,
+    string ExperimentName, string VariantName, string Hook, string SpeakingStyle, string EditPacing,
+    string AudioApproach, long Views, long Likes, long Comments, long Shares, long Saves,
+    long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds,
+    decimal? VideoDurationSeconds, decimal? EngagementRate, DateTimeOffset LearnedAt);
+
+public sealed record CreatorStyleProfileDetail(Guid Id, string ProfileKey, string DisplayName,
+    string Positioning, string StyleSummary, CreatorStyleEvidenceItem[] Evidence,
+    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+
+public sealed record StyleExperimentItem(Guid Id, Guid? ContentProjectId, string Name, string Hypothesis,
+    string Status, Guid? WinningVariantId, StyleVariantItem[] Variants);
+
+public sealed record StyleVariantItem(Guid Id, string Name, string Hook, string SpeakingStyle, string EditPacing,
+    string AudioApproach, string Script, string Status, long Views, long Likes, long Comments, long Shares,
+    long Saves, long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds,
+    decimal? VideoDurationSeconds, decimal? EngagementRate, DateTimeOffset? PublishedAt, DateTimeOffset? MeasuredAt);
