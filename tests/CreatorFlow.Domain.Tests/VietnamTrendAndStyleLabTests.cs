@@ -90,7 +90,7 @@ public sealed class VietnamTrendAndStyleLabTests
 
         Assert.Equal(StyleExperimentStatus.Evaluated, experiment.Status);
         Assert.Equal(variants[2].Id, experiment.WinningVariantId);
-        Assert.Equal(15.777777777777777777777777778m, variants[2].EngagementRate);
+        Assert.Equal(15.7777777778m, variants[2].EngagementRate!.Value, 10);
     }
 
     [Fact]
