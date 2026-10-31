@@ -245,6 +245,8 @@ vietnamTrends.MapPost("/", async (CreateVietnamTrendRequest request, CreatorFlow
             request.CreatorName, request.SourceUrl, request.Topic, request.SoundName, request.SoundArtist,
             request.Views, request.Likes, request.Comments, request.Shares, request.Saves, request.PublishedAt, now);
         db.VietnamTrendSignals.Add(signal);
+        db.VietnamTrendMetricSnapshots.Add(VietnamTrendMetricSnapshot.Create(signal.Id, signal.Views, signal.Likes,
+            signal.Comments, signal.Shares, signal.Saves, signal.ObservedAt));
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/vietnam-trends/{signal.Id}",
             new VietnamTrendResponse(signal.Id, signal.Kind.ToString(), signal.Platform.ToString(), signal.ExternalId,
@@ -253,6 +255,14 @@ vietnamTrends.MapPost("/", async (CreateVietnamTrendRequest request, CreatorFlow
     }
     catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["trend"] = [ex.Message] }); }
 });
+vietnamTrends.MapGet("/{id:guid}/history", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (!await db.VietnamTrendSignals.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+    var snapshots = await db.VietnamTrendMetricSnapshots.AsNoTracking().Where(x => x.TrendSignalId == id)
+        .OrderBy(x => x.ObservedAt).Select(x => new { x.Views, x.Likes, x.Comments, x.Shares, x.Saves, x.ObservedAt }).ToArrayAsync(ct);
+    return Results.Ok(snapshots);
+});
 vietnamTrends.MapPost("/{id:guid}/observe", async (Guid id, RecordVietnamTrendObservationRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
@@ -260,7 +270,10 @@ vietnamTrends.MapPost("/{id:guid}/observe", async (Guid id, RecordVietnamTrendOb
     if (signal is null) return Results.NotFound();
     try
     {
-        signal.RecordObservation(request.Views, request.Likes, request.Comments, request.Shares, request.Saves, DateTimeOffset.UtcNow);
+        var observedAt = DateTimeOffset.UtcNow;
+        signal.RecordObservation(request.Views, request.Likes, request.Comments, request.Shares, request.Saves, observedAt);
+        db.VietnamTrendMetricSnapshots.Add(VietnamTrendMetricSnapshot.Create(signal.Id, request.Views,
+            request.Likes, request.Comments, request.Shares, request.Saves, observedAt));
         await db.SaveChangesAsync(ct);
         return Results.NoContent();
     }
