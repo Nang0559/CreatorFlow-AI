@@ -12,12 +12,12 @@
 - [ ] Storage adapter and integration tests.
 
 ## Phase 2 — AI intelligence and editorial workflow
-- [ ] Provider-neutral LLM adapter and prompt/version registry.
+- [x] Configurable OpenAI-compatible LLM adapter and structured AI service contracts (source analysis, variant generation, evidence synthesis).\n- [ ] Prompt/version registry, provider health checks and API/Web orchestration.
 - [ ] Trend adapters using permitted APIs/data sources.
 - [ ] Script generation, translation, scoring, human review UI.
 - [x] Deterministic, explainable style learning across measured winning and losing variants, with topic-level analysis.
 - [ ] Persisted proposal review/approval and approved-profile versioning.
-- [ ] LLM-assisted style explanation and prompt integration.
+- [x] LLM-assisted style explanation service contract (standalone AI service; not yet wired to profile UI).\n- [ ] Persisted AI outputs, approved profile-version prompt integration and evaluation harness.\n- [ ] Trained ML outcome predictor, model registry, scheduled retraining, drift checks and champion/challenger rollout.
 - [ ] Evaluation datasets and regression tests.
 
 ## Phase 3 — Media production
