@@ -43,11 +43,12 @@ public static class StyleLearningEngine
 
         var all = source.Where(x => x.Status == StyleExperimentStatus.Evaluated &&
                                     x.WinningVariantId.HasValue).ToArray();
-        var eligible = all.Where(x => (string.IsNullOrWhiteSpace(topic) ||
-                                        string.Equals(x.Topic, topic.Trim(), StringComparison.OrdinalIgnoreCase)) &&
-                                       x.Variants.Count is >= 2 and <= 3 &&
-                                       x.Variants.All(v => v.Status == StyleVariantStatus.Measured &&
-                                                           v.Views >= minimumViewsPerVariant))
+        var scoped = all.Where(x => string.IsNullOrWhiteSpace(topic) ||
+                                     string.Equals(x.Topic, topic.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var eligible = scoped.Where(x => x.Variants.Count is >= 2 and <= 3 &&
+                                         x.Variants.All(v => v.Status == StyleVariantStatus.Measured &&
+                                                             v.Views >= minimumViewsPerVariant))
             .ToArray();
 
         var insights = BuildSignals(eligible);
@@ -77,7 +78,7 @@ public static class StyleLearningEngine
             string.IsNullOrWhiteSpace(topic) ? null : topic.Trim(),
             eligible.Length,
             eligible.Sum(x => x.Variants.Count),
-            all.Length - eligible.Length,
+            scoped.Length - eligible.Length,
             decimal.Round(baseline, 4),
             insights,
             topicBreakdown,
@@ -87,7 +88,8 @@ public static class StyleLearningEngine
 
     private static IReadOnlyList<StyleFactorInsight> BuildSignals(IEnumerable<StyleExperiment> experiments)
     {
-        var counts = new Dictionary<(string Dimension, string Value), (HashSet<Guid> Experiments, int Wins, int Losses)>();
+        var counts = new Dictionary<(string Dimension, string Value),
+            (HashSet<Guid> Wins, HashSet<Guid> Losses)>();
         var materialized = experiments.ToArray();
         foreach (var experiment in materialized)
         {
@@ -103,10 +105,12 @@ public static class StyleLearningEngine
         var baseline = materialized.Length == 0 ? 0m : materialized.Average(x => 1m / x.Variants.Count);
         return counts.Select(pair =>
             {
-                var support = pair.Value.Experiments.Count;
-                var winRate = support == 0 ? 0m : (decimal)pair.Value.Wins / support;
-                return new StyleFactorInsight(pair.Key.Dimension, pair.Key.Value, support,
-                    pair.Value.Wins, pair.Value.Losses, decimal.Round(winRate, 4),
+                // Experiments where the same factor occurs in both a winner and a loser
+                // are ambiguous and are excluded from the decisive support denominator.
+                var decisiveSupport = pair.Value.Wins.Count + pair.Value.Losses.Count;
+                var winRate = decisiveSupport == 0 ? 0m : (decimal)pair.Value.Wins.Count / decisiveSupport;
+                return new StyleFactorInsight(pair.Key.Dimension, pair.Key.Value, decisiveSupport,
+                    pair.Value.Wins.Count, pair.Value.Losses.Count, decimal.Round(winRate, 4),
                     decimal.Round(winRate - baseline, 4));
             })
             .Where(x => x.SupportingExperiments >= 2 && x.WinningExperiments >= 2 && x.Lift > 0m)
@@ -121,12 +125,11 @@ public static class StyleLearningEngine
             if (string.IsNullOrWhiteSpace(rawValue)) return;
             var key = (dimension, rawValue.Trim());
             if (!counts.TryGetValue(key, out var current))
-                current = (new HashSet<Guid>(), 0, 0);
-            if (!current.Experiments.Add(experiment.Id)) return;
+                current = (new HashSet<Guid>(), new HashSet<Guid>());
             if (variant.Id == experiment.WinningVariantId)
-                current.Wins++;
+                current.Wins.Add(experiment.Id);
             else
-                current.Losses++;
+                current.Losses.Add(experiment.Id);
             counts[key] = current;
         }
     }
