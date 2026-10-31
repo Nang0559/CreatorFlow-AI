@@ -28,6 +28,7 @@ public sealed class StyleExperiment
             throw new ArgumentException("Each experiment must contain exactly 2 or 3 style variants.", nameof(variants));
         if (drafts.Any(x => string.IsNullOrWhiteSpace(x.Name) || string.IsNullOrWhiteSpace(x.Hook) ||
                             string.IsNullOrWhiteSpace(x.SpeakingStyle) || string.IsNullOrWhiteSpace(x.EditPacing) ||
+                            string.IsNullOrWhiteSpace(x.AudioApproach) ||
                             string.IsNullOrWhiteSpace(x.Script)))
             throw new ArgumentException("Every variant needs a name, hook, speaking style, edit pacing and script.", nameof(variants));
         if (drafts.Select(x => x.Name.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != drafts.Length)
@@ -39,7 +40,7 @@ public sealed class StyleExperiment
             Hypothesis = hypothesis.Trim(), Status = StyleExperimentStatus.Draft, CreatedAt = now, UpdatedAt = now
         };
         foreach (var draft in drafts)
-            experiment.Variants.Add(StyleExperimentVariant.Create(experiment.Id, draft, now));
+            experiment.Variants.Add(StyleExperimentVariant.Create(experiment.Id, draft));
         return experiment;
     }
 
@@ -93,7 +94,7 @@ public sealed class StyleExperimentVariant
     public DateTimeOffset? MeasuredAt { get; private set; }
     public decimal? EngagementRate => Views == 0 ? null : (decimal)(Likes + Comments + Shares + Saves) / Views * 100m;
 
-    internal static StyleExperimentVariant Create(Guid experimentId, StyleVariantDraft draft, DateTimeOffset now) => new()
+    internal static StyleExperimentVariant Create(Guid experimentId, StyleVariantDraft draft) => new()
     {
         Id = Guid.NewGuid(), StyleExperimentId = experimentId, Name = draft.Name.Trim(),
         Hook = draft.Hook.Trim(), SpeakingStyle = draft.SpeakingStyle.Trim(), EditPacing = draft.EditPacing.Trim(),
@@ -120,6 +121,8 @@ public sealed class StyleExperimentVariant
         if (Status != StyleVariantStatus.Published) throw new InvalidOperationException("Only published variants can be measured.");
         if (new[] { views, likes, comments, shares, saves, followsGained, productClicks, orders }.Any(x => x < 0))
             throw new ArgumentOutOfRangeException(nameof(views), "Metrics cannot be negative.");
+        if (PublishedAt.HasValue && measuredAt < PublishedAt.Value)
+            throw new ArgumentOutOfRangeException(nameof(measuredAt), "Measurement cannot precede publication.");
         if (averageWatchSeconds < 0 || videoDurationSeconds < 0 ||
             (averageWatchSeconds.HasValue && videoDurationSeconds.HasValue && averageWatchSeconds > videoDurationSeconds))
             throw new ArgumentOutOfRangeException(nameof(averageWatchSeconds), "Watch duration metrics are invalid.");
