@@ -91,3 +91,22 @@ The endpoint is advisory only. It does not mutate `CreatorStyleProfiles.StyleSum
 New Style Lab create requests may include an optional `topic` (maximum 200 characters). The Style Profiles UI can request the read-only learning preview and place its suggested summary into the editable Style Summary draft; the creator must review and save it.
 
 The current learning-analysis endpoint checks that the supplied profile ID exists but analyzes the global evaluated experiment pool. It does not yet scope analysis to evidence imported into that profile or enforce tenant ownership. Do not use this route as a multi-creator data isolation boundary. The analysis is deterministic and descriptive, not an LLM verdict; see [design/STYLE_LAB_AND_LEARNING.md](design/STYLE_LAB_AND_LEARNING.md).
+
+
+## Python AI runtime (LLM-backed)
+
+The Python AI service exposes server-to-server endpoints. Every `/v1/*` endpoint requires `X-CreatorFlow-AI-Key`; configure `CREATORFLOW_AI_API_KEY` with at least 32 characters. The key must remain server-side.
+
+Configure a real OpenAI-compatible chat-completions provider with:
+- `CREATORFLOW_LLM_BASE_URL` (defaults to `https://api.openai.com/v1`; HTTPS required except localhost)
+- `CREATORFLOW_LLM_API_KEY`
+- `CREATORFLOW_LLM_MODEL`
+- Optional `CREATORFLOW_LLM_TIMEOUT_SECONDS` and `CREATORFLOW_LLM_MAX_OUTPUT_TOKENS`
+
+No mock or deterministic fallback is used in runtime. Missing provider credentials/configuration returns HTTP 503; provider failures or invalid structured output return HTTP 502. `GET /ready` reports whether provider configuration exists, not whether the remote provider is reachable. `GET /health` is a liveness check.
+
+- `POST /v1/analyze`: analyze source transcript/text, audience intent, topic, narrative mechanisms and localization opportunities. Source text is reference material only; the response explicitly identifies elements not to copy.
+- `POST /v1/style-lab/generate-variants`: generate exactly 2 or 3 distinct Vietnamese creative variants with hook, speaking style, edit pacing, audio approach, script, shot plan and CTA.
+- `POST /v1/learning/synthesize`: synthesize repeated strengths, conflicting evidence and next experiments from supplied structured evidence. The service rejects experiment citations not present in the request.
+
+All outputs are drafts with `requires_human_review=true`. These endpoints are real LLM calls only when a provider is configured. They do not yet persist prompts, learning proposals, profile versions, ML model artifacts or generated scripts in SQL, and they are not yet invoked by the Blazor/API Style Lab workflow. See [design/AI_RUNTIME.md](design/AI_RUNTIME.md).
