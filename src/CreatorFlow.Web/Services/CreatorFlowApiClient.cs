@@ -90,3 +90,7 @@ public sealed record AiGeneratedVariant(string Name, string CreativeAngle, strin
     string EditPacing, string AudioApproach, string Script, string[] ShotPlan, string CallToAction);
 public sealed record AiGenerateVariantsResponse(string Topic, string Language, AiGeneratedVariant[] Variants,
     string[] DifferentiationNotes, bool RequiresHumanReview);
+
+public sealed record AiLearningSynthesisResponse(string ProposedStyleSummary, string[] RecurringStrengths,
+    string[] ConflictingEvidence, string[] NextExperiments, string[] CitedExperimentIds,
+    string Uncertainty, bool RequiresHumanReview);
