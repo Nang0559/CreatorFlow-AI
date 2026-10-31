@@ -50,7 +50,7 @@ public sealed class CreatorStyleProfile
         var winner = experiment.Variants.Single(x => x.Id == experiment.WinningVariantId.Value);
         if (winner.Status != StyleVariantStatus.Measured)
             throw new InvalidOperationException("Winning variant must have measured results.");
-        var evidence = CreatorStyleEvidence.From(experiment.Id, winner, now);
+        var evidence = CreatorStyleEvidence.From(Id, experiment.Id, experiment.Name, winner, now);
         Evidence.Add(evidence);
         UpdatedAt = now;
         return evidence;
@@ -83,10 +83,10 @@ public sealed class CreatorStyleEvidence
     public decimal? EngagementRate => Views == 0 ? null : (decimal)(Likes + Comments + Shares + Saves) / Views * 100m;
     public DateTimeOffset LearnedAt { get; private set; }
 
-    internal static CreatorStyleEvidence From(Guid experimentId, StyleExperimentVariant winner, DateTimeOffset now) => new()
+    internal static CreatorStyleEvidence From(Guid profileId, Guid experimentId, string experimentName, StyleExperimentVariant winner, DateTimeOffset now) => new()
     {
-        Id = Guid.NewGuid(), StyleExperimentId = experimentId, WinningVariantId = winner.Id,
-        ExperimentName = string.Empty, VariantName = winner.Name, Hook = winner.Hook,
+        Id = Guid.NewGuid(), CreatorStyleProfileId = profileId, StyleExperimentId = experimentId, WinningVariantId = winner.Id,
+        ExperimentName = experimentName, VariantName = winner.Name, Hook = winner.Hook,
         SpeakingStyle = winner.SpeakingStyle, EditPacing = winner.EditPacing, AudioApproach = winner.AudioApproach,
         Views = winner.Views, Likes = winner.Likes, Comments = winner.Comments, Shares = winner.Shares,
         Saves = winner.Saves, FollowsGained = winner.FollowsGained, ProductClicks = winner.ProductClicks,
