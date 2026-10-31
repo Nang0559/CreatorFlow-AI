@@ -110,3 +110,12 @@ No mock or deterministic fallback is used in runtime. Missing provider credentia
 - `POST /v1/learning/synthesize`: synthesize repeated strengths, conflicting evidence and next experiments from supplied structured evidence. The service rejects experiment citations not present in the request.
 
 All outputs are drafts with `requires_human_review=true`. These endpoints are real LLM calls only when a provider is configured. They do not yet persist prompts, learning proposals, profile versions, ML model artifacts or generated scripts in SQL, and they are not yet invoked by the Blazor/API Style Lab workflow. See [design/AI_RUNTIME.md](design/AI_RUNTIME.md).
+
+
+### .NET API proxy to the AI service
+
+The authenticated .NET API exposes server-side proxy routes:
+- `POST /api/v1/ai/analyze` with `{ "text": "...", "language": "vi", "topic": "...", "creatorPositioning": "..." }`.
+- `POST /api/v1/ai/style-lab/generate-variants` with `sourceAnalysis`, `topic`, `creatorPositioning`, optional `styleSummary` / `productContext`, `variantCount` (2 or 3) and `targetDurationSeconds`.
+
+Configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` in the API host. The proxy validates HTTPS (or localhost HTTP), requires a 32-character service key, and forwards provider responses/status without exposing the AI service key to the browser. Missing configuration and unavailable service return 503; timeout returns 504. The Python service separately requires its own provider credentials. The creator-facing Blazor controls are not yet wired to these proxy routes.
