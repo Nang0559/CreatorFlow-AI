@@ -4,7 +4,6 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from creatorflow_ai.llm import OpenAICompatibleLLM
 from creatorflow_ai.main import app, get_llm_client
 
 client = TestClient(app)
@@ -21,7 +20,7 @@ class FakeLLM:
 
 
 def auth(monkeypatch) -> dict[str, str]:
-    monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key")
+    monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key-0123456789abcdef")
     return {"X-CreatorFlow-AI-Key": "test-service-key"}
 
 
@@ -124,6 +123,7 @@ def test_learning_synthesis_rejects_fabricated_experiment_citations(monkeypatch)
     assert response.status_code == 502
 
 
-def test_analyze_rejects_empty_text() -> None:
-    response = client.post("/v1/analyze", headers={"X-CreatorFlow-AI-Key": "test"}, json={"text": ""})
+def test_analyze_rejects_empty_text(monkeypatch) -> None:
+    monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key-0123456789abcdef")
+    response = client.post("/v1/analyze", headers={"X-CreatorFlow-AI-Key": "test-service-key-0123456789abcdef"}, json={"text": ""})
     assert response.status_code == 422
