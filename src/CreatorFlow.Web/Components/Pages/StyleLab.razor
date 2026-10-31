@@ -95,7 +95,7 @@
         new() { Name = "Review trực diện", Hook = "3 điều cần biết trước khi mua...", SpeakingStyle = "Rõ ràng, súc tích", EditPacing = "Cắt nhanh, minh họa tính năng", AudioApproach = "Voice nổi bật, nhạc nền nhỏ" }];
     private string name = "Thử nghiệm phong cách mới";
     private string hypothesis = "Hook kể chuyện giúp tăng thời gian xem và lượt theo dõi.";
-    private string topic = "";
+    private string topic = "";\n    private string sourceText = "";\n    private string sourceAnalysis = "";\n    private string creatorPositioning = "";\n    private string styleSummary = "";\n    private string productContext = "";\n    private string aiAnalysisSummary = "";\n    private CreatorFlow.Web.Services.AiAnalyzeResponse? aiAnalysis;\n    private bool aiGenerated;
     private int variantCount = 2;
     private bool busy;
     private string error = "";
@@ -124,6 +124,46 @@
             }
         }
         catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task AnalyzeWithAiAsync()
+    {
+        try
+        {
+            busy = true; error = ""; aiAnalysis = null; aiGenerated = false;
+            aiAnalysis = await Api.PostAsync<CreatorFlow.Web.Services.AiAnalyzeRequest, CreatorFlow.Web.Services.AiAnalyzeResponse>(
+                "/api/v1/ai/analyze", new(sourceText, "vi", string.IsNullOrWhiteSpace(topic) ? null : topic, creatorPositioning));
+            if (aiAnalysis is null) throw new InvalidOperationException("AI không trả về kết quả phân tích.");
+            sourceAnalysis = $"Tóm tắt: {aiAnalysis.Summary}\nChủ đề: {string.Join(", ", aiAnalysis.Topics)}\nÝ định khán giả: {aiAnalysis.AudienceIntent}\nCơ chế: {string.Join("; ", aiAnalysis.StoryMechanisms)}\nHook: {string.Join("; ", aiAnalysis.HookPatterns)}\nCơ hội Việt hóa: {string.Join("; ", aiAnalysis.LocalizationOpportunities)}";
+            aiAnalysisSummary = aiAnalysis.Summary;
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task GenerateWithAiAsync()
+    {
+        try
+        {
+            busy = true; error = ""; aiGenerated = false;
+            var generated = await Api.PostAsync<CreatorFlow.Web.Services.AiGenerateVariantsRequest, CreatorFlow.Web.Services.AiGenerateVariantsResponse>(
+                "/api/v1/ai/style-lab/generate-variants",
+                new(sourceAnalysis, string.IsNullOrWhiteSpace(topic) ? "Chưa phân loại" : topic,
+                    string.IsNullOrWhiteSpace(creatorPositioning) ? "Nhà sáng tạo nội dung Việt Nam" : creatorPositioning,
+                    styleSummary, string.IsNullOrWhiteSpace(productContext) ? null : productContext, variantCount));
+            if (generated is null || generated.Variants.Length != variantCount)
+                throw new InvalidOperationException("AI không tạo đủ số phương án được yêu cầu.");
+            variants = generated.Variants.Select(x => new VariantInput
+            {
+                Name = x.Name, Hook = x.Hook, SpeakingStyle = x.SpeakingStyle,
+                EditPacing = x.EditPacing, AudioApproach = x.AudioApproach, Script = x.Script
+            }).ToList();
+            aiGenerated = true;
+            if (string.IsNullOrWhiteSpace(name)) name = $"AI · {topic}";
+            if (string.IsNullOrWhiteSpace(hypothesis)) hypothesis = "So sánh các góc sáng tạo khác nhau trên cùng một chủ đề.";
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
     }
 
     private async Task StartAsync(Guid id) => await RunActionAsync($"/api/v1/style-experiments/{id}/start");
