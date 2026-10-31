@@ -26,6 +26,7 @@ public sealed class StyleLearningEngineTests
             x.SupportingExperiments == 3 && x.WinningExperiments == 3);
         Assert.Contains(result.TopicBreakdown, x => x.Topic == "Kitchen" && x.EligibleExperiments == 2);
         Assert.Contains("người sáng tạo duyệt", result.SuggestedStyleSummary);
+        Assert.DoesNotContain(result.StrongestSignals, x => x.Dimension == "SpeakingStyle");
     }
 
     [Fact]
