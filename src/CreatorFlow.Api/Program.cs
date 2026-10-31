@@ -171,7 +171,7 @@ videos.MapGet("/", async (string? status, string? discoveryMethod, int? skip, in
     var size = take ?? 50;
     if (size is < 1 or > 100) return Results.ValidationProblem(new Dictionary<string, string[]> { ["take"] = ["Must be between 1 and 100."] });
     var items = await query.OrderByDescending(x => x.DiscoveredAt).Skip(page).Take(size)
-        .Select(x => new VideoCandidateResponse(x.Id, x.DouyinVideoId, x.SourceChannelId, x.SourceUrl, x.Title, x.DiscoveryMethod.ToString(), x.Status.ToString(), x.PublishedAt, x.DiscoveredAt)).ToArrayAsync(ct);
+        .Select(x => new VideoCandidateResponse(x.Id, x.DouyinVideoId, x.SourceChannelId, x.ContentTopicId, x.SourceUrl, x.Title, x.DiscoveryMethod.ToString(), x.Status.ToString(), x.PublishedAt, x.DiscoveredAt)).ToArrayAsync(ct);
     return Results.Ok(items);
 });
 videos.MapPost("/", async (CreateVideoCandidateRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
@@ -183,13 +183,15 @@ videos.MapPost("/", async (CreateVideoCandidateRequest request, CreatorFlowDbCon
         return Results.ValidationProblem(new Dictionary<string, string[]> { ["discoveryMethod"] = ["Use FollowedChannel, TopicExplore or Manual."] });
     if (request.SourceChannelId.HasValue && !await db.DouyinSourceChannels.AnyAsync(x => x.Id == request.SourceChannelId.Value, ct))
         return Results.ValidationProblem(new Dictionary<string, string[]> { ["sourceChannelId"] = ["Source channel does not exist."] });
+    if (request.ContentTopicId.HasValue && !await db.ContentTopics.AnyAsync(x => x.Id == request.ContentTopicId.Value, ct))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["contentTopicId"] = ["Content topic does not exist."] });
     try
     {
         var now = DateTimeOffset.UtcNow;
-        var video = DouyinVideoCandidate.Create(request.DouyinVideoId, request.SourceChannelId, request.SourceUrl, request.Title, method, request.PublishedAt, now);
+        var video = DouyinVideoCandidate.Create(request.DouyinVideoId, request.SourceChannelId, request.SourceUrl, request.Title, method, request.PublishedAt, now, request.ContentTopicId);
         db.DouyinVideoCandidates.Add(video);
         await db.SaveChangesAsync(ct);
-        return Results.Created($"/api/v1/douyin/videos/{video.Id}", new VideoCandidateResponse(video.Id, video.DouyinVideoId, video.SourceChannelId, video.SourceUrl, video.Title, video.DiscoveryMethod.ToString(), video.Status.ToString(), video.PublishedAt, video.DiscoveredAt));
+        return Results.Created($"/api/v1/douyin/videos/{video.Id}", new VideoCandidateResponse(video.Id, video.DouyinVideoId, video.SourceChannelId, video.ContentTopicId, video.SourceUrl, video.Title, video.DiscoveryMethod.ToString(), video.Status.ToString(), video.PublishedAt, video.DiscoveredAt));
     }
     catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["video"] = [ex.Message] }); }
 });
@@ -217,6 +219,6 @@ public sealed record UpdateTopicRequest(string Name, string? Keywords);
 public sealed record TopicResponse(Guid Id, string Name, string Keywords, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 public sealed record CreateChannelRequest(string DouyinSecUserId, string DisplayName, string ProfileUrl);
 public sealed record ChannelResponse(Guid Id, string DouyinSecUserId, string DisplayName, string ProfileUrl, bool IsFollowed, DateTimeOffset? FollowedAt, DateTimeOffset? LastCheckedAt);
-public sealed record CreateVideoCandidateRequest(string DouyinVideoId, Guid? SourceChannelId, string SourceUrl, string? Title, string DiscoveryMethod, DateTimeOffset? PublishedAt);
-public sealed record VideoCandidateResponse(Guid Id, string DouyinVideoId, Guid? SourceChannelId, string SourceUrl, string Title, string DiscoveryMethod, string Status, DateTimeOffset? PublishedAt, DateTimeOffset DiscoveredAt);
+public sealed record CreateVideoCandidateRequest(string DouyinVideoId, Guid? SourceChannelId, Guid? ContentTopicId, string SourceUrl, string? Title, string DiscoveryMethod, DateTimeOffset? PublishedAt);
+public sealed record VideoCandidateResponse(Guid Id, string DouyinVideoId, Guid? SourceChannelId, Guid? ContentTopicId, string SourceUrl, string Title, string DiscoveryMethod, string Status, DateTimeOffset? PublishedAt, DateTimeOffset DiscoveredAt);
 public partial class Program;
