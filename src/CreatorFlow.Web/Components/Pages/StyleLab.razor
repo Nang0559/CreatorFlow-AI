@@ -1,0 +1,109 @@
+@page "/style-lab"
+@inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
+
+<PageTitle>Style Lab · CreatorFlow</PageTitle>
+<header class="page-header">
+    <div><p class="eyebrow">CREATIVE EXPERIMENTS</p><h1>Style Lab</h1>
+        <p class="muted">Tạo 2–3 cách thể hiện khác nhau cho cùng một ý tưởng, đo lường sau khi đăng và chọn phương án thắng.</p></div>
+    <button class="primary" @onclick="LoadAsync">Làm mới</button>
+</header>
+@if (!Api.IsConfigured) { <section class="notice"><strong>Chưa kết nối API</strong><p>Cần cấu hình CreatorFlowApi ở server Web.</p></section> }
+@if (!string.IsNullOrWhiteSpace(error)) { <section class="notice"><strong>Thông báo</strong><p>@error</p></section> }
+
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">NEW EXPERIMENT</p><h2>Tạo thử nghiệm phong cách</h2></div></div>
+    <div class="trend-form">
+        <label>Tên thử nghiệm<input @bind="name" /></label>
+        <label>Giả thuyết<input @bind="hypothesis" /></label>
+        <label>Số phương án<select @bind="variantCount"><option value="2">2 phương án</option><option value="3">3 phương án</option></select></label>
+    </div>
+    @for (var i = 0; i < variantCount; i++)
+    {
+        var index = i;
+        <div class="variant-editor">
+            <h3>Phương án @(index + 1)</h3>
+            <div class="trend-form">
+                <label>Tên<input @bind="variants[index].Name" /></label>
+                <label>Hook / mở đầu<input @bind="variants[index].Hook" /></label>
+                <label>Phong cách nói<input @bind="variants[index].SpeakingStyle" /></label>
+                <label>Nhịp dựng<input @bind="variants[index].EditPacing" /></label>
+                <label>Cách dùng âm thanh<input @bind="variants[index].AudioApproach" /></label>
+                <label>Kịch bản<textarea @bind="variants[index].Script" rows="3"></textarea></label>
+            </div>
+        </div>
+    }
+    <button class="primary" disabled="@(!Api.IsConfigured || busy)" @onclick="CreateAsync">Tạo thử nghiệm</button>
+</section>
+
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">EXPERIMENT HISTORY</p><h2>Các thử nghiệm</h2></div><span class="status">@experiments.Count thử nghiệm</span></div>
+    @if (experiments.Count == 0) { <p class="muted">Chưa có thử nghiệm. Mỗi thử nghiệm cần 2 hoặc 3 phương án được viết độc lập.</p> }
+    @foreach (var experiment in experiments)
+    {
+        <article class="experiment-item">
+            <div class="panel-heading"><div><h3>@experiment.Name</h3><p class="muted">@experiment.Hypothesis</p></div><span class="status">@experiment.Status</span></div>
+            <div class="variant-grid">
+                @foreach (var variant in experiment.Variants)
+                {
+                    <div class="variant-card">
+                        <strong>@variant.Name</strong><span class="status">@variant.Status</span>
+                        <p><b>Hook:</b> @variant.Hook</p><p><b>Cách nói:</b> @variant.SpeakingStyle</p><p><b>Nhịp dựng:</b> @variant.EditPacing</p><p><b>Âm thanh:</b> @variant.AudioApproach</p>
+                        <div class="variant-stats"><span>@variant.Views.ToString("N0") views</span><span>@(variant.EngagementRate?.ToString("0.00") ?? "—")% tương tác</span><span>@variant.FollowsGained follows</span><span>@variant.Orders orders</span></div>
+                    </div>
+                }
+            </div>
+            @if (experiment.WinningVariantId.HasValue) { <p class="winner">Phương án thắng: @experiment.Variants.FirstOrDefault(x => x.Id == experiment.WinningVariantId)?.Name</p> }
+        </article>
+    }
+</section>
+
+@code {
+    private List<CreatorFlow.Web.Services.StyleExperimentItem> experiments = [];
+    private List<VariantInput> variants = [new() { Name = "Tự nhiên", Hook = "Bạn có từng gặp tình huống này?", SpeakingStyle = "Gần gũi, trò chuyện", EditPacing = "Nhịp vừa, cắt theo ý", AudioApproach = "Nhạc nền nhẹ" },
+        new() { Name = "Storytelling", Hook = "Tôi đã bất ngờ khi thử...", SpeakingStyle = "Kể chuyện có cao trào", EditPacing = "Mở chậm, tăng nhịp ở điểm chính", AudioApproach = "Âm thanh tạo cảm xúc" },
+        new() { Name = "Review trực diện", Hook = "3 điều cần biết trước khi mua...", SpeakingStyle = "Rõ ràng, súc tích", EditPacing = "Cắt nhanh, minh họa tính năng", AudioApproach = "Voice nổi bật, nhạc nền nhỏ" }];
+    private string name = "Thử nghiệm phong cách mới";
+    private string hypothesis = "Hook kể chuyện giúp tăng thời gian xem và lượt theo dõi.";
+    private int variantCount = 2;
+    private bool busy;
+    private string error = "";
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (!Api.IsConfigured) return;
+        try { error = ""; experiments = await Api.GetAsync<List<CreatorFlow.Web.Services.StyleExperimentItem>>("/api/v1/style-experiments?take=100") ?? []; }
+        catch (Exception ex) { error = ex.Message; }
+    }
+
+    private async Task CreateAsync()
+    {
+        try
+        {
+            busy = true; error = "";
+            var payload = new
+            {
+                name, hypothesis, contentProjectId = (Guid?)null,
+                variants = variants.Take(variantCount).Select(x => new { name = x.Name, hook = x.Hook,
+                    speakingStyle = x.SpeakingStyle, editPacing = x.EditPacing, audioApproach = x.AudioApproach,
+                    script = string.IsNullOrWhiteSpace(x.Script) ? $"Kịch bản tiếng Việt theo phong cách {x.Name}" : x.Script,
+                    creativeNotes = (string?)null }).ToArray()
+            };
+            await Api.PostAsync<object, object>("/api/v1/style-experiments", payload);
+            await LoadAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private sealed class VariantInput
+    {
+        public string Name { get; set; } = "";
+        public string Hook { get; set; } = "";
+        public string SpeakingStyle { get; set; } = "";
+        public string EditPacing { get; set; } = "";
+        public string AudioApproach { get; set; } = "";
+        public string Script { get; set; } = "";
+    }
+}
