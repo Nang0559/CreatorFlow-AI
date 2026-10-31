@@ -116,6 +116,6 @@ All outputs are drafts with `requires_human_review=true`. These endpoints are re
 
 The authenticated .NET API exposes server-side proxy routes:
 - `POST /api/v1/ai/analyze` with `{ "text": "...", "language": "vi", "topic": "...", "creatorPositioning": "..." }`.
-- `POST /api/v1/ai/style-lab/generate-variants` with `sourceAnalysis`, `topic`, `creatorPositioning`, optional `styleSummary` / `productContext`, `variantCount` (2 or 3) and `targetDurationSeconds`.
+- `POST /api/v1/ai/style-lab/generate-variants` with `sourceAnalysis`, `topic`, `creatorPositioning`, optional `styleSummary` / `productContext`, `variantCount` (2 or 3) and `targetDurationSeconds`.\n- `POST /api/v1/style-profiles/{id}/ai-learning-synthesis` loads only evaluated experiments explicitly imported into that profile, sends winner/loser factors and winner metrics to the LLM, and returns a draft synthesis. At least two imported evaluated experiments and a non-empty profile positioning are required. The result is not persisted; the creator may put it into the editable Style Summary and save manually.
 
 Configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` in the API host. The proxy validates HTTPS (or localhost HTTP), requires a 32-character service key, and forwards provider responses/status without exposing the AI service key to the browser. Missing configuration and unavailable service return 503; timeout returns 504. The Python service separately requires its own provider credentials. The creator-facing Blazor controls are not yet wired to these proxy routes.
