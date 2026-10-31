@@ -11,6 +11,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<DouyinSourceChannel> DouyinSourceChannels => Set<DouyinSourceChannel>();
     public DbSet<DouyinVideoCandidate> DouyinVideoCandidates => Set<DouyinVideoCandidate>();
     public DbSet<VietnamTrendSignal> VietnamTrendSignals => Set<VietnamTrendSignal>();
+    public DbSet<VietnamTrendMetricSnapshot> VietnamTrendMetricSnapshots => Set<VietnamTrendMetricSnapshot>();
     public DbSet<StyleExperiment> StyleExperiments => Set<StyleExperiment>();
     public DbSet<StyleExperimentVariant> StyleExperimentVariants => Set<StyleExperimentVariant>();
 
@@ -60,6 +61,15 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.SoundArtist).HasMaxLength(200);
             entity.HasIndex(x => new { x.Platform, x.Kind, x.ExternalId }).IsUnique();
             entity.HasIndex(x => new { x.Kind, x.ObservedAt });
+        });
+
+        modelBuilder.Entity<VietnamTrendMetricSnapshot>(entity =>
+        {
+            entity.ToTable("VietnamTrendMetricSnapshots");
+            entity.HasKey(x => x.Id);
+            entity.HasOne<VietnamTrendSignal>().WithMany().HasForeignKey(x => x.TrendSignalId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.TrendSignalId, x.ObservedAt }).IsUnique();
         });
 
         modelBuilder.Entity<StyleExperiment>(entity =>
