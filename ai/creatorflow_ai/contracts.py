@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator\n\n\ndef to_camel(value: str) -> str:\n    first, *rest = value.split("_")\n    return first + "".join(part[:1].upper() + part[1:] for part in rest)\n\n\nclass CreatorFlowModel(BaseModel):\n    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
 class AnalyzeRequest(BaseModel):
