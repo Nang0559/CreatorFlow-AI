@@ -57,3 +57,19 @@ A style experiment is attached optionally to a content project and requires exac
 An experiment can start only after every variant is ready. It can be evaluated only after every variant has been published and measured; the creator explicitly records the winning variant. Engagement rate is exposed as a derived descriptive metric, not an automatic winner score. Reach, retention, follows and commerce outcomes should be considered against the experiment's stated hypothesis and comparable measurement windows.
 
 The goal is cumulative learning: preserve winning and losing experiments, extract reusable style traits into a creator style profile in a later workflow, and test whether those traits keep working across topics and products. Do not copy source dialogue or reproduce a source video shot-for-shot; translate the underlying creative mechanism into a distinct Vietnamese execution.
+
+
+## Creator style profile and cumulative learning
+
+A creator style profile is created for a stable creator/account key. It contains positioning and editable style guidance, plus an evidence history of winning variants from completed Style Lab experiments.
+
+Learning is explicit:
+1. Complete and measure all two or three variants in an experiment.
+2. The creator reviews the evidence and confirms the winning variant.
+3. The creator explicitly adds that evaluated experiment to a style profile.
+4. CreatorFlow stores a snapshot of the winning hook, speaking style, editing pace, audio approach and measured results.
+5. After several experiments, an AI synthesis step can identify repeated traits across topics and product categories and propose an updated style summary for creator approval.
+
+One successful video is evidence, not a permanent style rule. Preserve counterexamples and losing variants in their original experiments. Compare outcomes over similar measurement windows and consider retention, follows and commerce outcomes alongside engagement. The style summary is editable and should not be overwritten by an unreviewed AI inference.
+
+The current `ProfileKey` is an application-level owner key only. The bootstrap API-key scheme is not a multi-user identity system; tenant ownership enforcement is a prerequisite for a shared multi-creator deployment.
