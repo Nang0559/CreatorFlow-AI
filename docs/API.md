@@ -43,7 +43,7 @@ Trend kinds: `CreatorChannel`, `Video`, `Sound`. Platforms: `TikTokVietnam`, `Yo
 - `POST /api/v1/vietnam-trends` with kind, platform, externalId, sourceUrl (HTTPS), creator/title/topic, optional soundName/soundArtist, publishedAt and the observed views/likes/comments/shares/saves.
 - `POST /api/v1/vietnam-trends/{id}/observe` with a newer metrics snapshot.
 
-The API currently stores the latest observed metrics on each signal. The schema/API do not imply automatic access to platform trend feeds or music charts; records must be entered manually or supplied by a separately validated connector.
+Every create and observe operation stores an immutable timestamped metric snapshot; query history with `GET /api/v1/vietnam-trends/{id}/history`. The schema/API do not imply automatic access to platform trend feeds or music charts; records must be entered manually or supplied by a separately validated connector.
 
 ## Style Lab experiments
 
