@@ -38,7 +38,7 @@
         <section class="evidence-card">
             <div class="panel-heading">
                 <div><h3>AI Style Learning</h3><p class="muted">Phân tích các phương án thắng và thua qua nhiều thử nghiệm, tách riêng theo chủ đề.</p></div>
-                <button class="primary" disabled="@busy" @onclick="AnalyzeStyleAsync">Phân tích dữ liệu</button>
+                <button class="primary" disabled="@busy" @onclick="AnalyzeStyleAsync">Phân tích dữ liệu</button>\n                <button class="secondary" disabled="@busy || selectedProfile.Evidence.Length < 2" @onclick="SynthesizeWithAiAsync">LLM tự tổng hợp phong cách</button>
             </div>
             @if (learningAnalysis is not null)
             {
@@ -104,7 +104,7 @@
     private List<CreatorFlow.Web.Services.CreatorStyleProfileItem> profiles = [];
     private List<CreatorFlow.Web.Services.StyleExperimentItem> evaluatedExperiments = [];
     private CreatorFlow.Web.Services.CreatorStyleProfileDetail? selectedProfile;
-    private CreatorFlow.Web.Services.StyleLearningAnalysisItem? learningAnalysis;
+    private CreatorFlow.Web.Services.StyleLearningAnalysisItem? learningAnalysis;\n    private CreatorFlow.Web.Services.AiLearningSynthesisResponse? aiSynthesis;
     private string profileKey = "creator-main", displayName = "", positioning = "", styleSummary = "";
     private string selectedProfileId = "", selectedExperimentId = "", error = "";
     private bool busy;
@@ -168,6 +168,25 @@
     {
         if (learningAnalysis is not null)
             styleSummary = learningAnalysis.SuggestedStyleSummary;
+    }
+
+    private async Task SynthesizeWithAiAsync()
+    {
+        if (selectedProfile is null) return;
+        try
+        {
+            busy = true; error = ""; aiSynthesis = null;
+            aiSynthesis = await Api.PostAsync<object, CreatorFlow.Web.Services.AiLearningSynthesisResponse>(
+                $"/api/v1/style-profiles/{selectedProfile.Id}/ai-learning-synthesis", new { });
+            if (aiSynthesis is null) throw new InvalidOperationException("AI không trả về bản tổng hợp.");
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private void UseAiSummary()
+    {
+        if (aiSynthesis is not null) styleSummary = aiSynthesis.ProposedStyleSummary;
     }
 
     private async Task SaveGuidanceAsync()
