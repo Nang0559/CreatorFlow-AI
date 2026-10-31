@@ -112,6 +112,8 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
             entity.Property(x => x.Hypothesis).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.Topic).HasMaxLength(200);
+            entity.HasIndex(x => new { x.Topic, x.Status, x.UpdatedAt });
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.HasIndex(x => new { x.Status, x.UpdatedAt });
             entity.HasMany(x => x.Variants).WithOne().HasForeignKey(x => x.StyleExperimentId)
