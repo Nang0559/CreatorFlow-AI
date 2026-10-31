@@ -9,6 +9,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -42,8 +43,12 @@ class LLMSettings:
                 "CREATORFLOW_LLM_API_KEY and CREATORFLOW_LLM_MODEL must be configured."
             )
         base_url = os.getenv("CREATORFLOW_LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
-        if not base_url.startswith("https://") and not base_url.startswith("http://localhost"):
+        parsed_url = urlparse(base_url)
+        is_local_http = parsed_url.scheme == "http" and parsed_url.hostname in {"localhost", "127.0.0.1", "::1"}
+        if parsed_url.scheme != "https" and not is_local_http:
             raise AIConfigurationError("CREATORFLOW_LLM_BASE_URL must use HTTPS (HTTP is allowed only for localhost).")
+        if not parsed_url.hostname or parsed_url.username or parsed_url.password or parsed_url.query or parsed_url.fragment:
+            raise AIConfigurationError("CREATORFLOW_LLM_BASE_URL is not a valid provider base URL.")
         try:
             timeout = float(os.getenv("CREATORFLOW_LLM_TIMEOUT_SECONDS", "60"))
             max_tokens = int(os.getenv("CREATORFLOW_LLM_MAX_OUTPUT_TOKENS", "3000"))
@@ -80,7 +85,10 @@ class OpenAICompatibleLLM:
                 response.raise_for_status()
                 payload = response.json()
                 content = payload["choices"][0]["message"]["content"]
-                parsed = json.loads(content)
+                try:
+                    parsed = json.loads(content)
+                except json.JSONDecodeError as exc:
+                    raise AIInvalidOutputError("The model response is not valid JSON.") from exc
                 if not isinstance(parsed, dict):
                     raise AIInvalidOutputError("The model response must be a JSON object.")
                 return parsed
