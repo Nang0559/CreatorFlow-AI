@@ -20,6 +20,7 @@ jobs:
           dotnet-version: 9.0.x
       - run: dotnet restore CreatorFlow.sln
       - run: dotnet build CreatorFlow.sln --configuration Release --no-restore
+      - run: dotnet test CreatorFlow.sln --configuration Release --no-build
 
   python:
     name: Python tests
