@@ -107,10 +107,12 @@ public static class StyleLearningEngine
             {
                 // Experiments where the same factor occurs in both a winner and a loser
                 // are ambiguous and are excluded from the decisive support denominator.
-                var decisiveSupport = pair.Value.Wins.Count + pair.Value.Losses.Count;
-                var winRate = decisiveSupport == 0 ? 0m : (decimal)pair.Value.Wins.Count / decisiveSupport;
+                var decisiveWins = pair.Value.Wins.Except(pair.Value.Losses).Count();
+                var decisiveLosses = pair.Value.Losses.Except(pair.Value.Wins).Count();
+                var decisiveSupport = decisiveWins + decisiveLosses;
+                var winRate = decisiveSupport == 0 ? 0m : (decimal)decisiveWins / decisiveSupport;
                 return new StyleFactorInsight(pair.Key.Dimension, pair.Key.Value, decisiveSupport,
-                    pair.Value.Wins.Count, pair.Value.Losses.Count, decimal.Round(winRate, 4),
+                    decisiveWins, decisiveLosses, decimal.Round(winRate, 4),
                     decimal.Round(winRate - baseline, 4));
             })
             .Where(x => x.SupportingExperiments >= 2 && x.WinningExperiments >= 2 && x.Lift > 0m)
