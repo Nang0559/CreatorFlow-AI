@@ -42,6 +42,18 @@ public sealed class VietnamTrendAndStyleLabTests
         Assert.Throws<InvalidOperationException>(() => trend.RecordObservation(90, 9, 1, 1, 1, Now.AddMinutes(-1)));
     }
 
+
+    [Fact]
+    public void Trend_metric_snapshot_preserves_each_observation()
+    {
+        var signalId = Guid.NewGuid();
+        var first = VietnamTrendMetricSnapshot.Create(signalId, 100, 10, 1, 2, 3, Now);
+        var second = VietnamTrendMetricSnapshot.Create(signalId, 250, 25, 3, 5, 7, Now.AddHours(1));
+        Assert.NotEqual(first.Id, second.Id);
+        Assert.Equal(100, first.Views);
+        Assert.Equal(250, second.Views);
+    }
+
     [Fact]
     public void Sound_trend_requires_sound_name()
     {
