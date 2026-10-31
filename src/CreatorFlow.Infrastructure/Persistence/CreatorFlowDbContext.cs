@@ -1,5 +1,5 @@
 using CreatorFlow.Domain.Content;
-using CreatorFlow.Domain.Discovery;
+using CreatorFlow.Domain.Discovery;\nusing CreatorFlow.Domain.Content;
 using Microsoft.EntityFrameworkCore;
 
 namespace CreatorFlow.Infrastructure.Persistence;
@@ -10,6 +10,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<ContentTopic> ContentTopics => Set<ContentTopic>();
     public DbSet<DouyinSourceChannel> DouyinSourceChannels => Set<DouyinSourceChannel>();
     public DbSet<DouyinVideoCandidate> DouyinVideoCandidates => Set<DouyinVideoCandidate>();
+    public DbSet<VietnamTrendSignal> VietnamTrendSignals => Set<VietnamTrendSignal>();
+    public DbSet<StyleExperiment> StyleExperiments => Set<StyleExperiment>();
+    public DbSet<StyleExperimentVariant> StyleExperimentVariants => Set<StyleExperimentVariant>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -40,6 +43,54 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.ProfileUrl).HasMaxLength(1000).IsRequired();
             entity.HasIndex(x => x.DouyinSecUserId).IsUnique();
             entity.HasIndex(x => new { x.IsFollowed, x.LastCheckedAt });
+        });
+
+        modelBuilder.Entity<VietnamTrendSignal>(entity =>
+        {
+            entity.ToTable("VietnamTrendSignals");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Kind).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.Property(x => x.Platform).HasConversion<string>().HasMaxLength(40).IsRequired();
+            entity.Property(x => x.ExternalId).HasMaxLength(180).IsRequired();
+            entity.Property(x => x.Title).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.CreatorName).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.SourceUrl).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.Topic).HasMaxLength(200);
+            entity.Property(x => x.SoundName).HasMaxLength(300);
+            entity.Property(x => x.SoundArtist).HasMaxLength(200);
+            entity.HasIndex(x => new { x.Platform, x.Kind, x.ExternalId }).IsUnique();
+            entity.HasIndex(x => new { x.Kind, x.ObservedAt });
+        });
+
+        modelBuilder.Entity<StyleExperiment>(entity =>
+        {
+            entity.ToTable("StyleExperiments");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.Hypothesis).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
+            entity.HasIndex(x => new { x.Status, x.UpdatedAt });
+            entity.HasMany(x => x.Variants).WithOne().HasForeignKey(x => x.StyleExperimentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<ContentProject>().WithMany().HasForeignKey(x => x.ContentProjectId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<StyleExperimentVariant>(entity =>
+        {
+            entity.ToTable("StyleExperimentVariants");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Hook).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.SpeakingStyle).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.EditPacing).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.AudioApproach).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.Script).HasMaxLength(12000).IsRequired();
+            entity.Property(x => x.CreativeNotes).HasMaxLength(4000);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
+            entity.Property(x => x.AverageWatchSeconds).HasPrecision(12, 3);
+            entity.Property(x => x.VideoDurationSeconds).HasPrecision(12, 3);
+            entity.HasIndex(x => new { x.StyleExperimentId, x.Name }).IsUnique();
         });
 
         modelBuilder.Entity<DouyinVideoCandidate>(entity =>
