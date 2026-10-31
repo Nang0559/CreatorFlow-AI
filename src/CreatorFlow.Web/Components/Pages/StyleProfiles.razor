@@ -35,6 +35,49 @@
             <label>Style summary<textarea @bind="styleSummary" rows="3" placeholder="Các đặc điểm lặp lại đã được xác nhận qua nhiều thử nghiệm"></textarea></label>
             <button class="secondary" disabled="@busy" @onclick="SaveGuidanceAsync">Lưu định hướng</button>
         </div>
+        <section class="evidence-card">
+            <div class="panel-heading">
+                <div><h3>AI Style Learning</h3><p class="muted">Phân tích các phương án thắng và thua qua nhiều thử nghiệm, tách riêng theo chủ đề.</p></div>
+                <button class="primary" disabled="@busy" @onclick="AnalyzeStyleAsync">Phân tích dữ liệu</button>
+            </div>
+            @if (learningAnalysis is not null)
+            {
+                <div class="variant-stats">
+                    <span>@learningAnalysis.EligibleExperiments thử nghiệm đủ điều kiện</span>
+                    <span>@learningAnalysis.EligibleVariants biến thể đã đo</span>
+                    <span>@learningAnalysis.ExcludedExperiments bị loại do thiếu mẫu</span>
+                    <span>Baseline @((learningAnalysis.BaselineWinRate * 100m).ToString("0.0"))%</span>
+                </div>
+                <p>@learningAnalysis.SuggestedStyleSummary</p>
+                @if (learningAnalysis.StrongestSignals.Length == 0)
+                {
+                    <p class="muted">Chưa có đặc điểm lặp lại đủ bằng chứng để đề xuất.</p>
+                }
+                else
+                {
+                    <h4>Tín hiệu phong cách lặp lại</h4>
+                    @foreach (var factor in learningAnalysis.StrongestSignals)
+                    {
+                        <p><b>@factor.Dimension:</b> @factor.Value — thắng @factor.WinningExperiments/@factor.SupportingExperiments thử nghiệm; uplift @((factor.Lift * 100m).ToString("0.0")) điểm %.</p>
+                    }
+                }
+                @if (learningAnalysis.TopicBreakdown.Length > 0)
+                {
+                    <h4>Phân tích theo chủ đề</h4>
+                    @foreach (var group in learningAnalysis.TopicBreakdown)
+                    {
+                        <p><b>@group.Topic</b> · @group.EligibleExperiments thử nghiệm</p>
+                        @foreach (var factor in group.StrongestSignals)
+                        {
+                            <p class="muted">@factor.Dimension: @factor.Value · thắng @factor.WinningExperiments/@factor.SupportingExperiments</p>
+                        }
+                    }
+                }
+                <button class="secondary" disabled="@busy" @onclick="UseSuggestedSummary">Đưa đề xuất vào bản nháp Style Summary</button>
+                <p class="muted">Đây chỉ là bản nháp. Hồ sơ chưa thay đổi cho đến khi bạn kiểm tra và bấm “Lưu định hướng”.</p>
+                <details><summary>Phương pháp và giới hạn</summary><p class="muted">@learningAnalysis.Methodology</p></details>
+            }
+        </section>
         <div class="learn-row">
             <label>Thử nghiệm đã đánh giá
                 <select @bind="selectedExperimentId">
@@ -61,6 +104,7 @@
     private List<CreatorFlow.Web.Services.CreatorStyleProfileItem> profiles = [];
     private List<CreatorFlow.Web.Services.StyleExperimentItem> evaluatedExperiments = [];
     private CreatorFlow.Web.Services.CreatorStyleProfileDetail? selectedProfile;
+    private CreatorFlow.Web.Services.StyleLearningAnalysisItem? learningAnalysis;
     private string profileKey = "creator-main", displayName = "", positioning = "", styleSummary = "";
     private string selectedProfileId = "", selectedExperimentId = "", error = "";
     private bool busy;
@@ -105,6 +149,25 @@
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
+    }
+
+    private async Task AnalyzeStyleAsync()
+    {
+        if (selectedProfile is null) return;
+        try
+        {
+            busy = true; error = "";
+            learningAnalysis = await Api.GetAsync<CreatorFlow.Web.Services.StyleLearningAnalysisItem>(
+                $"/api/v1/style-profiles/{selectedProfile.Id}/learning-analysis?minimumViewsPerVariant=100");
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private void UseSuggestedSummary()
+    {
+        if (learningAnalysis is not null)
+            styleSummary = learningAnalysis.SuggestedStyleSummary;
     }
 
     private async Task SaveGuidanceAsync()
