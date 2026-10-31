@@ -55,6 +55,8 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasIndex(x => new { x.Status, x.DiscoveredAt });
             entity.HasOne<DouyinSourceChannel>().WithMany().HasForeignKey(x => x.SourceChannelId)
                 .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne<ContentTopic>().WithMany().HasForeignKey(x => x.ContentTopicId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
