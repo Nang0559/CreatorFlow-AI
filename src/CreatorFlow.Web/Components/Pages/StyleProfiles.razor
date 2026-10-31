@@ -39,7 +39,7 @@
             <div class="panel-heading">
                 <div><h3>AI Style Learning</h3><p class="muted">Phân tích các phương án thắng và thua qua nhiều thử nghiệm, tách riêng theo chủ đề.</p></div>
                 <button class="primary" disabled="@busy" @onclick="AnalyzeStyleAsync">Phân tích dữ liệu</button>
-                <button class="secondary" disabled="@busy || selectedProfile.Evidence.Length < 2" @onclick="SynthesizeWithAiAsync">LLM tự tổng hợp phong cách</button>
+                <button class="secondary" disabled="@(busy || selectedProfile.Evidence.Length < 2)" @onclick="SynthesizeWithAiAsync">LLM tự tổng hợp phong cách</button>
             </div>
             @if (learningAnalysis is not null)
             {
