@@ -34,6 +34,7 @@
         </div>
     }
     <button class="primary" disabled="@(!Api.IsConfigured || busy)" @onclick="CreateAsync">Tạo thử nghiệm</button>
+    @if (aiGenerated) { <p class="muted">Các phương án được tạo bằng LLM. Kiểm tra nội dung, tính chính xác của thông tin và quyền sử dụng trước khi lưu.</p> }
 </section>
 
 <section class="panel">
