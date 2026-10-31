@@ -73,3 +73,12 @@ Learning is explicit:
 One successful video is evidence, not a permanent style rule. Preserve counterexamples and losing variants in their original experiments. Compare outcomes over similar measurement windows and consider retention, follows and commerce outcomes alongside engagement. The style summary is editable and should not be overwritten by an unreviewed AI inference.
 
 The current `ProfileKey` is an application-level owner key only. The bootstrap API-key scheme is not a multi-user identity system; tenant ownership enforcement is a prerequisite for a shared multi-creator deployment.
+
+
+## As-built design references and current learning behavior
+
+The implemented Style Lab and creator-style learning behavior is specified in [Style Lab and Style Learning design](design/STYLE_LAB_AND_LEARNING.md). The implemented entities and relationships are specified in [Data model](design/DATA_MODEL.md).
+
+Current Style Learning is a deterministic analysis of evaluated 2–3-variant experiments. It requires every variant to be measured and meet the minimum-view threshold, compares exact repeated hook/speaking/edit/audio values, and only surfaces factors with at least two decisive supporting experiments, at least two wins and positive lift over the mean 1/N baseline. Factors present in both winner and loser variants of the same experiment are treated as ambiguous for that experiment. The analysis is descriptive, not causal, and is not an ML/LLM-generated conclusion.
+
+Important scope limitation: the learning-analysis route verifies the profile exists but currently analyzes the evaluated experiment pool, not only experiments imported into that profile. It must not be treated as profile isolation or multi-account-safe behavior. The UI lets the creator copy the proposed summary into an editable draft and save it manually; no persisted proposal approval state or profile version history exists yet.
