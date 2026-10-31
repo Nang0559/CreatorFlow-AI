@@ -10,6 +10,7 @@ public sealed class StyleExperiment
     public Guid? ContentProjectId { get; private set; }
     public string Name { get; private set; } = string.Empty;
     public string Hypothesis { get; private set; } = string.Empty;
+    public string? Topic { get; private set; }
     public StyleExperimentStatus Status { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -17,12 +18,14 @@ public sealed class StyleExperiment
     public Guid? WinningVariantId { get; private set; }
 
     public static StyleExperiment Create(string name, string hypothesis, IEnumerable<StyleVariantDraft> variants,
-        DateTimeOffset now, Guid? contentProjectId = null)
+        DateTimeOffset now, Guid? contentProjectId = null, string? topic = null)
     {
         if (string.IsNullOrWhiteSpace(name) || name.Trim().Length > 160)
             throw new ArgumentException("Experiment name is required and cannot exceed 160 characters.", nameof(name));
         if (string.IsNullOrWhiteSpace(hypothesis) || hypothesis.Trim().Length > 2000)
             throw new ArgumentException("A testable hypothesis is required (max 2000 characters).", nameof(hypothesis));
+        if (topic?.Trim().Length > 200)
+            throw new ArgumentException("Topic cannot exceed 200 characters.", nameof(topic));
         var drafts = variants?.ToArray() ?? [];
         if (drafts.Length is < 2 or > 3)
             throw new ArgumentException("Each experiment must contain exactly 2 or 3 style variants.", nameof(variants));
@@ -37,7 +40,8 @@ public sealed class StyleExperiment
         var experiment = new StyleExperiment
         {
             Id = Guid.NewGuid(), ContentProjectId = contentProjectId, Name = name.Trim(),
-            Hypothesis = hypothesis.Trim(), Status = StyleExperimentStatus.Draft, CreatedAt = now, UpdatedAt = now
+            Hypothesis = hypothesis.Trim(), Topic = string.IsNullOrWhiteSpace(topic) ? null : topic.Trim(),
+            Status = StyleExperimentStatus.Draft, CreatedAt = now, UpdatedAt = now
         };
         foreach (var draft in drafts)
             experiment.Variants.Add(StyleExperimentVariant.Create(experiment.Id, draft));
