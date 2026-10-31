@@ -73,3 +73,14 @@ A profile is keyed by a stable creator/account key and keeps creator positioning
 Learning is deliberately explicit and idempotent per profile/experiment: only an evaluated experiment with a measured winning variant can be added, and the same experiment cannot be added twice to one profile. Each evidence row snapshots the winning hook, speaking style, edit pacing, audio approach and measured performance. The profile's written style summary remains creator-editable; evidence is not automatically promoted into permanent rules after one win. A later AI synthesis step should identify recurring traits across multiple experiments and propose changes for creator approval.
 
 `ProfileKey` is an application-level owner key, not an authentication identity. The current API-key authentication is a bootstrap service credential; multi-user authorization and ownership isolation must be implemented before exposing multiple creators' profiles in a shared deployment.
+
+
+## AI Style Learning
+
+`GET /api/v1/style-profiles/{profileId}/learning-analysis?topic=Kitchen&minimumViewsPerVariant=100`
+
+Returns a read-only analysis of evaluated experiments, including repeated winning factors, topic breakdown, sample eligibility and a proposed style summary. The profile must exist. `topic` is optional; `minimumViewsPerVariant` defaults to 100 and must be non-negative (API maximum: 1,000,000,000).
+
+New style experiments may include an optional `topic` string (maximum 200 characters). Historical experiments retain a NULL topic until explicitly classified; no topic is inferred from their names.
+
+The endpoint is advisory only. It does not mutate `CreatorStyleProfiles.StyleSummary` or create an approval decision.
