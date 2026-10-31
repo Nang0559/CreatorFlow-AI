@@ -62,7 +62,16 @@ public sealed record CreatorStyleProfileDetail(Guid Id, string ProfileKey, strin
     DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 
 public sealed record StyleExperimentItem(Guid Id, Guid? ContentProjectId, string Name, string Hypothesis,
-    string Status, Guid? WinningVariantId, StyleVariantItem[] Variants);
+    string? Topic, string Status, Guid? WinningVariantId, StyleVariantItem[] Variants);
+
+public sealed record StyleFactorInsightItem(string Dimension, string Value, int SupportingExperiments,
+    int WinningExperiments, int LosingExperiments, decimal WinRate, decimal Lift);
+
+public sealed record StyleTopicInsightItem(string Topic, int EligibleExperiments, StyleFactorInsightItem[] StrongestSignals);
+
+public sealed record StyleLearningAnalysisItem(string? TopicFilter, int EligibleExperiments, int EligibleVariants,
+    int ExcludedExperiments, decimal BaselineWinRate, StyleFactorInsightItem[] StrongestSignals,
+    StyleTopicInsightItem[] TopicBreakdown, string SuggestedStyleSummary, string Methodology);
 
 public sealed record StyleVariantItem(Guid Id, string Name, string Hook, string SpeakingStyle, string EditPacing,
     string AudioApproach, string Script, string Status, long Views, long Likes, long Comments, long Shares,
