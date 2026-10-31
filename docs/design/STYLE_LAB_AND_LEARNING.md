@@ -88,7 +88,13 @@ The endpoint returns eligibility counts, signals, topic breakdown, a proposed su
 ## 6. Creator review
 The Style Profiles UI requests analysis, can place the proposed summary into the editable Style Summary draft, and leaves the creator to review and save guidance. This is a manual edit step, not a formal approval workflow: no persisted Pending/Approved/Rejected proposal or immutable profile version history exists yet.
 
-## 7. LLM-assisted synthesis — implemented service boundary\n\nThe Python AI service now exposes a provider-backed evidence synthesis endpoint. It receives structured experiment evidence, profile positioning and current guidance; asks the configured LLM to summarize repeated strengths, conflicting evidence, uncertainty and next experiments; and validates that every cited experiment ID exists in the supplied evidence. The output is a review-required draft. This endpoint does not load evidence from SQL, enforce profile ownership, persist a proposal, or update a profile. Callers must supply a profile-scoped evidence set from a trusted application service; until that orchestration and tenant authorization exist, do not expose it as an account-isolated workflow.\n\nThe LLM is not permitted to turn correlation into causality or to promote a single experiment into a permanent rule. Deterministic eligibility/statistical analysis remains the auditable numeric layer; the LLM provides qualitative synthesis and experiment ideas.\n\n## 8. Next design increments
+## 7. LLM-assisted synthesis — implemented service boundary
+
+The Python AI service now exposes a provider-backed evidence synthesis endpoint. It receives structured experiment evidence, profile positioning and current guidance; asks the configured LLM to summarize repeated strengths, conflicting evidence, uncertainty and next experiments; and validates that every cited experiment ID exists in the supplied evidence. The output is a review-required draft. This endpoint does not load evidence from SQL, enforce profile ownership, persist a proposal, or update a profile. Callers must supply a profile-scoped evidence set from a trusted application service; until that orchestration and tenant authorization exist, do not expose it as an account-isolated workflow.
+
+The LLM is not permitted to turn correlation into causality or to promote a single experiment into a permanent rule. Deterministic eligibility/statistical analysis remains the auditable numeric layer; the LLM provides qualitative synthesis and experiment ideas.
+
+## 8. Next design increments
 1. Persist StyleLearningProposal with source experiment IDs, evidence snapshot, factor details, topic scope, algorithm version, creation time and status.
 2. Add Pending → Approved/Rejected, reviewer identity, review timestamp and reason.
 3. Add immutable CreatorStyleProfileVersion; approval creates a new active version.
