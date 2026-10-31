@@ -42,7 +42,7 @@
     {
         <article class="experiment-item">
             <div class="panel-heading"><div><h3>@experiment.Name</h3><p class="muted">@experiment.Hypothesis</p></div><span class="status">@experiment.Status</span></div>
-            @if (experiment.Status == "Draft") { <button class="secondary" disabled="@busy" @onclick="() => StartAsync(experiment.Id)">Bắt đầu thử nghiệm</button> }
+            @if (experiment.Status == "Draft") { <button class="secondary" disabled="@(busy || experiment.Variants.Any(x => x.Status != "Ready"))" @onclick="() => StartAsync(experiment.Id)">Bắt đầu thử nghiệm</button> }
             <div class="variant-grid">
                 @foreach (var variant in experiment.Variants)
                 {
