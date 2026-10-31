@@ -55,16 +55,16 @@
                         @if (variant.Status == "Published")
                         {
                             <div class="metrics-editor">
-                                <label>Views<input type="number" min="0" @bind="GetMetrics(variant.Id).Views" /></label>
-                                <label>Likes<input type="number" min="0" @bind="GetMetrics(variant.Id).Likes" /></label>
-                                <label>Comments<input type="number" min="0" @bind="GetMetrics(variant.Id).Comments" /></label>
-                                <label>Shares<input type="number" min="0" @bind="GetMetrics(variant.Id).Shares" /></label>
-                                <label>Saves<input type="number" min="0" @bind="GetMetrics(variant.Id).Saves" /></label>
-                                <label>Follows<input type="number" min="0" @bind="GetMetrics(variant.Id).FollowsGained" /></label>
-                                <label>Product clicks<input type="number" min="0" @bind="GetMetrics(variant.Id).ProductClicks" /></label>
-                                <label>Orders<input type="number" min="0" @bind="GetMetrics(variant.Id).Orders" /></label>
-                                <label>Avg watch (s)<input type="number" min="0" step="0.1" @bind="GetMetrics(variant.Id).AverageWatchSeconds" /></label>
-                                <label>Duration (s)<input type="number" min="0" step="0.1" @bind="GetMetrics(variant.Id).VideoDurationSeconds" /></label>
+                                <label>Views<input type="number" min="0" @bind="metricInputs[variant.Id].Views" /></label>
+                                <label>Likes<input type="number" min="0" @bind="metricInputs[variant.Id].Likes" /></label>
+                                <label>Comments<input type="number" min="0" @bind="metricInputs[variant.Id].Comments" /></label>
+                                <label>Shares<input type="number" min="0" @bind="metricInputs[variant.Id].Shares" /></label>
+                                <label>Saves<input type="number" min="0" @bind="metricInputs[variant.Id].Saves" /></label>
+                                <label>Follows<input type="number" min="0" @bind="metricInputs[variant.Id].FollowsGained" /></label>
+                                <label>Product clicks<input type="number" min="0" @bind="metricInputs[variant.Id].ProductClicks" /></label>
+                                <label>Orders<input type="number" min="0" @bind="metricInputs[variant.Id].Orders" /></label>
+                                <label>Avg watch (s)<input type="number" min="0" step="0.1" @bind="metricInputs[variant.Id].AverageWatchSeconds" /></label>
+                                <label>Duration (s)<input type="number" min="0" step="0.1" @bind="metricInputs[variant.Id].VideoDurationSeconds" /></label>
                             </div>
                             <button class="secondary" disabled="@busy" @onclick="() => MeasureAsync(experiment.Id, variant.Id)">Lưu số liệu</button>
                         }
