@@ -14,6 +14,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreatorFlow.Workers", "src\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreatorFlow.Web", "src\\CreatorFlow.Web\\CreatorFlow.Web.csproj", "{7C6E60D1-2C4E-4F7C-AB40-000000000006}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreatorFlow.Domain.Tests", "tests\CreatorFlow.Domain.Tests\CreatorFlow.Domain.Tests.csproj", "{7C6E60D1-2C4E-4F7C-AB40-000000000007}"
+EndProject
 Global
   GlobalSection(SolutionConfigurationPlatforms) = preSolution
     Debug|Any CPU = Debug|Any CPU
@@ -32,5 +34,9 @@ Global
     {7C6E60D1-2C4E-4F7C-AB40-000000000005}.Debug|Any CPU.Build.0 = Debug|Any CPU
     {7C6E60D1-2C4E-4F7C-AB40-000000000006}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
     {7C6E60D1-2C4E-4F7C-AB40-000000000006}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {7C6E60D1-2C4E-4F7C-AB40-000000000007}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {7C6E60D1-2C4E-4F7C-AB40-000000000007}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {7C6E60D1-2C4E-4F7C-AB40-000000000007}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {7C6E60D1-2C4E-4F7C-AB40-000000000007}.Release|Any CPU.Build.0 = Release|Any CPU
   EndGlobalSection
 EndGlobal
