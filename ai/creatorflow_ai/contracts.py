@@ -1,16 +1,25 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator\n\n\ndef to_camel(value: str) -> str:\n    first, *rest = value.split("_")\n    return first + "".join(part[:1].upper() + part[1:] for part in rest)\n\n\nclass CreatorFlowModel(BaseModel):\n    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class AnalyzeRequest(BaseModel):
+def to_camel(value: str) -> str:
+    first, *rest = value.split("_")
+    return first + "".join(part[:1].upper() + part[1:] for part in rest)
+
+
+class CreatorFlowModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+
+class AnalyzeRequest(CreatorFlowModel):
     text: str = Field(min_length=1, max_length=20_000)
     language: str = Field(default="vi", min_length=2, max_length=12)
     topic: str | None = Field(default=None, max_length=200)
     creator_positioning: str | None = Field(default=None, max_length=2_000)
 
 
-class AnalyzeResponse(BaseModel):
+class AnalyzeResponse(CreatorFlowModel):
     language: str
     summary: str
     topics: list[str]
@@ -22,7 +31,7 @@ class AnalyzeResponse(BaseModel):
     requires_human_review: bool = True
 
 
-class GenerateVariantsRequest(BaseModel):
+class GenerateVariantsRequest(CreatorFlowModel):
     source_analysis: str = Field(min_length=1, max_length=12_000)
     topic: str = Field(min_length=1, max_length=200)
     creator_positioning: str = Field(min_length=1, max_length=2_000)
@@ -32,7 +41,7 @@ class GenerateVariantsRequest(BaseModel):
     target_duration_seconds: int = Field(default=45, ge=10, le=180)
 
 
-class GeneratedVariant(BaseModel):
+class GeneratedVariant(CreatorFlowModel):
     name: str = Field(min_length=1, max_length=100)
     creative_angle: str = Field(min_length=1, max_length=500)
     hook: str = Field(min_length=1, max_length=500)
@@ -44,7 +53,7 @@ class GeneratedVariant(BaseModel):
     call_to_action: str = Field(min_length=1, max_length=500)
 
 
-class GenerateVariantsResponse(BaseModel):
+class GenerateVariantsResponse(CreatorFlowModel):
     topic: str
     language: str = "vi"
     variants: list[GeneratedVariant] = Field(min_length=2, max_length=3)
@@ -60,7 +69,7 @@ class GenerateVariantsResponse(BaseModel):
         return variants
 
 
-class LearningEvidence(BaseModel):
+class LearningEvidence(CreatorFlowModel):
     experiment_id: str = Field(min_length=1, max_length=100)
     topic: str | None = Field(default=None, max_length=200)
     winning_variant_id: str = Field(min_length=1, max_length=100)
@@ -69,14 +78,14 @@ class LearningEvidence(BaseModel):
     metrics: dict[str, float] = Field(default_factory=dict)
 
 
-class SynthesizeLearningRequest(BaseModel):
+class SynthesizeLearningRequest(CreatorFlowModel):
     profile_key: str = Field(min_length=1, max_length=200)
     creator_positioning: str = Field(min_length=1, max_length=2_000)
     current_style_summary: str = Field(default="", max_length=5_000)
     evidence: list[LearningEvidence] = Field(min_length=2, max_length=100)
 
 
-class LearningSynthesisResponse(BaseModel):
+class LearningSynthesisResponse(CreatorFlowModel):
     proposed_style_summary: str = Field(min_length=1, max_length=5_000)
     recurring_strengths: list[str] = Field(max_length=20)
     conflicting_evidence: list[str] = Field(max_length=20)
