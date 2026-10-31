@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
+builder.Services.AddHttpClient<CreatorFlowAiClient>();
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = ApiKeyAuthenticationHandler.SchemeName;
@@ -414,6 +415,14 @@ styleProfiles.MapPost("/{id:guid}/learn/{experimentId:guid}", async (Guid id, Gu
     }
     catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
 });
+
+
+// AI requests are proxied server-to-server; provider credentials never reach the browser.
+var ai = app.MapGroup("/api/v1/ai").RequireAuthorization();
+ai.MapPost("/analyze", async (AiAnalyzeRequest request, CreatorFlowAiClient aiClient, CancellationToken ct) =>
+    await aiClient.ForwardAsync("/v1/analyze", request, ct));
+ai.MapPost("/style-lab/generate-variants", async (AiGenerateVariantsRequest request, CreatorFlowAiClient aiClient, CancellationToken ct) =>
+    await aiClient.ForwardAsync("/v1/style-lab/generate-variants", request, ct));
 
 app.Run();
 
