@@ -1,0 +1,1 @@
+<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><ProjectReference Include="../CreatorFlow.Domain/CreatorFlow.Domain.csproj" /></ItemGroup></Project>
