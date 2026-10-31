@@ -38,3 +38,22 @@ A candidate can also be Rejected. Only selected candidates can enter the adaptat
 The current domain and SQL schema provide the discovery and selection foundation only. They do not yet log in to Douyin, scrape feeds, follow accounts, download media, publish to TikTok, or attach products to a shopping cart. Those capabilities require separately implemented and tested connectors, with platform access, account eligibility, and applicable content-use requirements verified before activation. Do not treat a browser-visible page or a public URL as proof that an automated API is available.
 
 Jobs should preserve successful artifacts on failure. Idempotency keys should prevent duplicate candidate ingestion, generated artifacts and external posts.
+
+## Vietnam market intelligence
+
+The Vietnam market is tracked separately from Douyin source discovery. A trend signal can represent a creator channel, a video, or a sound/music item on TikTok Vietnam, YouTube Shorts Vietnam, Facebook Reels Vietnam, or another explicitly recorded platform. Each observation stores its source URL, topic, creator/sound attribution and a timestamped snapshot of views, likes, comments, shares and saves. Repeated observations must be chronological; this makes trend acceleration measurable instead of treating a single view count as a trend score.
+
+These records are observations entered by a user or supplied by a configured connector. The schema does not imply that TikTok/Meta/YouTube trend feeds or music charts are already connected.
+
+## Style Lab: controlled 2–3 variant tests
+
+A style experiment is attached optionally to a content project and requires exactly two or three distinct variants. Each variant records:
+- Hook/opening approach and script;
+- Vietnamese speaking/narration style;
+- Editing pace and visual rhythm;
+- Audio/music approach and creative notes;
+- Publication timestamp and measured views, likes, comments, shares, saves, follows gained, product clicks, orders, average watch time and video duration.
+
+An experiment can start only after every variant is ready. It can be evaluated only after every variant has been published and measured; the creator explicitly records the winning variant. Engagement rate is exposed as a derived descriptive metric, not an automatic winner score. Reach, retention, follows and commerce outcomes should be considered against the experiment's stated hypothesis and comparable measurement windows.
+
+The goal is cumulative learning: preserve winning and losing experiments, extract reusable style traits into a creator style profile in a later workflow, and test whether those traits keep working across topics and products. Do not copy source dialogue or reproduce a source video shot-for-shot; translate the underlying creative mechanism into a distinct Vietnamese execution.
