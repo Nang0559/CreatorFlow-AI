@@ -125,5 +125,7 @@ def test_learning_synthesis_rejects_fabricated_experiment_citations(monkeypatch)
 
 def test_analyze_rejects_empty_text(monkeypatch) -> None:
     monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key-0123456789abcdef")
+    monkeypatch.setenv("CREATORFLOW_LLM_API_KEY", "test-provider-key")
+    monkeypatch.setenv("CREATORFLOW_LLM_MODEL", "test-model")
     response = client.post("/v1/analyze", headers={"X-CreatorFlow-AI-Key": "test-service-key-0123456789abcdef"}, json={"text": ""})
     assert response.status_code == 422
