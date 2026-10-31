@@ -14,6 +14,8 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<VietnamTrendMetricSnapshot> VietnamTrendMetricSnapshots => Set<VietnamTrendMetricSnapshot>();
     public DbSet<StyleExperiment> StyleExperiments => Set<StyleExperiment>();
     public DbSet<StyleExperimentVariant> StyleExperimentVariants => Set<StyleExperimentVariant>();
+    public DbSet<CreatorStyleProfile> CreatorStyleProfiles => Set<CreatorStyleProfile>();
+    public DbSet<CreatorStyleEvidence> CreatorStyleEvidence => Set<CreatorStyleEvidence>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -70,6 +72,38 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasOne<VietnamTrendSignal>().WithMany().HasForeignKey(x => x.TrendSignalId)
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.TrendSignalId, x.ObservedAt }).IsUnique();
+        });
+
+        modelBuilder.Entity<CreatorStyleProfile>(entity =>
+        {
+            entity.ToTable("CreatorStyleProfiles");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ProfileKey).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.DisplayName).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.Positioning).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.StyleSummary).HasMaxLength(4000).IsRequired();
+            entity.HasIndex(x => x.ProfileKey).IsUnique();
+            entity.HasMany(x => x.Evidence).WithOne().HasForeignKey(x => x.CreatorStyleProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CreatorStyleEvidence>(entity =>
+        {
+            entity.ToTable("CreatorStyleEvidence");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ExperimentName).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.VariantName).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.Hook).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.SpeakingStyle).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.EditPacing).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.AudioApproach).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.AverageWatchSeconds).HasPrecision(12, 3);
+            entity.Property(x => x.VideoDurationSeconds).HasPrecision(12, 3);
+            entity.HasIndex(x => new { x.CreatorStyleProfileId, x.StyleExperimentId }).IsUnique();
+            entity.HasOne<StyleExperiment>().WithMany().HasForeignKey(x => x.StyleExperimentId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<StyleExperimentVariant>().WithMany().HasForeignKey(x => x.WinningVariantId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<StyleExperiment>(entity =>
