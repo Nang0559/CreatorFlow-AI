@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -27,9 +28,9 @@ app = FastAPI(title="CreatorFlow AI", version="0.2.0")
 
 def require_service_key(x_creatorflow_ai_key: str | None = Header(default=None)) -> None:
     expected = os.getenv("CREATORFLOW_AI_API_KEY", "").strip()
-    if not expected:
-        raise HTTPException(status_code=503, detail="CreatorFlow AI service authentication is not configured.")
-    if x_creatorflow_ai_key is None or x_creatorflow_ai_key != expected:
+    if len(expected) < 32:
+        raise HTTPException(status_code=503, detail="CREATORFLOW_AI_API_KEY must contain at least 32 characters.")
+    if x_creatorflow_ai_key is None or not secrets.compare_digest(x_creatorflow_ai_key, expected):
         raise HTTPException(status_code=401, detail="Invalid CreatorFlow AI service credential.")
 
 
