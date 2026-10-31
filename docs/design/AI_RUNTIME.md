@@ -74,7 +74,7 @@ The fake adapter is test-only. Production requests instantiate the real OpenAI-c
 - No trained ML model, feature store, model registry, model artifact persistence, retraining schedule, drift detection or champion/challenger rollout.
 - No prompt registry/version persistence or provider cost/latency telemetry.
 - No SQL persistence of AI analysis, generated scripts or learning proposals.
-- The .NET API proxy is implemented, but no Blazor UI orchestration, SQL persistence or creator-facing approval workflow is wired yet.
+- The .NET API proxy and Blazor Style Lab source-analysis/variant-generation controls are wired. Style Profiles can request profile-scoped LLM synthesis from imported evaluated experiments. Generated variants are saved through the existing Style Lab workflow; LLM learning proposals remain ephemeral drafts and require creator review/save.
 - No source-video ingestion, STT, visual scene understanding, audio/music analysis, translation alignment, TTS or FFmpeg rendering.
 - No Douyin/TikTok live connector, automatic publishing or metric synchronization.
 
