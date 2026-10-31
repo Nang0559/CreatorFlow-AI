@@ -15,6 +15,7 @@
     <div class="trend-form">
         <label>Tên thử nghiệm<input @bind="name" /></label>
         <label>Giả thuyết<input @bind="hypothesis" /></label>
+        <label>Chủ đề nội dung<input @bind="topic" placeholder="Ví dụ: gia dụng, làm đẹp, chăm sóc da" /></label>
         <label>Số phương án<select @bind="variantCount"><option value="2">2 phương án</option><option value="3">3 phương án</option></select></label>
     </div>
     @for (var i = 0; i < variantCount; i++)
@@ -41,7 +42,7 @@
     @foreach (var experiment in experiments)
     {
         <article class="experiment-item">
-            <div class="panel-heading"><div><h3>@experiment.Name</h3><p class="muted">@experiment.Hypothesis</p></div><span class="status">@experiment.Status</span></div>
+            <div class="panel-heading"><div><h3>@experiment.Name</h3><p class="muted">@experiment.Hypothesis</p><p class="muted">Chủ đề: @(string.IsNullOrWhiteSpace(experiment.Topic) ? "Chưa phân loại" : experiment.Topic)</p></div><span class="status">@experiment.Status</span></div>
             @if (experiment.Status == "Draft") { <button class="secondary" disabled="@(busy || experiment.Variants.Any(x => x.Status != "Ready"))" @onclick="() => StartAsync(experiment.Id)">Bắt đầu thử nghiệm</button> }
             <div class="variant-grid">
                 @foreach (var variant in experiment.Variants)
@@ -94,6 +95,7 @@
         new() { Name = "Review trực diện", Hook = "3 điều cần biết trước khi mua...", SpeakingStyle = "Rõ ràng, súc tích", EditPacing = "Cắt nhanh, minh họa tính năng", AudioApproach = "Voice nổi bật, nhạc nền nhỏ" }];
     private string name = "Thử nghiệm phong cách mới";
     private string hypothesis = "Hook kể chuyện giúp tăng thời gian xem và lượt theo dõi.";
+    private string topic = "";
     private int variantCount = 2;
     private bool busy;
     private string error = "";
@@ -163,7 +165,7 @@
             busy = true; error = "";
             var payload = new
             {
-                name, hypothesis, contentProjectId = (Guid?)null,
+                name, hypothesis, topic = string.IsNullOrWhiteSpace(topic) ? null : topic.Trim(), contentProjectId = (Guid?)null,
                 variants = variants.Take(variantCount).Select(x => new { name = x.Name, hook = x.Hook,
                     speakingStyle = x.SpeakingStyle, editPacing = x.EditPacing, audioApproach = x.AudioApproach,
                     script = string.IsNullOrWhiteSpace(x.Script) ? $"Kịch bản tiếng Việt theo phong cách {x.Name}" : x.Script,
