@@ -13,7 +13,8 @@ This document records the current SQL Server/EF Core model. Numbered scripts und
 | VietnamTrendSignals | Vietnam creator/video/sound trend identity and latest metrics | Unique platform + kind + external ID |
 | VietnamTrendMetricSnapshots | Immutable trend metric observations | FK to trend signal, cascade delete; unique signal + observation time |
 | StyleExperiments | Hypothesis and 2–3 variant comparison | Optional project FK, optional topic, optional winning variant |
-| StyleExperimentVariants | Creative variant and measured metrics | FK to experiment; unique experiment + variant name |
+| StyleExperimentVariants | Creative variant and latest measured summary | FK to experiment; unique experiment + variant name |
+| StyleVariantMetricObservations | Append-only time-series snapshots for each variant | FK to variant, unique variant + ObservedAt; indexed for chronological reads |
 | CreatorStyleProfiles | Creator positioning and editable guidance | Unique ProfileKey |
 | CreatorStyleEvidence | Snapshot of confirmed winner and measured results | FK to profile, experiment and winner; unique profile + experiment |
 
@@ -69,10 +70,13 @@ erDiagram
 - Evidence references experiments and variants with no-action delete behavior, preserving historical provenance while evidence exists.
 - Metrics are non-negative; watch-time values are non-negative and average watch time cannot exceed video duration when both are present.
 
-## 5. Topic migration
+## 5. Metric observation history
+Migration 008 adds immutable StyleVariantMetricObservations. Every successful variant measurement appends a row with all eight count metrics, watch time, duration and ObservedAt. The variant row remains the latest summary for lifecycle/API compatibility. Observation-derived rates include engagement, follow, product-click, order and watch-retention rates. Repeated measurements are accepted only at a later timestamp while the experiment remains Running.
+
+## 6. Topic migration
 007_style_learning_topic.sql adds nullable StyleExperiments.Topic nvarchar(200) and an index on (Topic, Status, UpdatedAt DESC). Existing rows remain NULL; no historical topic is guessed from names or scripts.
 
-## 6. Known model limitations
+## 7. Known model limitations
 - No user, tenant, account ownership or role tables isolate creator data.
 - ProfileKey is an application-level key, not a foreign key to an authenticated user.
 - Experiment topic is one optional free-text value, not a normalized topic FK or multi-label taxonomy.
