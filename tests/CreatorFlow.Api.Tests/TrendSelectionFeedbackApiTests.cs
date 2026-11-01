@@ -83,7 +83,7 @@ public sealed class TrendSelectionFeedbackApiTests
 
         var outcomeResponse = await client.PostAsJsonAsync(outcomePath,
             new { outcomeKind = "Published", outcomeValue = "Published via approved flow",
-                metricsSnapshotJson = "{\\"views\\":1200,\\"orders\\":4}", source = "OfficialAnalyticsApi" });
+                metricsSnapshotJson = """{"views":1200,"orders":4}""", source = "OfficialAnalyticsApi" });
         Assert.Equal(HttpStatusCode.Created, outcomeResponse.StatusCode);
 
         var historyResponse = await client.GetAsync(outcomePath);
