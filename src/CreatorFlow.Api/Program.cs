@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CreatorFlow.Api.Security;
 using CreatorFlow.Application.Content;
 using CreatorFlow.Domain.Discovery;
@@ -451,6 +452,96 @@ styleProfiles.MapPost("/{id:guid}/learn/{experimentId:guid}", async (Guid id, Gu
 });
 
 
+// Learning Memory persists AI/statistical drafts and requires an explicit review before profile activation.
+styleProfiles.MapGet("/{id:guid}/learning-proposals", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (!await db.CreatorStyleProfiles.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+    var proposals = await db.StyleLearningProposals.AsNoTracking()
+        .Where(x => x.CreatorStyleProfileId == id).OrderByDescending(x => x.CreatedAt)
+        .Select(x => new StyleLearningProposalResponse(x.Id, x.CreatorStyleProfileId, x.ProposedSummary,
+            x.EvidenceExperimentIdsJson, x.AlgorithmVersion, x.Status.ToString(), x.ReviewReason,
+            x.ReviewerId, x.CreatedAt, x.ReviewedAt)).ToArrayAsync(ct);
+    return Results.Ok(proposals);
+});
+
+styleProfiles.MapPost("/{id:guid}/learning-proposals", async (Guid id, CreateStyleLearningProposalRequest request,
+    CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var profile = await db.CreatorStyleProfiles.AsNoTracking().Include(x => x.Evidence)
+        .SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (profile is null) return Results.NotFound();
+    if (profile.Evidence.Select(x => x.StyleExperimentId).Distinct().Count() < 2)
+        return Results.Conflict(new { error = "At least two imported evaluated experiments are required." });
+    try
+    {
+        var evidence = profile.Evidence.OrderBy(x => x.LearnedAt).Select(x => new
+        {
+            x.StyleExperimentId, x.WinningVariantId, x.ExperimentName, x.VariantName,
+            x.Hook, x.SpeakingStyle, x.EditPacing, x.AudioApproach, x.Views, x.Likes,
+            x.Comments, x.Shares, x.Saves, x.FollowsGained, x.ProductClicks, x.Orders,
+            x.AverageWatchSeconds, x.VideoDurationSeconds, x.LearnedAt
+        }).ToArray();
+        var idsJson = JsonSerializer.Serialize(evidence.Select(x => x.StyleExperimentId).Distinct());
+        var snapshotJson = JsonSerializer.Serialize(evidence);
+        var proposal = StyleLearningProposal.Create(id, request.ProposedSummary, idsJson,
+            snapshotJson, request.AlgorithmVersion, DateTimeOffset.UtcNow);
+        db.StyleLearningProposals.Add(proposal);
+        await db.SaveChangesAsync(ct);
+        return Results.Created($"/api/v1/style-profiles/{id}/learning-proposals/{proposal.Id}",
+            new StyleLearningProposalResponse(proposal.Id, id, proposal.ProposedSummary,
+                proposal.EvidenceExperimentIdsJson, proposal.AlgorithmVersion, proposal.Status.ToString(),
+                null, null, proposal.CreatedAt, null));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["proposal"] = [ex.Message] });
+    }
+});
+
+styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/approve", async (Guid id,
+    Guid proposalId, ReviewStyleLearningProposalRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var profile = await db.CreatorStyleProfiles.SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (profile is null) return Results.NotFound();
+    var proposal = await db.StyleLearningProposals.SingleOrDefaultAsync(
+        x => x.Id == proposalId && x.CreatorStyleProfileId == id, ct);
+    if (proposal is null) return Results.NotFound();
+    try
+    {
+        var now = DateTimeOffset.UtcNow;
+        proposal.Approve(request.ReviewerId, request.Reason, now);
+        profile.UpdateGuidance(profile.DisplayName, profile.Positioning, proposal.ProposedSummary, now);
+        var nextVersion = (await db.CreatorStyleProfileVersions.Where(x => x.CreatorStyleProfileId == id)
+            .Select(x => (int?)x.VersionNumber).MaxAsync(ct) ?? 0) + 1;
+        db.CreatorStyleProfileVersions.Add(CreatorStyleProfileVersion.Capture(
+            profile, nextVersion, proposal.Id, request.ReviewerId, now));
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new { proposalId, status = proposal.Status.ToString(), version = nextVersion, profile.StyleSummary });
+    }
+    catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
+    catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["review"] = [ex.Message] }); }
+});
+
+styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/reject", async (Guid id,
+    Guid proposalId, ReviewStyleLearningProposalRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var proposal = await db.StyleLearningProposals.SingleOrDefaultAsync(
+        x => x.Id == proposalId && x.CreatorStyleProfileId == id, ct);
+    if (proposal is null) return Results.NotFound();
+    try
+    {
+        proposal.Reject(request.ReviewerId, request.Reason, DateTimeOffset.UtcNow);
+        await db.SaveChangesAsync(ct);
+        return Results.Ok(new { proposalId, status = proposal.Status.ToString() });
+    }
+    catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
+    catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["review"] = [ex.Message] }); }
+});
+
 // AI requests are proxied server-to-server; provider credentials never reach the browser.
 var ai = app.MapGroup("/api/v1/ai").RequireAuthorization();
 ai.MapPost("/analyze", async (AiAnalyzeRequest request, CreatorFlowAiClient aiClient, CancellationToken ct) =>
@@ -547,6 +638,11 @@ static CreatorStyleEvidenceResponse ToStyleEvidenceResponse(CreatorStyleEvidence
         x.Saves, x.FollowsGained, x.ProductClicks, x.Orders, x.AverageWatchSeconds,
         x.VideoDurationSeconds, x.EngagementRate, x.LearnedAt);
 
+public sealed record CreateStyleLearningProposalRequest(string ProposedSummary, string AlgorithmVersion);
+public sealed record ReviewStyleLearningProposalRequest(string ReviewerId, string? Reason);
+public sealed record StyleLearningProposalResponse(Guid Id, Guid CreatorStyleProfileId, string ProposedSummary,
+    string EvidenceExperimentIdsJson, string AlgorithmVersion, string Status, string? ReviewReason,
+    string? ReviewerId, DateTimeOffset CreatedAt, DateTimeOffset? ReviewedAt);
 public sealed record CreateCreatorStyleProfileRequest(string ProfileKey, string DisplayName, string? Positioning);
 public sealed record UpdateCreatorStyleProfileRequest(string DisplayName, string? Positioning, string? StyleSummary);
 public sealed record CreatorStyleProfileListResponse(Guid Id, string ProfileKey, string DisplayName,
