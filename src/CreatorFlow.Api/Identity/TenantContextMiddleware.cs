@@ -13,7 +13,7 @@ namespace CreatorFlow.Api.Identity;
 public sealed class TenantContextMiddleware(
     RequestDelegate next,
     ITenantContext tenantContext,
-    CreatorFlowDbContext db,
+    CreatorFlowDbContext? db,
     IConfiguration configuration,
     IWebHostEnvironment environment)
 {
@@ -40,6 +40,12 @@ public sealed class TenantContextMiddleware(
             if (bootstrapAllowed && tenantId == DevelopmentTenantId)
                 ((TenantContext)tenantContext).Set(tenantId, TenantRole.Owner.ToString());
 
+            await next(context);
+            return;
+        }
+
+        if (db is null)
+        {
             await next(context);
             return;
         }
