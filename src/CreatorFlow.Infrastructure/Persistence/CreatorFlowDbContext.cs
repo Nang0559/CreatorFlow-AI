@@ -114,7 +114,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.ToTable("StyleLearningProposals");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.ProposedSummary).HasMaxLength(4000).IsRequired();
-            entity.Property(x => x.EvidenceExperimentIdsJson).HasMaxLength(20000).IsRequired();
+            entity.Property(x => x.EvidenceExperimentIdsJson).IsRequired();
             entity.Property(x => x.EvidenceSnapshotJson).IsRequired();
             entity.Property(x => x.AlgorithmVersion).HasMaxLength(80).IsRequired();
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
