@@ -20,6 +20,22 @@
 - [x] LLM-assisted style explanation service contract (standalone AI service; not yet wired to profile UI).\n- [ ] Persisted AI outputs, approved profile-version prompt integration and evaluation harness.\n- [ ] Trained ML outcome predictor, model registry, scheduled retraining, drift checks and champion/challenger rollout.
 - [ ] Evaluation datasets and regression tests.
 
+## Trend Selection Intelligence — foundation and next gates
+- [x] Persist creator-authored Select/Reject/Watch decisions with candidate snapshots.
+- [x] Expose authenticated feedback create/history endpoints.
+- [x] Persist downstream outcome observations with source, timestamp and metrics snapshot.
+- [x] Expose authenticated outcome create/history endpoints.
+- [x] Enforce append-only feedback and outcome history in SQL Server.
+- [x] Add domain validation and API integration test coverage for feedback/outcome workflows.
+- [ ] Add SQL Server migration integration tests for empty database and schema 009 upgrade paths.
+- [ ] Implement versioned candidate feature extraction with reproducible feature schema.
+- [ ] Implement preference learning; exclude Watch from binary labels and keep outcome labels separate.
+- [ ] Implement compliant TikTok Vietnam scan adapters with explicit provider eligibility, source provenance and coverage.
+- [ ] Implement similarity and 24h/7d/30d saturation assessments.
+- [ ] Implement rights evidence registry and separate content/recommendation/account-enforcement risk assessments.
+- [ ] Implement durable background jobs, progress reporting, retries, dead-letter handling and realtime dashboard.
+- [ ] Connect official publishing/analytics APIs with explicit final creator approval.
+
 ## Phase 3 — Media production
 - [ ] Deterministic FFmpeg pipeline, STT, subtitle alignment, TTS.
 - [ ] Render validation, preview, artifact versioning.
