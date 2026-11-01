@@ -1,12 +1,14 @@
 using CreatorFlow.Domain.Content;
 using CreatorFlow.Domain.Discovery;
 using CreatorFlow.Domain.Identity;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 
 namespace CreatorFlow.Infrastructure.Persistence;
 
-public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> options) : DbContext(options)
+public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> options, ITenantContext? tenantContext = null) : DbContext(options)
 {
+    private Guid CurrentTenantId => tenantContext?.TenantId ?? Guid.Empty;
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
     public DbSet<ContentProject> ContentProjects => Set<ContentProject>();
@@ -24,6 +26,37 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<StyleVariantMetricObservation> StyleVariantMetricObservations => Set<StyleVariantMetricObservation>();
     public DbSet<StyleLearningProposal> StyleLearningProposals => Set<StyleLearningProposal>();
     public DbSet<CreatorStyleProfileVersion> CreatorStyleProfileVersions => Set<CreatorStyleProfileVersion>();
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampTenantOwnership();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StampTenantOwnership();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void StampTenantOwnership()
+    {
+        foreach (var entry in ChangeTracker.Entries().Where(x =>
+                     x.State is EntityState.Added or EntityState.Modified &&
+                     x.Entity is not Tenant && x.Entity is not TenantMembership))
+        {
+            var tenantId = tenantContext?.TenantId;
+            if (!tenantId.HasValue || tenantId.Value == Guid.Empty)
+                throw new InvalidOperationException("A verified tenant context is required to write tenant-owned data.");
+
+            var tenantProperty = entry.Property("TenantId");
+            if (entry.State == EntityState.Added)
+                tenantProperty.CurrentValue = tenantId.Value;
+            else if (!Equals(tenantProperty.OriginalValue, tenantId.Value) ||
+                     !Equals(tenantProperty.CurrentValue, tenantId.Value))
+                throw new InvalidOperationException("Tenant ownership is immutable; cross-tenant row moves are forbidden.");
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -260,5 +293,24 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasOne<ContentTopic>().WithMany().HasForeignKey(x => x.ContentTopicId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+        // Apply one tenant filter and tenant FK to every business entity. Identity tables are
+        // intentionally unfiltered because membership resolution happens before authorization.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes()
+                     .Where(x => x.ClrType != typeof(Tenant) && x.ClrType != typeof(TenantMembership))
+                     .ToArray())
+        {
+            var entityBuilder = modelBuilder.Entity(entityType.ClrType);
+            entityBuilder.Property<Guid>("TenantId").IsRequired();
+            entityBuilder.HasOne(typeof(Tenant)).WithMany().HasForeignKey("TenantId")
+                .OnDelete(DeleteBehavior.NoAction);
+            entityBuilder.HasIndex("TenantId");
+
+            var parameter = Expression.Parameter(entityType.ClrType, "row");
+            var tenantProperty = Expression.Call(typeof(EF), nameof(EF.Property),
+                new[] { typeof(Guid) }, parameter, Expression.Constant("TenantId"));
+            var currentTenant = Expression.Property(Expression.Constant(this), nameof(CurrentTenantId));
+            var filter = Expression.Lambda(Expression.Equal(tenantProperty, currentTenant), parameter);
+            entityBuilder.HasQueryFilter(filter);
+        }
     }
 }
