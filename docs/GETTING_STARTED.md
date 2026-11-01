@@ -45,12 +45,12 @@ dotnet run --project src/CreatorFlow.Web
 
 The API URL must match the actual local API address/certificate. On Windows PowerShell, set these values with `$env:NAME="value"` before starting each process. For production, store the API key in the deployment secret manager rather than a committed settings file.
 
-The interactive Web workspace includes:
+For real LLM calls, configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` on the .NET API, plus `CREATORFLOW_AI_API_KEY`, `CREATORFLOW_LLM_API_KEY` and `CREATORFLOW_LLM_MODEL` on the Python service. Use a separate internal service key and provider key; never expose either to the browser.\n\nThe interactive Web workspace includes:
 - `/trends`: manually record Vietnam creator/video/sound trend observations.
 - `/style-lab`: create 2–3 style variants, mark them ready/published, enter performance metrics and evaluate a winner.
 - `/style-profiles`: create a creator style profile, add evaluated winners as evidence and maintain an editable style summary.
 
-Apply SQL scripts in numeric order to the dedicated CreatorFlow database. The Vietnam trend/style workflow uses scripts `005_vietnam_trends_and_style_lab.sql`, `006_creator_style_profiles.sql` and `007_style_learning_topic.sql` after the earlier foundation scripts. Apply all numbered scripts in order (001–007) to the dedicated CreatorFlow database.
+Apply SQL scripts in numeric order to the dedicated CreatorFlow database. The Vietnam trend/style workflow uses scripts `005_vietnam_trends_and_style_lab.sql`, `006_creator_style_profiles.sql`, `007_style_learning_topic.sql` and `008_style_variant_metric_observations.sql` after the earlier foundation scripts. Apply all numbered scripts in order (001–008) to the dedicated CreatorFlow database. Migration 008 is required for immutable Style Lab metric history; do not deploy the new measurement API before applying it.
 
 
 ## Design documentation
