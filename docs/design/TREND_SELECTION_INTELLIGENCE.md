@@ -14,7 +14,7 @@ CreatorFlow learns the creator's selection preferences, measures market saturati
 1. Creator chooses Select, Reject or Watch and a reason code such as Hook, Story, Novelty, VietnamDemand, LowSaturation, CommercialPotential, Format, Sound or Other.
 2. Optional note may be empty; example decision=Select, reasonCode=Hook, reasonNote="".
 3. API captures immutable candidate metadata and appends the decision.
-4. Feature extraction runs separately and writes a versioned feature snapshot; until implemented the snapshot remains {}.
+4. The API captures a deterministic, versioned metadata feature snapshot at review time (schema `creatorflow.trend-selection`, version 1). It records discovery method, source/topic presence, title-shape counts and point-in-time age fields. It deliberately excludes the creator decision and mutable candidate status to prevent label leakage. This is metadata-only extraction, not semantic/video/audio analysis.
 5. Preference analysis compares Select and Reject; Watch is excluded from binary labels.
 6. Adaptation, publication and measured market results are appended as separate outcome observations.
 
@@ -39,7 +39,7 @@ List-first paginated dashboard; indexed queries; creator feedback writes stay sy
 Proposed, unmeasured SLO targets: dashboard P95 <2s; feedback write P95 <500ms; status visibility <1s.
 
 ## API currently implemented
-POST and GET /api/v1/douyin/videos/{id}/feedback, plus POST and GET /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes. FeatureSnapshotJson remains {} until a real extractor exists. Existing shared API-key auth is bootstrap-only; verified user identity and tenant ownership remain production blockers.
+POST and GET /api/v1/douyin/videos/{id}/feedback, plus POST and GET /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes. FeatureSnapshotJson now stores schema `creatorflow.trend-selection` version 1. It is reproducible from the candidate metadata and extraction timestamp; it does not yet contain video content, transcript, engagement velocity, sound identity, similarity embeddings or saturation features. Existing shared API-key auth is bootstrap-only; verified user identity and tenant ownership remain production blockers.
 
 ## Release gates
 Migration tests on empty and schema-009 databases; decision validation and empty-note round-trip; append-only history; preference labels exclude Watch; connector compliance and coverage; rights review; calibrated risk model; human approval and official publishing API.
