@@ -15,7 +15,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<StyleExperiment> StyleExperiments => Set<StyleExperiment>();
     public DbSet<StyleExperimentVariant> StyleExperimentVariants => Set<StyleExperimentVariant>();
     public DbSet<CreatorStyleProfile> CreatorStyleProfiles => Set<CreatorStyleProfile>();
-    public DbSet<CreatorStyleEvidence> CreatorStyleEvidence => Set<CreatorStyleEvidence>();
+    public DbSet<CreatorStyleEvidence> CreatorStyleEvidence => Set<CreatorStyleEvidence>();\n    public DbSet<StyleVariantMetricObservation> StyleVariantMetricObservations => Set<StyleVariantMetricObservation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -139,6 +139,19 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.AverageWatchSeconds).HasPrecision(12, 3);
             entity.Property(x => x.VideoDurationSeconds).HasPrecision(12, 3);
             entity.HasIndex(x => new { x.StyleExperimentId, x.Name }).IsUnique();
+        });
+
+
+        modelBuilder.Entity<StyleVariantMetricObservation>(entity =>
+        {
+            entity.ToTable("StyleVariantMetricObservations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.AverageWatchSeconds).HasPrecision(12, 3);
+            entity.Property(x => x.VideoDurationSeconds).HasPrecision(12, 3);
+            entity.HasOne<StyleExperimentVariant>().WithMany().HasForeignKey(x => x.StyleExperimentVariantId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.StyleExperimentVariantId, x.ObservedAt }).IsUnique();
+            entity.HasIndex(x => new { x.ObservedAt, x.StyleExperimentVariantId });
         });
 
         modelBuilder.Entity<DouyinVideoCandidate>(entity =>
