@@ -6,7 +6,7 @@ if ([string]::IsNullOrWhiteSpace($Database)) { $Database='CreatorFlow_QC' }
 if ($Database -cne 'CreatorFlow_QC') { throw "Refusing database '$Database'. Only CreatorFlow_QC is allowed." }
 $hostName=($SqlInstance -split '\\')[0].Trim()
 if (@('.','(local)','localhost',$env:COMPUTERNAME) -notcontains $hostName) { throw "Refusing non-local SQL instance '$SqlInstance'." }
-if (-not (Get-Module -ListAvailable -Name SqlServer)) { throw 'SqlServer module missing. Install-Module SqlServer -Scope CurrentUser.' }
+if (-not (Get-Module -ListAvailable -Name SqlServer)) { throw 'SqlServer module missing. Install-Module SqlServer -Scope AllUsers.' }
 Import-Module SqlServer -ErrorAction Stop
 $query=@"
 SET NOCOUNT ON;
