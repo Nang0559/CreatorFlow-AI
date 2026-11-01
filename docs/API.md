@@ -54,7 +54,8 @@ Create an experiment linked optionally to a content project with exactly 2 or 3 
 - `POST /api/v1/style-experiments/{id}/variants/{variantId}/ready`
 - `POST /api/v1/style-experiments/{id}/start`
 - `POST /api/v1/style-experiments/{id}/variants/{variantId}/publish`
-- `POST /api/v1/style-experiments/{id}/variants/{variantId}/measure` with views, likes, comments, shares, saves, followsGained, productClicks, orders, averageWatchSeconds and videoDurationSeconds.
+- `POST /api/v1/style-experiments/{id}/variants/{variantId}/measure` with views, likes, comments, shares, saves, followsGained, productClicks, orders, averageWatchSeconds and videoDurationSeconds. Each successful call appends an immutable timestamped observation.
+- `GET /api/v1/style-experiments/{id}/observations` returns chronological metric observations across the experiment's variants, including derived engagement, follow, click, order and watch-retention rates.
 - `POST /api/v1/style-experiments/{id}/evaluate` with `winningVariantId`.
 
 An experiment cannot start until every variant is ready, and cannot be evaluated until every variant has been published and measured. Engagement rate is descriptive; the creator explicitly selects the winner after considering the stated hypothesis and the wider performance evidence.
@@ -120,3 +121,6 @@ The authenticated .NET API exposes server-side proxy routes:
 - `POST /api/v1/style-profiles/{id}/ai-learning-synthesis` loads only evaluated experiments explicitly imported into that profile, sends winner/loser factors and winner metrics to the LLM, and returns a draft synthesis. At least two imported evaluated experiments and a non-empty profile positioning are required. The result is not persisted; the creator may put it into the editable Style Summary and save manually.
 
 Configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` in the API host. The proxy validates HTTPS (or localhost HTTP), requires a 32-character service key, and forwards provider responses/status without exposing the AI service key to the browser. Missing configuration and unavailable service return 503; timeout returns 504. The Python service separately requires its own provider credentials. The creator-facing Blazor controls are not yet wired to these proxy routes.
+
+
+Apply SQL scripts `database/schema/001_initial.sql` through `008_style_variant_metric_observations.sql` in numeric order. Script 008 is required for Style Lab measurement writes after this change.
