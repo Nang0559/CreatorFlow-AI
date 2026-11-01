@@ -1,3 +1,4 @@
+using Xunit;
 using CreatorFlow.Domain.Identity;
 
 namespace CreatorFlow.Domain.Tests.Identity;
