@@ -11,16 +11,15 @@ namespace CreatorFlow.Api.Identity;
 /// X-CreatorFlow-Tenant is only a selector; it never grants access by itself.
 /// </summary>
 public sealed class TenantContextMiddleware(
-    RequestDelegate next,
     ITenantContext tenantContext,
     CreatorFlowDbContext? db,
     IConfiguration configuration,
-    IWebHostEnvironment environment)
+    IWebHostEnvironment environment) : IMiddleware
 {
     public const string TenantHeader = "X-CreatorFlow-Tenant";
     private static readonly Guid DevelopmentTenantId = Guid.Parse("00000000-0000-4000-8000-000000000001");
 
-    public async Task InvokeAsync(HttpContext context)
+    public async Task InvokeAsync(HttpContext context, RequestDelegate next)
     {
         var identity = context.User.Identity;
         if (identity?.IsAuthenticated != true)
