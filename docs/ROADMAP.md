@@ -20,8 +20,8 @@
 - [ ] Trend adapters using permitted APIs/data sources.
 - [ ] Script generation, translation, scoring and human review UI.
 - [x] Deterministic, explainable style learning across measured winning and losing variants, with topic-level analysis.
-- [ ] Persisted proposal review/approval and approved-profile versioning.
-- [x] LLM-assisted style explanation service contract (standalone AI service; not yet wired to profile UI).
+- [x] Persisted proposal review/approval and immutable approved-profile versioning (review is fail-closed until verified OIDC identity is configured).
+- [x] LLM-assisted style explanation service contract and Style Profiles synthesis UI (provider credentials required; proposal submission remains an explicit review step).
 - [ ] Persisted AI outputs, approved profile-version prompt integration and evaluation harness.
 - [ ] Trained ML outcome predictor, model registry, scheduled retraining, drift checks and champion/challenger rollout.
 - [ ] Evaluation datasets and regression tests.
@@ -33,7 +33,7 @@
 - [x] Enforce append-only feedback and outcome history in SQL Server.
 - [x] Add domain validation and API integration test coverage for feedback/outcome workflows.
 - [ ] Add SQL Server migration integration tests for empty database and schema 009 upgrade paths.
-- [ ] Implement versioned candidate feature extraction with reproducible feature schema.
+- [x] Implement versioned candidate metadata feature extraction (schema v1); rich media/semantic/market features remain outstanding.
 - [ ] Implement preference learning; exclude Watch from binary labels and keep outcome labels separate.
 - [ ] Implement compliant TikTok Vietnam scan adapters with explicit provider eligibility, source provenance and coverage.
 - [ ] Implement similarity and 24h/7d/30d saturation assessments.
