@@ -1,4 +1,7 @@
 using CreatorFlow.Api.Identity;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
 using CreatorFlow.Api.Security;
 using CreatorFlow.Application.Content;
@@ -12,13 +15,51 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpClient<CreatorFlowAiClient>();
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddScoped<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
+
+var oidcAuthority = builder.Configuration["Authentication:Oidc:Authority"];
+var oidcAudience = builder.Configuration["Authentication:Oidc:Audience"];
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = ApiKeyAuthenticationHandler.SchemeName;
-    options.DefaultChallengeScheme = ApiKeyAuthenticationHandler.SchemeName;
-}).AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
-    ApiKeyAuthenticationHandler.SchemeName, _ => { });
-builder.Services.AddAuthorization();
+    options.DefaultScheme = "CreatorFlow";
+    options.DefaultAuthenticateScheme = "CreatorFlow";
+    options.DefaultChallengeScheme = "CreatorFlow";
+})
+.AddPolicyScheme("CreatorFlow", "OIDC bearer or local API key", options =>
+{
+    options.ForwardDefaultSelector = context =>
+        context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? JwtBearerDefaults.AuthenticationScheme
+            : ApiKeyAuthenticationHandler.SchemeName;
+})
+.AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+    ApiKeyAuthenticationHandler.SchemeName, _ => { })
+.AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.Authority = oidcAuthority;
+    options.Audience = oidcAudience;
+    options.RequireHttpsMetadata = true;
+    options.MapInboundClaims = false;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        NameClaimType = "name",
+        RoleClaimType = "role"
+    };
+});
+builder.Services.AddAuthorization(options =>
+{
+    var tenantPolicy = new AuthorizationPolicyBuilder("CreatorFlow")
+        .RequireAuthenticatedUser()
+        .AddRequirements(new TenantMembershipRequirement())
+        .Build();
+    options.DefaultPolicy = tenantPolicy;
+    options.FallbackPolicy = tenantPolicy;
+});
 
 var connectionString = builder.Configuration.GetConnectionString("CreatorFlow");
 if (!string.IsNullOrWhiteSpace(connectionString))
@@ -32,6 +73,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 var app = builder.Build();
 app.UseExceptionHandler();
 app.UseAuthentication();
+app.UseMiddleware<TenantContextMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" }));
