@@ -16,6 +16,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpClient<CreatorFlowAiClient>();
 builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddTransient<TenantContextMiddleware>();
 builder.Services.AddScoped<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
 
 var oidcAuthority = builder.Configuration["Authentication:Oidc:Authority"];
