@@ -25,7 +25,7 @@ CreatorFlow AI turns a creator-approved idea or licensed source asset into a rev
 
 ## Getting started
 
-See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and [docs/ROADMAP.md](docs/ROADMAP.md). The selected SaaS/hybrid deployment profile is documented in [docs/SAAS_HYBRID_ARCHITECTURE.md](docs/SAAS_HYBRID_ARCHITECTURE.md), [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md), [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md), and [docs/PUBLIC_LAUNCH_CHECKLIST.md](docs/PUBLIC_LAUNCH_CHECKLIST.md).
+See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and [docs/ROADMAP.md](docs/ROADMAP.md). For the isolated Windows SQL Server test host and self-hosted runner, follow [docs/SQLSERVER_QC_RUNNER.md](docs/SQLSERVER_QC_RUNNER.md). The selected SaaS/hybrid deployment profile is documented in [docs/SAAS_HYBRID_ARCHITECTURE.md](docs/SAAS_HYBRID_ARCHITECTURE.md), [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md), [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md), and [docs/PUBLIC_LAUNCH_CHECKLIST.md](docs/PUBLIC_LAUNCH_CHECKLIST.md).
 
 ## Status
 
