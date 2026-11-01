@@ -37,8 +37,21 @@ public sealed class TenantContextMiddleware(
                 (configuration.GetValue<bool?>("Tenant:AllowApiKeyBootstrap") ?? true);
             var configuredId = configuration["Tenant:BootstrapTenantId"];
             var tenantId = Guid.TryParse(configuredId, out var parsed) ? parsed : DevelopmentTenantId;
-            if (bootstrapAllowed && tenantId == DevelopmentTenantId)
-                ((TenantContext)tenantContext).Set(tenantId, TenantRole.Owner.ToString());
+            if (bootstrapAllowed && tenantId == DevelopmentTenantId && db is not null)
+            {
+                var tenant = await db.Tenants.AsNoTracking().SingleOrDefaultAsync(
+                    x => x.Id == tenantId && x.Status == TenantStatus.Active, context.RequestAborted);
+                if (tenant is null && !await db.Tenants.AnyAsync(x => x.Id == tenantId, context.RequestAborted))
+                {
+                    var created = Tenant.Create("Legacy workspace", "legacy-workspace", DateTimeOffset.UtcNow);
+                    db.Entry(created).Property(x => x.Id).CurrentValue = tenantId;
+                    db.Tenants.Add(created);
+                    await db.SaveChangesAsync(context.RequestAborted);
+                    tenant = created;
+                }
+                if (tenant is not null)
+                    ((TenantContext)tenantContext).Set(tenantId, TenantRole.Owner.ToString());
+            }
 
             await next(context);
             return;
