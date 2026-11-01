@@ -43,7 +43,7 @@ public sealed record TrendSelectionFeatureSnapshot(
             candidate.ContentTopicId.HasValue,
             title.Length,
             tokens.Length,
-            title.Contains('?', StringComparison.Ordinal) || title.Contains('？', StringComparison.Ordinal),
+            title.Contains('?') || title.Contains('？'),
             title.Any(char.IsDigit),
             tokens.Count(token => token.StartsWith('#')),
             publishedAge,
