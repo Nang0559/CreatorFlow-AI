@@ -81,14 +81,14 @@ Do not create these variables and assume connectors work: the TikTok/Douyin adap
 
 1. Provision an empty dedicated database for the environment.
 2. Back up before each production migration; verify restore procedure.
-3. Apply numbered SQL migrations in order using a deployment identity with DDL permission.
+3. Apply numbered SQL migrations in order using a deployment identity with DDL permission. Migration 011 creates the initial Tenants and TenantMemberships tables; it does not make legacy business tables tenant-safe.
 4. Run schema verification and migration integration tests against both a clean database and supported upgrade baseline.
 5. Deploy API/Web only after schema checks pass.
 6. Run health checks and read/write smoke tests using a non-production tenant.
 7. Keep rollback scripts or forward-fix plan for every schema change; do not assume destructive down-migrations are safe.
 8. Record migration version, commit SHA, operator and timestamp.
 
-Migration 010 still requires SQL Server execution tests against an empty database and a schema-009 upgrade database before this gate can be marked complete.
+Migration 010 still requires SQL Server execution tests against an empty database and a schema-009 upgrade database. Migration 011 also needs clean/upgrade execution tests before production. Do not onboard tenants: existing business tables and API queries are not tenant-scoped.
 
 ## 7. Deploy sequence
 
