@@ -33,8 +33,8 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Product catalog, product matching, cart attachment and order attribution.
 - TikTok OAuth, official publishing, scheduling and post reconciliation.
 - Durable jobs, outbox/inbox, retries and connector observability.
-- Multi-user identity, role/tenant model, per-profile ownership and audit actor.
-- Persisted style proposal approval/rejection and profile version history.
+- OIDC multi-user identity and tenant authorization; tenant foundation tables exist, but per-profile ownership and verified human audit actor are not yet enabled.
+
 - Profile-scoped deterministic style learning analysis; current deterministic analysis reads the global evaluated experiment pool. LLM synthesis is scoped to imported profile evidence.
 - Trained ML prediction, durable model registry/retraining and KPI/retention-aware optimization.
 - Persisted LLM proposals, prompt registry/version history and immutable approved profile versions.
@@ -53,7 +53,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 
 ## Learning Memory update
-Migration 009 and EF mappings now persist `StyleLearningProposals` and immutable `CreatorStyleProfileVersions`. The API exposes proposal list/create, approve/reject, and version-history routes. Approval updates current guidance and inserts a version; rejection requires a reason. The proposal-create route snapshots the profile's already-imported evidence and requires at least two distinct experiments. Important limitation: `reviewerId` is caller-supplied audit metadata under the existing shared API-key authentication, not a verified user identity. Multi-creator/tenant deployment remains blocked until identity and authorization are implemented. The AI synthesis endpoint still returns a draft; its caller must submit that draft to Learning Memory.
+Migration 009 and EF mappings now persist `StyleLearningProposals` and immutable `CreatorStyleProfileVersions`. The API exposes proposal list/create, approve/reject, and version-history routes. Approval updates current guidance and inserts a version; rejection requires a reason. The proposal-create route snapshots the profile's already-imported evidence and requires at least two distinct experiments. Review endpoints now derive the reviewer from the authenticated `sub`/NameIdentifier claim and ignore caller-supplied reviewer IDs; the shared API-key scheme is explicitly rejected as a human reviewer. Because OIDC is not yet configured, approve/reject currently fail closed for all existing API-key callers. Multi-creator/tenant deployment remains blocked until OIDC and tenant authorization are implemented. The AI synthesis endpoint still returns a draft; its caller must submit that draft to Learning Memory.
 
 
 ## Trend Selection Intelligence (migration 010)
