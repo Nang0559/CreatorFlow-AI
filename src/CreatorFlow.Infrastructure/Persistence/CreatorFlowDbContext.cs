@@ -302,7 +302,8 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             var entityBuilder = modelBuilder.Entity(entityType.ClrType);
             entityBuilder.Property<Guid>("TenantId").IsRequired();
             entityBuilder.HasOne(typeof(Tenant)).WithMany().HasForeignKey("TenantId")
-                .OnDelete(DeleteBehavior.NoAction);
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName($"FK_{entityType.GetTableName()}_Tenants");
             entityBuilder.HasIndex("TenantId");
 
             var parameter = Expression.Parameter(entityType.ClrType, "row");
