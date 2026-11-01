@@ -28,7 +28,7 @@ This is strictly a development/test environment. SQL Server Developer is license
 
 Install SSMS and sqlcmd separately using Microsoft's current installers. Install the PowerShell SQL module:
 
-    Install-Module SqlServer -Scope CurrentUser -Force -AllowClobber
+    Install-Module SqlServer -Scope AllUsers -Force -AllowClobber
     Get-Module -ListAvailable SqlServer
     Get-Command sqlcmd
 
