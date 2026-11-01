@@ -14,7 +14,7 @@
 
 Apply migrations in order through 011, then 012. Migration 012 adds a non-null TenantId and tenant FK/index to each current business table. Existing rows are preserved and assigned to the single `legacy-workspace` tenant (ID `00000000-0000-4000-8000-000000000001`). This is valid only when the pre-migration database represents one workspace. If the database already contains multiple customers, stop and perform a reviewed ownership mapping before applying migration 012.
 
-New OIDC users are not automatically members. A trusted operator must create TenantMembership rows using the exact issuer and immutable subject from the validated identity provider. Do not use email as SubjectId. Tenant membership provisioning should be added to a controlled invitation/onboarding workflow before public SaaS onboarding.
+New OIDC users are not automatically members. Until a controlled invitation/onboarding workflow exists, a trusted operator may use `database/ops/provision_tenant_membership.template.sql` to create a membership using the exact issuer and immutable subject from a successfully validated identity-provider login. Do not use email as SubjectId. Execute the template only through a privileged, audited operator session. Role/status changes need a separate reviewed workflow; do not silently overwrite an existing membership.
 
 ## Configuration
 
