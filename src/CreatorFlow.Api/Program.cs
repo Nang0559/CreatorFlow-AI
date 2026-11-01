@@ -58,7 +58,6 @@ builder.Services.AddAuthorization(options =>
         .AddRequirements(new TenantMembershipRequirement())
         .Build();
     options.DefaultPolicy = tenantPolicy;
-    options.FallbackPolicy = tenantPolicy;
 });
 
 var connectionString = builder.Configuration.GetConnectionString("CreatorFlow");
