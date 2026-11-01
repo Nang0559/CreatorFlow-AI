@@ -17,6 +17,8 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<CreatorStyleProfile> CreatorStyleProfiles => Set<CreatorStyleProfile>();
     public DbSet<CreatorStyleEvidence> CreatorStyleEvidence => Set<CreatorStyleEvidence>();
     public DbSet<StyleVariantMetricObservation> StyleVariantMetricObservations => Set<StyleVariantMetricObservation>();
+    public DbSet<StyleLearningProposal> StyleLearningProposals => Set<StyleLearningProposal>();
+    public DbSet<CreatorStyleProfileVersion> CreatorStyleProfileVersions => Set<CreatorStyleProfileVersion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -105,6 +107,38 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
                 .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<StyleExperimentVariant>().WithMany().HasForeignKey(x => x.WinningVariantId)
                 .OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<StyleLearningProposal>(entity =>
+        {
+            entity.ToTable("StyleLearningProposals");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.ProposedSummary).HasMaxLength(4000).IsRequired();
+            entity.Property(x => x.EvidenceExperimentIdsJson).HasMaxLength(20000).IsRequired();
+            entity.Property(x => x.EvidenceSnapshotJson).IsRequired();
+            entity.Property(x => x.AlgorithmVersion).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(x => x.ReviewReason).HasMaxLength(2000);
+            entity.Property(x => x.ReviewerId).HasMaxLength(160);
+            entity.HasOne<CreatorStyleProfile>().WithMany().HasForeignKey(x => x.CreatorStyleProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(x => new { x.CreatorStyleProfileId, x.Status, x.CreatedAt });
+        });
+
+        modelBuilder.Entity<CreatorStyleProfileVersion>(entity =>
+        {
+            entity.ToTable("CreatorStyleProfileVersions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.DisplayName).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.Positioning).HasMaxLength(1000).IsRequired();
+            entity.Property(x => x.StyleSummary).HasMaxLength(4000).IsRequired();
+            entity.Property(x => x.CreatedBy).HasMaxLength(160).IsRequired();
+            entity.HasOne<CreatorStyleProfile>().WithMany().HasForeignKey(x => x.CreatorStyleProfileId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<StyleLearningProposal>().WithMany().HasForeignKey(x => x.ApprovedProposalId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasIndex(x => new { x.CreatorStyleProfileId, x.VersionNumber }).IsUnique();
+            entity.HasIndex(x => x.ApprovedProposalId).IsUnique().HasFilter("[ApprovedProposalId] IS NOT NULL");
         });
 
         modelBuilder.Entity<StyleExperiment>(entity =>
