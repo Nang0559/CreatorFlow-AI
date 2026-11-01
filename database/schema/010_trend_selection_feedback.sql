@@ -17,9 +17,11 @@ BEGIN
   CONSTRAINT CK_TrendSelectionFeedback_CandidateJson CHECK (ISJSON(CandidateSnapshotJson)=1),
   CONSTRAINT CK_TrendSelectionFeedback_FeatureJson CHECK (ISJSON(FeatureSnapshotJson)=1)
  );
- CREATE INDEX IX_TrendSelectionFeedback_Candidate_Reviewed ON dbo.TrendSelectionFeedback(DouyinVideoCandidateId,ReviewedAt DESC);
- CREATE INDEX IX_TrendSelectionFeedback_Decision_Reason_Reviewed ON dbo.TrendSelectionFeedback(Decision,ReasonCode,ReviewedAt DESC);
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.TrendSelectionFeedback') AND name = N'IX_TrendSelectionFeedback_Candidate_Reviewed')
+    CREATE INDEX IX_TrendSelectionFeedback_Candidate_Reviewed ON dbo.TrendSelectionFeedback(DouyinVideoCandidateId,ReviewedAt DESC);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.TrendSelectionFeedback') AND name = N'IX_TrendSelectionFeedback_Decision_Reason_Reviewed')
+    CREATE INDEX IX_TrendSelectionFeedback_Decision_Reason_Reviewed ON dbo.TrendSelectionFeedback(Decision,ReasonCode,ReviewedAt DESC);
 IF OBJECT_ID(N'dbo.TrendCandidateOutcomeObservations', N'U') IS NULL
 BEGIN
  CREATE TABLE dbo.TrendCandidateOutcomeObservations
