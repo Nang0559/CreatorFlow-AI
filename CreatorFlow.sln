@@ -15,8 +15,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreatorFlow.Web", "src\\CreatorFlow.Web\\CreatorFlow.Web.csproj", "{7C6E60D1-2C4E-4F7C-AB40-000000000006}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreatorFlow.Domain.Tests", "tests\CreatorFlow.Domain.Tests\CreatorFlow.Domain.Tests.csproj", "{7C6E60D1-2C4E-4F7C-AB40-000000000007}"
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreatorFlow.Api.Tests", "tests\CreatorFlow.Api.Tests\CreatorFlow.Api.Tests.csproj", "{7C6E60D1-2C4E-4F7C-AB40-000000000008}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CreatorFlow.Api.Tests", "tests\CreatorFlow.Api.Tests\CreatorFlow.Api.Tests.csproj", "{7C6E60D1-2C4E-4F7C-AB40-000000000008}"
 EndProject
 Global
   GlobalSection(SolutionConfigurationPlatforms) = preSolution
