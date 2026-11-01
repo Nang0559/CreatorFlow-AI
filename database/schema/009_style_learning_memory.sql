@@ -43,7 +43,9 @@ BEGIN
         CONSTRAINT FK_CreatorStyleProfileVersions_Proposals FOREIGN KEY (ApprovedProposalId)
             REFERENCES dbo.StyleLearningProposals(Id) ON DELETE NO ACTION,
         CONSTRAINT UQ_CreatorStyleProfileVersions_Profile_Version UNIQUE (CreatorStyleProfileId, VersionNumber),
-        CONSTRAINT UQ_CreatorStyleProfileVersions_Proposal UNIQUE (ApprovedProposalId),
         CONSTRAINT CK_CreatorStyleProfileVersions_Version CHECK (VersionNumber > 0)
     );
+    CREATE UNIQUE INDEX UX_CreatorStyleProfileVersions_Proposal
+        ON dbo.CreatorStyleProfileVersions(ApprovedProposalId)
+        WHERE ApprovedProposalId IS NOT NULL;
 END;
