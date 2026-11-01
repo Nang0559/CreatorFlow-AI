@@ -39,7 +39,12 @@ public sealed class TrendSelectionFeedbackApiTests
         Assert.Single(items);
         Assert.Equal("Select", items[0].GetProperty("decision").GetString());
         Assert.Equal("", items[0].GetProperty("reasonNote").GetString());
-        Assert.Equal("{}", items[0].GetProperty("featureSnapshotJson").GetString());
+        using var featureSnapshot = System.Text.Json.JsonDocument.Parse(
+            items[0].GetProperty("featureSnapshotJson").GetString()!);
+        Assert.Equal("creatorflow.trend-selection", featureSnapshot.RootElement.GetProperty("schema").GetString());
+        Assert.Equal(1, featureSnapshot.RootElement.GetProperty("schemaVersion").GetInt32());
+        Assert.False(featureSnapshot.RootElement.TryGetProperty("status", out _));
+        Assert.False(featureSnapshot.RootElement.TryGetProperty("decision", out _));
     }
 
     [Fact]
