@@ -6,7 +6,7 @@ BEGIN
         Id uniqueidentifier NOT NULL CONSTRAINT PK_StyleLearningProposals PRIMARY KEY,
         CreatorStyleProfileId uniqueidentifier NOT NULL,
         ProposedSummary nvarchar(4000) NOT NULL,
-        EvidenceExperimentIdsJson nvarchar(20000) NOT NULL,
+        EvidenceExperimentIdsJson nvarchar(max) NOT NULL,
         EvidenceSnapshotJson nvarchar(max) NOT NULL,
         AlgorithmVersion nvarchar(80) NOT NULL,
         Status nvarchar(16) NOT NULL,
