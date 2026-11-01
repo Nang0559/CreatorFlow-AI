@@ -189,6 +189,47 @@ trendFeedback.MapPost("/", async (Guid id, CreateTrendSelectionFeedbackRequest r
     catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["feedback"] = [ex.Message] }); }
 });
 
+var trendOutcomes = app.MapGroup("/api/v1/douyin/videos/{id:guid}/feedback/{feedbackId:guid}/outcomes").RequireAuthorization();
+trendOutcomes.MapGet("/", async (Guid id, Guid feedbackId, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var feedbackExists = await db.TrendSelectionFeedback.AnyAsync(
+        x => x.Id == feedbackId && x.DouyinVideoCandidateId == id, ct);
+    if (!feedbackExists) return Results.NotFound();
+    var items = await db.TrendCandidateOutcomeObservations.AsNoTracking()
+        .Where(x => x.FeedbackId == feedbackId)
+        .OrderByDescending(x => x.ObservedAt)
+        .Select(x => new TrendCandidateOutcomeObservationResponse(x.Id, x.FeedbackId,
+            x.OutcomeKind.ToString(), x.OutcomeValue, x.MetricsSnapshotJson, x.Source, x.ObservedAt))
+        .ToArrayAsync(ct);
+    return Results.Ok(items);
+});
+trendOutcomes.MapPost("/", async (Guid id, Guid feedbackId, CreateTrendCandidateOutcomeObservationRequest request,
+    CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var feedbackExists = await db.TrendSelectionFeedback.AnyAsync(
+        x => x.Id == feedbackId && x.DouyinVideoCandidateId == id, ct);
+    if (!feedbackExists) return Results.NotFound();
+    if (!Enum.TryParse<TrendCandidateOutcomeKind>(request.OutcomeKind, true, out var outcomeKind) ||
+        !Enum.IsDefined(outcomeKind))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["outcomeKind"] = ["Use Adapted, Published, MarketPerformance or CreatorAssessment."] });
+    try
+    {
+        var outcome = TrendCandidateOutcomeObservation.Create(feedbackId, outcomeKind,
+            request.OutcomeValue, request.MetricsSnapshotJson, request.Source, DateTimeOffset.UtcNow);
+        db.TrendCandidateOutcomeObservations.Add(outcome);
+        await db.SaveChangesAsync(ct);
+        return Results.Created($"/api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes",
+            new TrendCandidateOutcomeObservationResponse(outcome.Id, feedbackId, outcome.OutcomeKind.ToString(),
+                outcome.OutcomeValue, outcome.MetricsSnapshotJson, outcome.Source, outcome.ObservedAt));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["outcome"] = [ex.Message] });
+    }
+});
+
 // Video intake accepts metadata/links. It deliberately does not claim to download media.
 var videos = app.MapGroup("/api/v1/douyin/videos").RequireAuthorization();
 videos.MapGet("/", async (string? status, string? discoveryMethod, int? skip, int? take, CreatorFlowDbContext? db, CancellationToken ct) =>
@@ -745,4 +786,8 @@ public sealed record StyleVariantMetricObservationResponse(Guid Id, Guid StyleEx
     decimal? ProductClickRate, decimal? OrderRate, decimal? WatchRetentionRate);
 
 public sealed record CreateTrendSelectionFeedbackRequest(string Decision, string ReasonCode, string? ReasonNote);
+public sealed record CreateTrendCandidateOutcomeObservationRequest(string OutcomeKind, string? OutcomeValue,
+    string MetricsSnapshotJson, string Source);
+public sealed record TrendCandidateOutcomeObservationResponse(Guid Id, Guid FeedbackId, string OutcomeKind,
+    string? OutcomeValue, string MetricsSnapshotJson, string Source, DateTimeOffset ObservedAt);
 public sealed record TrendSelectionFeedbackResponse(Guid Id, Guid DouyinVideoCandidateId, string Decision, string ReasonCode, string? ReasonNote, string CandidateSnapshotJson, string FeatureSnapshotJson, DateTimeOffset ReviewedAt);
