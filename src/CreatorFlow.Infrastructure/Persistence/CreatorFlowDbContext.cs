@@ -15,7 +15,8 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<StyleExperiment> StyleExperiments => Set<StyleExperiment>();
     public DbSet<StyleExperimentVariant> StyleExperimentVariants => Set<StyleExperimentVariant>();
     public DbSet<CreatorStyleProfile> CreatorStyleProfiles => Set<CreatorStyleProfile>();
-    public DbSet<CreatorStyleEvidence> CreatorStyleEvidence => Set<CreatorStyleEvidence>();\n    public DbSet<StyleVariantMetricObservation> StyleVariantMetricObservations => Set<StyleVariantMetricObservation>();
+    public DbSet<CreatorStyleEvidence> CreatorStyleEvidence => Set<CreatorStyleEvidence>();
+    public DbSet<StyleVariantMetricObservation> StyleVariantMetricObservations => Set<StyleVariantMetricObservation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
