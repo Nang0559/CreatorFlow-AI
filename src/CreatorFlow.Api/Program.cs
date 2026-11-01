@@ -328,9 +328,25 @@ styleLab.MapPost("/{id:guid}/start", async (Guid id, CreatorFlowDbContext? db, C
 styleLab.MapPost("/{id:guid}/variants/{variantId:guid}/publish", async (Guid id, Guid variantId, CreatorFlowDbContext? db, CancellationToken ct) =>
     await ChangeStyleVariant(id, variantId, db, ct, variant => variant.MarkPublished(DateTimeOffset.UtcNow)));
 styleLab.MapPost("/{id:guid}/variants/{variantId:guid}/measure", async (Guid id, Guid variantId, RecordStyleVariantMetricsRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
-    await ChangeStyleVariant(id, variantId, db, ct, variant => variant.RecordMetrics(request.Views, request.Likes,
-        request.Comments, request.Shares, request.Saves, request.FollowsGained, request.ProductClicks,
-        request.Orders, request.AverageWatchSeconds, request.VideoDurationSeconds, DateTimeOffset.UtcNow)));
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var experiment = await db.StyleExperiments.Include(x => x.Variants).SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (experiment is null) return Results.NotFound();
+    var variant = experiment.Variants.SingleOrDefault(x => x.Id == variantId);
+    if (variant is null) return Results.NotFound();
+    var observedAt = DateTimeOffset.UtcNow;
+    try
+    {
+        variant.RecordMetrics(request.Views, request.Likes, request.Comments, request.Shares, request.Saves,
+            request.FollowsGained, request.ProductClicks, request.Orders, request.AverageWatchSeconds,
+            request.VideoDurationSeconds, observedAt);
+        db.StyleVariantMetricObservations.Add(StyleVariantMetricObservation.Capture(variant, observedAt));
+        await db.SaveChangesAsync(ct);
+        return Results.NoContent();
+    }
+    catch (ArgumentOutOfRangeException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["metrics"] = [ex.Message] }); }
+    catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
+});
 styleLab.MapPost("/{id:guid}/evaluate", async (Guid id, EvaluateStyleExperimentRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
     await ChangeStyleExperiment(id, db, ct, (experiment, now) => experiment.Evaluate(request.WinningVariantId, now)));
 
