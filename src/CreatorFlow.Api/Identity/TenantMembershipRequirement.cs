@@ -3,7 +3,7 @@ using CreatorFlow.Infrastructure.Persistence;
 
 namespace CreatorFlow.Api.Identity;
 
-public sealed class TenantMembershipRequirement : IAuthorizationRequirement;
+public sealed class TenantMembershipRequirement : IAuthorizationRequirement { }
 
 public sealed class TenantMembershipAuthorizationHandler(ITenantContext tenantContext)
     : AuthorizationHandler<TenantMembershipRequirement>
