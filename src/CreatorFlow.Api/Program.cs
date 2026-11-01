@@ -179,8 +179,10 @@ trendFeedback.MapPost("/", async (Guid id, CreateTrendSelectionFeedbackRequest r
     {
         var snapshot = JsonSerializer.Serialize(new { candidate.DouyinVideoId, candidate.SourceUrl, candidate.Title,
             candidate.DiscoveryMethod, candidate.Status, candidate.PublishedAt, candidate.DiscoveredAt });
+        var reviewedAt = DateTimeOffset.UtcNow;
+        var featureSnapshot = TrendSelectionFeatureSnapshot.Create(candidate, reviewedAt).ToJson();
         var feedback = TrendSelectionFeedback.Create(id, decision, request.ReasonCode, request.ReasonNote,
-            snapshot, "{}", DateTimeOffset.UtcNow);
+            snapshot, featureSnapshot, reviewedAt);
         db.TrendSelectionFeedback.Add(feedback);
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/douyin/videos/{id}/feedback",
