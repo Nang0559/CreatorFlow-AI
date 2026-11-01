@@ -347,6 +347,22 @@ styleLab.MapPost("/{id:guid}/variants/{variantId:guid}/measure", async (Guid id,
     catch (ArgumentOutOfRangeException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["metrics"] = [ex.Message] }); }
     catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
 });
+styleLab.MapGet("/{id:guid}/observations", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (!await db.StyleExperiments.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+    var observations = await db.StyleVariantMetricObservations.AsNoTracking()
+        .Where(x => db.StyleExperimentVariants.Where(v => v.StyleExperimentId == id)
+            .Select(v => v.Id).Contains(x.StyleExperimentVariantId))
+        .OrderBy(x => x.ObservedAt)
+        .Select(x => new StyleVariantMetricObservationResponse(x.Id, x.StyleExperimentVariantId, x.ObservedAt,
+            x.Views, x.Likes, x.Comments, x.Shares, x.Saves, x.FollowsGained, x.ProductClicks, x.Orders,
+            x.AverageWatchSeconds, x.VideoDurationSeconds, x.EngagementRate, x.FollowRate,
+            x.ProductClickRate, x.OrderRate, x.WatchRetentionRate))
+        .ToArrayAsync(ct);
+    return Results.Ok(observations);
+});
+
 styleLab.MapPost("/{id:guid}/evaluate", async (Guid id, EvaluateStyleExperimentRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
     await ChangeStyleExperiment(id, db, ct, (experiment, now) => experiment.Evaluate(request.WinningVariantId, now)));
 
@@ -575,3 +591,9 @@ public sealed record AiLearningEvidence(string ExperimentId, string? Topic, stri
     string[] WinningFactors, string[] LosingFactors, Dictionary<string, double> Metrics);
 public sealed record AiSynthesizeLearningRequest(string ProfileKey, string CreatorPositioning,
     string CurrentStyleSummary, List<AiLearningEvidence> Evidence);
+
+public sealed record StyleVariantMetricObservationResponse(Guid Id, Guid StyleExperimentVariantId,
+    DateTimeOffset ObservedAt, long Views, long Likes, long Comments, long Shares, long Saves,
+    long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds,
+    decimal? VideoDurationSeconds, decimal? EngagementRate, decimal? FollowRate,
+    decimal? ProductClickRate, decimal? OrderRate, decimal? WatchRetentionRate);
