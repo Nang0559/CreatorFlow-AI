@@ -41,7 +41,7 @@ A variant records views, likes, comments, shares, saves, follows gained, product
 
 Engagement rate excludes follows, clicks and orders. It is descriptive, not conversion rate or winner score. Compare equivalent measurement windows and consider the hypothesis. Winner selection is currently a creator decision, not a weighted KPI formula.
 
-The current variant model stores one measurement snapshot in its metric fields. Repeated time-series snapshots for experiment variants are not modeled; Vietnam trend signals have their own snapshot table.
+The variant row stores the latest measurement summary for lifecycle/API compatibility. Migration 008 adds append-only `StyleVariantMetricObservations`; every successful measure request captures all metrics and its timestamp. A subsequent measurement is accepted only at a strictly later timestamp while the experiment is still Running. The history API returns observations chronologically. This preserves cumulative snapshots as observations, not per-window deltas; comparable fixed-window synchronization is still required before ML labels can be trusted.
 
 ## 4. Creator style profile and evidence
 CreatorStyleProfile stores an application-level ProfileKey, display name, positioning and editable StyleSummary.
