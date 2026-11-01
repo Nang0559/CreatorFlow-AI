@@ -53,3 +53,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 ## Learning Memory update
 Migration 009 and EF mappings now persist `StyleLearningProposals` and immutable `CreatorStyleProfileVersions`. The API exposes proposal list/create, approve/reject, and version-history routes. Approval updates current guidance and inserts a version; rejection requires a reason. The proposal-create route snapshots the profile's already-imported evidence and requires at least two distinct experiments. Important limitation: `reviewerId` is caller-supplied audit metadata under the existing shared API-key authentication, not a verified user identity. Multi-creator/tenant deployment remains blocked until identity and authorization are implemented. The AI synthesis endpoint still returns a draft; its caller must submit that draft to Learning Memory.
+
+
+## Trend Selection Intelligence (migration 010)
+Creator-authored Select/Reject/Watch feedback is persisted as immutable history with reason code, optional empty note and candidate metadata snapshot. API supports feedback capture and history. Feature snapshot remains {} until a versioned extractor exists. Outcome observation schema is present, but outcome API, TikTok connector, similarity extraction, saturation scoring, rights registry, calibrated risk model and durable worker remain outstanding. No live TikTok feed is claimed.

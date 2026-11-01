@@ -154,6 +154,40 @@ channels.MapPost("/{id:guid}/unfollow", async (Guid id, CreatorFlowDbContext? db
     return Results.NoContent();
 });
 
+
+var trendFeedback = app.MapGroup("/api/v1/douyin/videos/{id:guid}/feedback").RequireAuthorization();
+trendFeedback.MapGet("/", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (!await db.DouyinVideoCandidates.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+    var items = await db.TrendSelectionFeedback.AsNoTracking().Where(x => x.DouyinVideoCandidateId == id)
+        .OrderByDescending(x => x.ReviewedAt)
+        .Select(x => new TrendSelectionFeedbackResponse(x.Id, x.DouyinVideoCandidateId, x.Decision.ToString(),
+            x.ReasonCode, x.ReasonNote, x.CandidateSnapshotJson, x.FeatureSnapshotJson, x.ReviewedAt)).ToArrayAsync(ct);
+    return Results.Ok(items);
+});
+trendFeedback.MapPost("/", async (Guid id, CreateTrendSelectionFeedbackRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var candidate = await db.DouyinVideoCandidates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (candidate is null) return Results.NotFound();
+    if (!Enum.TryParse<TrendSelectionDecision>(request.Decision, true, out var decision))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["decision"] = ["Use Select, Reject or Watch."] });
+    try
+    {
+        var snapshot = JsonSerializer.Serialize(new { candidate.DouyinVideoId, candidate.SourceUrl, candidate.Title,
+            candidate.DiscoveryMethod, candidate.Status, candidate.PublishedAt, candidate.DiscoveredAt });
+        var feedback = TrendSelectionFeedback.Create(id, decision, request.ReasonCode, request.ReasonNote,
+            snapshot, "{}", DateTimeOffset.UtcNow);
+        db.TrendSelectionFeedback.Add(feedback);
+        await db.SaveChangesAsync(ct);
+        return Results.Created($"/api/v1/douyin/videos/{id}/feedback",
+            new TrendSelectionFeedbackResponse(feedback.Id, id, feedback.Decision.ToString(), feedback.ReasonCode,
+                feedback.ReasonNote, feedback.CandidateSnapshotJson, feedback.FeatureSnapshotJson, feedback.ReviewedAt));
+    }
+    catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["feedback"] = [ex.Message] }); }
+});
+
 // Video intake accepts metadata/links. It deliberately does not claim to download media.
 var videos = app.MapGroup("/api/v1/douyin/videos").RequireAuthorization();
 videos.MapGet("/", async (string? status, string? discoveryMethod, int? skip, int? take, CreatorFlowDbContext? db, CancellationToken ct) =>
@@ -708,3 +742,6 @@ public sealed record StyleVariantMetricObservationResponse(Guid Id, Guid StyleEx
     long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds,
     decimal? VideoDurationSeconds, decimal? EngagementRate, decimal? FollowRate,
     decimal? ProductClickRate, decimal? OrderRate, decimal? WatchRetentionRate);
+
+public sealed record CreateTrendSelectionFeedbackRequest(string Decision, string ReasonCode, string? ReasonNote);
+public sealed record TrendSelectionFeedbackResponse(Guid Id, Guid DouyinVideoCandidateId, string Decision, string ReasonCode, string? ReasonNote, string CandidateSnapshotJson, string FeatureSnapshotJson, DateTimeOffset ReviewedAt);

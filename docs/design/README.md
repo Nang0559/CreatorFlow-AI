@@ -6,7 +6,8 @@ This directory is the normative as-built design for the implemented CreatorFlow 
 1. [System overview](SYSTEM_OVERVIEW.md) — platform boundaries, deployment shape and end-to-end workflow.
 2. [Data model](DATA_MODEL.md) — implemented SQL entities, relationships and constraints.
 3. [Style Lab and Style Learning](STYLE_LAB_AND_LEARNING.md) — experiment lifecycle, measurement, evidence, analysis and creator review.
-4. [As-built status and gaps](AS_BUILT_STATUS.md) — implemented capabilities versus outstanding work.
+4. [Trend Selection, Saturation & Publishing Safety](TREND_SELECTION_INTELLIGENCE.md) — creator feedback, saturation, rights and risk design.
+5. [As-built status and gaps](AS_BUILT_STATUS.md) — implemented capabilities versus outstanding work.
 
 ## Authority and change control
 - Source code and SQL scripts are the implementation authority.

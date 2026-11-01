@@ -10,6 +10,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<ContentTopic> ContentTopics => Set<ContentTopic>();
     public DbSet<DouyinSourceChannel> DouyinSourceChannels => Set<DouyinSourceChannel>();
     public DbSet<DouyinVideoCandidate> DouyinVideoCandidates => Set<DouyinVideoCandidate>();
+    public DbSet<TrendSelectionFeedback> TrendSelectionFeedback => Set<TrendSelectionFeedback>();
     public DbSet<VietnamTrendSignal> VietnamTrendSignals => Set<VietnamTrendSignal>();
     public DbSet<VietnamTrendMetricSnapshot> VietnamTrendMetricSnapshots => Set<VietnamTrendMetricSnapshot>();
     public DbSet<StyleExperiment> StyleExperiments => Set<StyleExperiment>();
@@ -187,6 +188,21 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
                 .OnDelete(DeleteBehavior.Cascade);
             entity.HasIndex(x => new { x.StyleExperimentVariantId, x.ObservedAt }).IsUnique();
             entity.HasIndex(x => new { x.ObservedAt, x.StyleExperimentVariantId });
+        });
+
+
+        modelBuilder.Entity<TrendSelectionFeedback>(entity =>
+        {
+            entity.ToTable("TrendSelectionFeedback");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Decision).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(x => x.ReasonCode).HasMaxLength(60).IsRequired();
+            entity.Property(x => x.ReasonNote).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.CandidateSnapshotJson).IsRequired();
+            entity.Property(x => x.FeatureSnapshotJson).IsRequired();
+            entity.HasOne<DouyinVideoCandidate>().WithMany().HasForeignKey(x => x.DouyinVideoCandidateId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasIndex(x => new { x.DouyinVideoCandidateId, x.ReviewedAt });
+            entity.HasIndex(x => new { x.Decision, x.ReasonCode, x.ReviewedAt });
         });
 
         modelBuilder.Entity<DouyinVideoCandidate>(entity =>

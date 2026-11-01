@@ -133,3 +133,12 @@ Configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` in the API host
 Review identity is currently supplied by the API caller because the bootstrap API-key authentication has no individual user identity/role model. Do not treat `reviewerId` as verified identity or expose this workflow to multiple creators until user/tenant authorization is implemented. Only Approved proposals create versions; AI generation itself does not activate a profile.
 
 Apply SQL scripts `database/schema/001_initial.sql` through `009_style_learning_memory.sql` in numeric order. Scripts 008 and 009 are required for metric history and Learning Memory respectively.
+
+
+## Trend Selection Intelligence
+- POST /api/v1/douyin/videos/{id}/feedback with { "decision": "Select", "reasonCode": "Hook", "reasonNote": "" }.
+- GET /api/v1/douyin/videos/{id}/feedback returns immutable history.
+- Decisions are Select, Reject and Watch; Watch is not a negative training label.
+- Candidate metadata is snapshotted by the API. FeatureSnapshotJson remains {} until a real extractor is connected.
+- Migration: database/schema/010_trend_selection_feedback.sql.
+- TikTok scanning and calibrated account-risk prediction are not implemented by this migration.
