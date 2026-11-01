@@ -618,7 +618,7 @@ styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/approve",
 styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/reject", async (Guid id,
     Guid proposalId, ReviewStyleLearningProposalRequest request, HttpContext httpContext, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
-    var reviewerId = GetVerifiedReviewerId(httpContext.User);
+    var reviewerId = VerifiedReviewerIdentity.Resolve(httpContext.User);
     if (reviewerId is null) return Results.Forbid();
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var proposal = await db.StyleLearningProposals.SingleOrDefaultAsync(
