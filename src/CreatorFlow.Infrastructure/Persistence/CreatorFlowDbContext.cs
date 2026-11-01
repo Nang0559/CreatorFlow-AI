@@ -11,6 +11,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<DouyinSourceChannel> DouyinSourceChannels => Set<DouyinSourceChannel>();
     public DbSet<DouyinVideoCandidate> DouyinVideoCandidates => Set<DouyinVideoCandidate>();
     public DbSet<TrendSelectionFeedback> TrendSelectionFeedback => Set<TrendSelectionFeedback>();
+    public DbSet<TrendCandidateOutcomeObservation> TrendCandidateOutcomeObservations => Set<TrendCandidateOutcomeObservation>();
     public DbSet<VietnamTrendSignal> VietnamTrendSignals => Set<VietnamTrendSignal>();
     public DbSet<VietnamTrendMetricSnapshot> VietnamTrendMetricSnapshots => Set<VietnamTrendMetricSnapshot>();
     public DbSet<StyleExperiment> StyleExperiments => Set<StyleExperiment>();
@@ -203,6 +204,18 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasOne<DouyinVideoCandidate>().WithMany().HasForeignKey(x => x.DouyinVideoCandidateId).OnDelete(DeleteBehavior.NoAction);
             entity.HasIndex(x => new { x.DouyinVideoCandidateId, x.ReviewedAt });
             entity.HasIndex(x => new { x.Decision, x.ReasonCode, x.ReviewedAt });
+        });
+
+        modelBuilder.Entity<TrendCandidateOutcomeObservation>(entity =>
+        {
+            entity.ToTable("TrendCandidateOutcomeObservations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OutcomeKind).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.Property(x => x.OutcomeValue).HasMaxLength(1000);
+            entity.Property(x => x.MetricsSnapshotJson).IsRequired();
+            entity.Property(x => x.Source).HasMaxLength(80).IsRequired();
+            entity.HasOne<TrendSelectionFeedback>().WithMany().HasForeignKey(x => x.FeedbackId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasIndex(x => new { x.FeedbackId, x.ObservedAt });
         });
 
         modelBuilder.Entity<DouyinVideoCandidate>(entity =>
