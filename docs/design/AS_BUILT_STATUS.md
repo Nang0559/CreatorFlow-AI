@@ -49,3 +49,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 7. AI/ML: profile-scoped evidence, persisted prompt/model versions, evaluation datasets, ML train/validation gates, model registry and drift monitoring.
 8. Style learning: persisted proposal review, immutable approved versions, sample policy and regression tests.
 9. Operations: secrets manager, backups, monitoring, alerting, durable queues and restore drills.
+
+
+## Learning Memory update
+Migration 009 and EF mappings now persist `StyleLearningProposals` and immutable `CreatorStyleProfileVersions`. The API exposes proposal list/create, approve/reject, and version-history routes. Approval updates current guidance and inserts a version; rejection requires a reason. The proposal-create route snapshots the profile's already-imported evidence and requires at least two distinct experiments. Important limitation: `reviewerId` is caller-supplied audit metadata under the existing shared API-key authentication, not a verified user identity. Multi-creator/tenant deployment remains blocked until identity and authorization are implemented. The AI synthesis endpoint still returns a draft; its caller must submit that draft to Learning Memory.
