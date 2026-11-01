@@ -332,6 +332,8 @@ styleLab.MapPost("/{id:guid}/variants/{variantId:guid}/measure", async (Guid id,
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var experiment = await db.StyleExperiments.Include(x => x.Variants).SingleOrDefaultAsync(x => x.Id == id, ct);
     if (experiment is null) return Results.NotFound();
+    if (experiment.Status != StyleExperimentStatus.Running)
+        return Results.Conflict(new { error = "Metrics can only be appended while the experiment is Running; evaluated results are immutable." });
     var variant = experiment.Variants.SingleOrDefault(x => x.Id == variantId);
     if (variant is null) return Results.NotFound();
     var observedAt = DateTimeOffset.UtcNow;
