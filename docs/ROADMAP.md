@@ -33,7 +33,7 @@
 - [x] Enforce append-only feedback and outcome history in SQL Server.
 - [x] Add domain validation and API integration test coverage for feedback/outcome workflows.
 - [ ] Add SQL Server migration integration tests for empty database and schema 009 upgrade paths.
-- [ ] Implement versioned candidate feature extraction with reproducible feature schema.
+- [x] Implement versioned candidate feature extraction with reproducible feature schema v1 (metadata-only; decision/status excluded).
 - [ ] Implement preference learning; exclude Watch from binary labels and keep outcome labels separate.
 - [ ] Implement compliant TikTok Vietnam scan adapters with explicit provider eligibility, source provenance and coverage.
 - [ ] Implement similarity and 24h/7d/30d saturation assessments.
