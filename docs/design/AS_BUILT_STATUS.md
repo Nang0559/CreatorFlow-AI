@@ -14,6 +14,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 | Trend metric history | Snapshot entity, API and SQL | Timestamped history |
 | 2–3 variant Style Lab | Domain lifecycle, API, UI, SQL and tests | Implemented |
 | Manual metrics and winner confirmation | Metrics API and evaluation endpoint | Implemented |
+| Immutable Style Lab metric history | Migration 008, EF mapping, capture on every measure, history API and domain tests | Implemented foundation for ML datasets; no predictor yet |
 | Creator style profile | Profile API, UI, domain and SQL | Implemented |
 | Winner evidence import | Learn endpoint, evidence snapshot and unique profile/experiment index | Implemented with duplicate protection |
 | Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; not ML |
@@ -33,7 +34,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Durable jobs, outbox/inbox, retries and connector observability.
 - Multi-user identity, role/tenant model, per-profile ownership and audit actor.
 - Persisted style proposal approval/rejection and profile version history.
-- Profile-scoped style learning; current analysis reads the global evaluated experiment pool.
+- Profile-scoped deterministic style learning analysis; current deterministic analysis reads the global evaluated experiment pool. LLM synthesis is scoped to imported profile evidence.
 - Trained ML prediction, durable model registry/retraining and KPI/retention-aware optimization.
 - Persisted LLM proposals, prompt registry/version history and immutable approved profile versions.
 - Production evaluation datasets and end-to-end connector tests.
