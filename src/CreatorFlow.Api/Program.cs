@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using CreatorFlow.Api.Security;
 using CreatorFlow.Application.Content;
@@ -588,8 +589,10 @@ styleProfiles.MapPost("/{id:guid}/learning-proposals", async (Guid id, CreateSty
 });
 
 styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/approve", async (Guid id,
-    Guid proposalId, ReviewStyleLearningProposalRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+    Guid proposalId, ReviewStyleLearningProposalRequest request, HttpContext httpContext, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
+    var reviewerId = GetVerifiedReviewerId(httpContext.User);
+    if (reviewerId is null) return Results.Forbid();
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var profile = await db.CreatorStyleProfiles.SingleOrDefaultAsync(x => x.Id == id, ct);
     if (profile is null) return Results.NotFound();
@@ -599,12 +602,12 @@ styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/approve",
     try
     {
         var now = DateTimeOffset.UtcNow;
-        proposal.Approve(request.ReviewerId, request.Reason, now);
+        proposal.Approve(reviewerId, request.Reason, now);
         profile.UpdateGuidance(profile.DisplayName, profile.Positioning, proposal.ProposedSummary, now);
         var nextVersion = (await db.CreatorStyleProfileVersions.Where(x => x.CreatorStyleProfileId == id)
             .Select(x => (int?)x.VersionNumber).MaxAsync(ct) ?? 0) + 1;
         db.CreatorStyleProfileVersions.Add(CreatorStyleProfileVersion.Capture(
-            profile, nextVersion, proposal.Id, request.ReviewerId, now));
+            profile, nextVersion, proposal.Id, reviewerId, now));
         await db.SaveChangesAsync(ct);
         return Results.Ok(new { proposalId, status = proposal.Status.ToString(), version = nextVersion, profile.StyleSummary });
     }
@@ -613,15 +616,17 @@ styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/approve",
 });
 
 styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/reject", async (Guid id,
-    Guid proposalId, ReviewStyleLearningProposalRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+    Guid proposalId, ReviewStyleLearningProposalRequest request, HttpContext httpContext, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
+    var reviewerId = GetVerifiedReviewerId(httpContext.User);
+    if (reviewerId is null) return Results.Forbid();
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var proposal = await db.StyleLearningProposals.SingleOrDefaultAsync(
         x => x.Id == proposalId && x.CreatorStyleProfileId == id, ct);
     if (proposal is null) return Results.NotFound();
     try
     {
-        proposal.Reject(request.ReviewerId, request.Reason, DateTimeOffset.UtcNow);
+        proposal.Reject(reviewerId, request.Reason, DateTimeOffset.UtcNow);
         await db.SaveChangesAsync(ct);
         return Results.Ok(new { proposalId, status = proposal.Status.ToString() });
     }
@@ -725,10 +730,22 @@ static CreatorStyleEvidenceResponse ToStyleEvidenceResponse(CreatorStyleEvidence
         x.Saves, x.FollowsGained, x.ProductClicks, x.Orders, x.AverageWatchSeconds,
         x.VideoDurationSeconds, x.EngagementRate, x.LearnedAt);
 
+static string? GetVerifiedReviewerId(ClaimsPrincipal principal)
+{
+    // API-key clients are service identities, not human reviewers. Until OIDC is enabled,
+    // approval/rejection must fail closed rather than accept a caller-supplied reviewer ID.
+    if (principal.Identity?.AuthenticationType == ApiKeyAuthenticationHandler.SchemeName)
+        return null;
+
+    var subject = principal.FindFirst("sub")?.Value
+        ?? principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    return string.IsNullOrWhiteSpace(subject) ? null : subject;
+}
+
 public sealed record CreatorStyleProfileVersionResponse(Guid Id, int VersionNumber, Guid? ApprovedProposalId,
     string DisplayName, string Positioning, string StyleSummary, DateTimeOffset CreatedAt, string CreatedBy);
 public sealed record CreateStyleLearningProposalRequest(string ProposedSummary, string AlgorithmVersion);
-public sealed record ReviewStyleLearningProposalRequest(string ReviewerId, string? Reason);
+public sealed record ReviewStyleLearningProposalRequest(string? Reason);
 public sealed record StyleLearningProposalResponse(Guid Id, Guid CreatorStyleProfileId, string ProposedSummary,
     string EvidenceExperimentIdsJson, string AlgorithmVersion, string Status, string? ReviewReason,
     string? ReviewerId, DateTimeOffset CreatedAt, DateTimeOffset? ReviewedAt);
