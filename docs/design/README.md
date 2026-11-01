@@ -16,6 +16,9 @@ This directory is the normative as-built design for the implemented CreatorFlow 
 - When behavior changes, update design docs, API contract, SQL notes and tests in the same change.
 - A table, UI field, endpoint or provider interface alone does not prove an external integration is complete.
 
+## Deployment
+- [Public deployment guide](../DEPLOYMENT_GUIDE.md) — accounts and API authorization, topology, infrastructure sizing, AI/ML dependencies, secrets, security and launch gates.
+
 ## Scope
 The as-built design covers content projects, topic and Douyin discovery metadata, Vietnam trend observations, controlled 2–3-variant Style Lab experiments, creator style profiles/evidence, and deterministic topic-aware style learning.
 
