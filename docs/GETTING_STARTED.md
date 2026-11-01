@@ -1,7 +1,7 @@
 # Getting started
 
 ## Prerequisites
-- .NET 9 SDK
+- .NET 9 SDK (current branch baseline; public launch requires the .NET 10 LTS upgrade before 10 Nov 2026)
 - Python 3.11+
 - SQL Server 2022+ (optional for API health endpoint)
 - FFmpeg (when media processing is introduced)
@@ -26,6 +26,10 @@ uvicorn creatorflow_ai.main:app --app-dir ai --reload --port 8001
 
 Never commit API keys, database passwords, publishing tokens, or licensed media.
 
+## Deployment and public launch
+
+See [Deployment Guide](DEPLOYMENT_GUIDE.md) for the account prerequisites, TikTok/Douyin authorization separation, server sizing, ML runtime choices, secrets, security controls and phased public-launch checklist. The current repository is a pilot foundation, not yet a public multi-tenant SaaS release.
+
 
 ## Creator workspace (Blazor)
 
@@ -45,7 +49,9 @@ dotnet run --project src/CreatorFlow.Web
 
 The API URL must match the actual local API address/certificate. On Windows PowerShell, set these values with `$env:NAME="value"` before starting each process. For production, store the API key in the deployment secret manager rather than a committed settings file.
 
-For real LLM calls, configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` on the .NET API, plus `CREATORFLOW_AI_API_KEY`, `CREATORFLOW_LLM_API_KEY` and `CREATORFLOW_LLM_MODEL` on the Python service. Use a separate internal service key and provider key; never expose either to the browser.\n\nThe interactive Web workspace includes:
+For real LLM calls, configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` on the .NET API, plus `CREATORFLOW_AI_API_KEY`, `CREATORFLOW_LLM_API_KEY` and `CREATORFLOW_LLM_MODEL` on the Python service. Use a separate internal service key and provider key; never expose either to the browser.
+
+The interactive Web workspace includes:
 - `/trends`: manually record Vietnam creator/video/sound trend observations.
 - `/style-lab`: create 2–3 style variants, mark them ready/published, enter performance metrics and evaluate a winner.
 - `/style-profiles`: create a creator style profile, add evaluated winners as evidence and maintain an editable style summary.
