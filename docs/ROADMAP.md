@@ -7,8 +7,12 @@
 
 ## Phase 1 — Secure SaaS foundation (BLOCKING external-customer launch)
 - [ ] Upgrade .NET 9 baseline to .NET 10 LTS before public launch.
-- [ ] OIDC authentication, MFA, authorization, tenant and membership model.
-- [ ] Tenant-scoped repositories, EF filters, SQL constraints and cross-tenant negative tests.
+- [x] Tenant and membership domain model plus SQL identity migration 011.
+- [x] Configurable OIDC JWT bearer validation hook, active issuer+subject membership resolver and default tenant authorization gate.
+- [x] EF Core tenant query filters, TenantId stamping/immutability and SQL migration 012 for all current business tables.
+- [ ] Configure a production OIDC provider; implement MFA, invitations and membership administration.
+- [ ] Complete role-specific endpoint policies, tenant-local unique indexes/composite same-tenant relationships, SQL Server RLS and cross-tenant negative tests.
+- [ ] Execute migration 012 on empty and populated SQL Server databases; add migration upgrade/rollback evidence.
 - [ ] Audit trail, quotas, rate limits, billing and subscription lifecycle.
 - [ ] Content project persistence and migrations.
 - [ ] Asset registry, rights/provenance evidence, retention and deletion.
