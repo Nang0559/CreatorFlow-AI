@@ -70,6 +70,52 @@ public sealed class TrendSelectionFeedbackApiTests
     }
 
     [Fact]
+    public async Task Outcome_post_and_history_round_trip()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        var candidateId = await factory.SeedCandidateAsync();
+        using var client = factory.CreateAuthenticatedClient();
+
+        var feedbackResponse = await client.PostAsJsonAsync(string.Format(FeedbackPath, candidateId),
+            new { decision = "Select", reasonCode = "CommercialPotential", reasonNote = "" });
+        Assert.Equal(HttpStatusCode.Created, feedbackResponse.StatusCode);
+        using var feedbackJson = await System.Text.Json.JsonDocument.ParseAsync(await feedbackResponse.Content.ReadAsStreamAsync());
+        var feedbackId = feedbackJson.RootElement.GetProperty("id").GetGuid();
+        var outcomePath = $"/api/v1/douyin/videos/{candidateId}/feedback/{feedbackId}/outcomes";
+
+        var outcomeResponse = await client.PostAsJsonAsync(outcomePath,
+            new { outcomeKind = "Published", outcomeValue = "Published via approved flow",
+                metricsSnapshotJson = "{\\"views\\":1200,\\"orders\\":4}", source = "OfficialAnalyticsApi" });
+        Assert.Equal(HttpStatusCode.Created, outcomeResponse.StatusCode);
+
+        var historyResponse = await client.GetAsync(outcomePath);
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        using var history = await System.Text.Json.JsonDocument.ParseAsync(await historyResponse.Content.ReadAsStreamAsync());
+        var items = history.RootElement.EnumerateArray().ToArray();
+        Assert.Single(items);
+        Assert.Equal("Published", items[0].GetProperty("outcomeKind").GetString());
+        Assert.Equal("OfficialAnalyticsApi", items[0].GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public async Task Outcome_post_rejects_undefined_numeric_kind()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        var candidateId = await factory.SeedCandidateAsync();
+        using var client = factory.CreateAuthenticatedClient();
+        var feedbackResponse = await client.PostAsJsonAsync(string.Format(FeedbackPath, candidateId),
+            new { decision = "Watch", reasonCode = "Uncertain", reasonNote = "" });
+        using var feedbackJson = await System.Text.Json.JsonDocument.ParseAsync(await feedbackResponse.Content.ReadAsStreamAsync());
+        var feedbackId = feedbackJson.RootElement.GetProperty("id").GetGuid();
+
+        var response = await client.PostAsJsonAsync(
+            $"/api/v1/douyin/videos/{candidateId}/feedback/{feedbackId}/outcomes",
+            new { outcomeKind = "999", outcomeValue = (string?)null, metricsSnapshotJson = "{}", source = "Manual" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Feedback_post_returns_not_found_for_unknown_candidate()
     {
         using var factory = new CreatorFlowApiFactory();
