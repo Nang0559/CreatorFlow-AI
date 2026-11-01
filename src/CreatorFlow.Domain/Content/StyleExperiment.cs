@@ -122,7 +122,10 @@ public sealed class StyleExperimentVariant
         long followsGained, long productClicks, long orders, decimal? averageWatchSeconds,
         decimal? videoDurationSeconds, DateTimeOffset measuredAt)
     {
-        if (Status != StyleVariantStatus.Published) throw new InvalidOperationException("Only published variants can be measured.");
+        if (Status is not (StyleVariantStatus.Published or StyleVariantStatus.Measured))
+            throw new InvalidOperationException("Only published variants can be measured.");
+        if (Status == StyleVariantStatus.Measured && MeasuredAt.HasValue && measuredAt <= MeasuredAt.Value)
+            throw new ArgumentOutOfRangeException(nameof(measuredAt), "A new measurement must be later than the previous observation.");
         if (new[] { views, likes, comments, shares, saves, followsGained, productClicks, orders }.Any(x => x < 0))
             throw new ArgumentOutOfRangeException(nameof(views), "Metrics cannot be negative.");
         if (PublishedAt.HasValue && measuredAt < PublishedAt.Value)
