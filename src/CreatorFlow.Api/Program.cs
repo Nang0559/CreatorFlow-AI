@@ -453,6 +453,17 @@ styleProfiles.MapPost("/{id:guid}/learn/{experimentId:guid}", async (Guid id, Gu
 
 
 // Learning Memory persists AI/statistical drafts and requires an explicit review before profile activation.
+styleProfiles.MapGet("/{id:guid}/versions", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (!await db.CreatorStyleProfiles.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+    var versions = await db.CreatorStyleProfileVersions.AsNoTracking()
+        .Where(x => x.CreatorStyleProfileId == id).OrderByDescending(x => x.VersionNumber)
+        .Select(x => new CreatorStyleProfileVersionResponse(x.Id, x.VersionNumber, x.ApprovedProposalId,
+            x.DisplayName, x.Positioning, x.StyleSummary, x.CreatedAt, x.CreatedBy)).ToArrayAsync(ct);
+    return Results.Ok(versions);
+});
+
 styleProfiles.MapGet("/{id:guid}/learning-proposals", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
@@ -638,6 +649,8 @@ static CreatorStyleEvidenceResponse ToStyleEvidenceResponse(CreatorStyleEvidence
         x.Saves, x.FollowsGained, x.ProductClicks, x.Orders, x.AverageWatchSeconds,
         x.VideoDurationSeconds, x.EngagementRate, x.LearnedAt);
 
+public sealed record CreatorStyleProfileVersionResponse(Guid Id, int VersionNumber, Guid? ApprovedProposalId,
+    string DisplayName, string Positioning, string StyleSummary, DateTimeOffset CreatedAt, string CreatedBy);
 public sealed record CreateStyleLearningProposalRequest(string ProposedSummary, string AlgorithmVersion);
 public sealed record ReviewStyleLearningProposalRequest(string ReviewerId, string? Reason);
 public sealed record StyleLearningProposalResponse(Guid Id, Guid CreatorStyleProfileId, string ProposedSummary,
