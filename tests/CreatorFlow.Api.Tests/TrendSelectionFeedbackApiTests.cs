@@ -164,8 +164,8 @@ public sealed class TrendSelectionFeedbackApiTests
             var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>() as TenantContext
                 ?? throw new InvalidOperationException("Tenant context is not registered.");
             var tenant = Tenant.Create("Legacy workspace", "legacy-workspace", now);
-            db.Tenants.Add(tenant);
             db.Entry(tenant).Property(x => x.Id).CurrentValue = BootstrapTenantId;
+            db.Tenants.Add(tenant);
             await db.SaveChangesAsync();
             tenantContext.Set(BootstrapTenantId, TenantRole.Owner.ToString());
             var candidate = DouyinVideoCandidate.Create("test-video-001", null,
