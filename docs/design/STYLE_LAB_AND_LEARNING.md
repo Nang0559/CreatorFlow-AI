@@ -86,7 +86,7 @@ GET /api/v1/style-profiles/{profileId}/learning-analysis verifies that the profi
 The endpoint returns eligibility counts, signals, topic breakdown, a proposed summary and methodology. Learning Memory now persists a submitted draft with a profile-scoped evidence snapshot and algorithm version. Pending proposals can be approved or rejected; approval updates current guidance and creates an immutable profile version. The API accepts the generated summary as a draft payload, so the AI synthesis response must still be submitted to the proposal endpoint by its caller.
 
 ## 6. Creator review
-The Style Profiles UI requests analysis, can place the proposed summary into the editable Style Summary draft, and leaves the creator to review and save guidance. This is a manual edit step, not a formal approval workflow: no persisted Pending/Approved/Rejected proposal or immutable profile version history exists yet.
+The Style Profiles UI can request deterministic analysis and LLM synthesis. A synthesis result remains a draft until the caller submits it to Learning Memory. Learning Memory persists a Pending proposal with evidence snapshot and algorithm version; a verified human reviewer can approve or reject it. Approval atomically updates current guidance and creates an immutable profile version; rejection requires a reason. The current API-key bootstrap identity is not a human reviewer, so review endpoints fail closed until OIDC identity is configured. This workflow is implemented but not yet production-usable for multi-user tenants.
 
 ## 7. LLM-assisted synthesis — implemented service boundary
 
@@ -95,10 +95,8 @@ The Python AI service now exposes a provider-backed evidence synthesis endpoint.
 The LLM is not permitted to turn correlation into causality or to promote a single experiment into a permanent rule. Deterministic eligibility/statistical analysis remains the auditable numeric layer; the LLM provides qualitative synthesis and experiment ideas.
 
 ## 8. Next design increments
-1. Persist StyleLearningProposal with source experiment IDs, evidence snapshot, factor details, topic scope, algorithm version, creation time and status.
-2. Add Pending → Approved/Rejected, reviewer identity, review timestamp and reason.
-3. Add immutable CreatorStyleProfileVersion; approval creates a new active version.
-4. Scope analysis to profile/account evidence and enforce tenant authorization.
-5. Define KPI policy and comparable measurement windows; retain views, retention, follows, clicks and orders as distinct measures.
-6. Add optional LLM explanation over structured evidence, citing supporting experiments.
-7. Feed only approved profile versions into script prompts and retain profile-version ID on generated scripts.
+1. Scope deterministic analysis and evidence selection to the authenticated profile/tenant; current analysis still reads the global evaluated experiment pool.
+2. Configure OIDC and derive reviewer identity exclusively from a validated principal; API-key callers must remain unable to approve/reject.
+3. Define comparable measurement windows and distinct KPI policies for views, retention, follows, product clicks and orders.
+4. Feed only approved profile versions into script prompts and retain profile-version ID on every generated script.
+5. Add regression/evaluation datasets and tests for proposal quality, conflicting evidence, low sample size and model/prompt version changes.
