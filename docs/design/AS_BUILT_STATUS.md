@@ -35,7 +35,8 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Durable jobs, outbox/inbox, retries and connector observability.
 - OIDC multi-user identity and tenant authorization; tenant foundation tables exist, but per-profile ownership and verified human audit actor are not yet enabled.
 
-- Profile-scoped deterministic style learning analysis; current deterministic analysis reads the global evaluated experiment pool. LLM synthesis is scoped to imported profile evidence.
+- Profile-scoped deterministic style learning analysis; current deterministic analysis reads the global evaluated experiment pool.
+- Rich trend features: schema v1 currently covers intake metadata and title shape only; no video/audio/transcript/similarity/velocity extraction. LLM synthesis is scoped to imported profile evidence.
 - Trained ML prediction, durable model registry/retraining and KPI/retention-aware optimization.
 - Persisted LLM proposals, prompt registry/version history and immutable approved profile versions.
 - Production evaluation datasets and end-to-end connector tests.
@@ -57,7 +58,7 @@ Migration 009 and EF mappings now persist `StyleLearningProposals` and immutable
 
 
 ## Trend Selection Intelligence (migration 010)
-Creator-authored Select/Reject/Watch feedback is persisted as append-only history with reason code, optional empty note and candidate metadata snapshot. Authenticated API supports feedback capture/history and downstream outcome observation write/history. Domain tests cover decision validation and JSON snapshots; API integration tests cover authentication, feedback round-trip, outcome round-trip, invalid numeric enums and missing candidates. Migration 010 independently guards index creation and installs SQL triggers that reject UPDATE/DELETE on both history tables. Feature snapshot remains {} until a versioned extractor exists. SQL Server migration execution against empty/schema-009 databases is still awaiting a dedicated integration test. TikTok connector, similarity extraction, saturation scoring, rights registry, calibrated risk model and durable worker remain outstanding. No live TikTok feed is claimed.
+Creator-authored Select/Reject/Watch feedback is persisted as append-only history with reason code, optional empty note and candidate metadata snapshot. Authenticated API supports feedback capture/history and downstream outcome observation write/history. Domain tests cover decision validation and JSON snapshots; API integration tests cover authentication, feedback round-trip, outcome round-trip, invalid numeric enums and missing candidates. Migration 010 independently guards index creation and installs SQL triggers that reject UPDATE/DELETE on both history tables. Feature snapshot now contains the versioned metadata baseline (`creatorflow.trend-selection`, schema version 1). Rich content, engagement, similarity and saturation features remain outstanding. SQL Server migration execution against empty/schema-009 databases is still awaiting a dedicated integration test. TikTok connector, similarity extraction, saturation scoring, rights registry, calibrated risk model and durable worker remain outstanding. No live TikTok feed is claimed.
 
 
 ## SaaS tenant identity foundation (migration 011)
