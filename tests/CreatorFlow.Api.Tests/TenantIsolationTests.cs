@@ -62,7 +62,7 @@ public sealed class TenantIsolationTests
         await SeedWorkspaceAsync(options, tenantA, "tenant-a", "Workspace A", now);
         await SeedWorkspaceAsync(options, tenantB, "tenant-b", "Workspace B", now);
 
-        using var contextA = new TenantContext();
+        var contextA = new TenantContext();
         contextA.Set(tenantA, TenantRole.Owner.ToString());
         using var dbA = new CreatorFlowDbContext(options, contextA);
         var project = ContentProject.Create("Protected project", now);
@@ -78,8 +78,8 @@ public sealed class TenantIsolationTests
     {
         using var db = new CreatorFlowDbContext(options, new TenantContext());
         var tenant = Tenant.Create(name, slug, now);
-        db.Tenants.Add(tenant);
         db.Entry(tenant).Property(x => x.Id).CurrentValue = tenantId;
+        db.Tenants.Add(tenant);
         await db.SaveChangesAsync();
     }
 }
