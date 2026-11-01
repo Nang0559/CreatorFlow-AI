@@ -27,8 +27,8 @@ public sealed class TrendSelectionFeatureSnapshotTests
         Assert.Equal("FollowedChannel", root.GetProperty("discoveryMethod").GetString());
         Assert.True(root.GetProperty("hasSourceChannel").GetBoolean());
         Assert.True(root.GetProperty("hasTopic").GetBoolean());
-        Assert.Equal(25, root.GetProperty("titleCharacterCount").GetInt32());
-        Assert.Equal(5, root.GetProperty("titleTokenCount").GetInt32());
+        Assert.Equal(26, root.GetProperty("titleCharacterCount").GetInt32());
+        Assert.Equal(6, root.GetProperty("titleTokenCount").GetInt32());
         Assert.True(root.GetProperty("titleHasQuestionMark").GetBoolean());
         Assert.True(root.GetProperty("titleHasDigits").GetBoolean());
         Assert.Equal(1, root.GetProperty("titleHashtagCount").GetInt32());
