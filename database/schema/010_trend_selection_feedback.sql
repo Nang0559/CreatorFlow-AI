@@ -35,5 +35,23 @@ BEGIN
   CONSTRAINT CK_TrendCandidateOutcomeObservations_Kind CHECK (OutcomeKind IN (N'Adapted',N'Published',N'MarketPerformance',N'CreatorAssessment')),
   CONSTRAINT CK_TrendCandidateOutcomeObservations_MetricsJson CHECK (ISJSON(MetricsSnapshotJson)=1)
  );
- CREATE INDEX IX_TrendCandidateOutcomeObservations_Feedback_Observed ON dbo.TrendCandidateOutcomeObservations(FeedbackId,ObservedAt DESC);
 END;
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.TrendCandidateOutcomeObservations') AND name = N'IX_TrendCandidateOutcomeObservations_Feedback_Observed')
+    CREATE INDEX IX_TrendCandidateOutcomeObservations_Feedback_Observed ON dbo.TrendCandidateOutcomeObservations(FeedbackId,ObservedAt DESC);
+
+-- Enforce append-only audit history at the database boundary, not only in the domain model.
+EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_TrendSelectionFeedback_Immutable
+ON dbo.TrendSelectionFeedback AFTER UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    THROW 51001, ''TrendSelectionFeedback is append-only.'', 1;
+END;');
+
+EXEC(N'CREATE OR ALTER TRIGGER dbo.TR_TrendCandidateOutcomeObservations_Immutable
+ON dbo.TrendCandidateOutcomeObservations AFTER UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    THROW 51002, ''TrendCandidateOutcomeObservations is append-only.'', 1;
+END;');
