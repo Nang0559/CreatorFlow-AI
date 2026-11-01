@@ -83,7 +83,7 @@ Experiments may carry a free-text topic. Analysis can filter by exact topic (cas
 ### API scope caveat
 GET /api/v1/style-profiles/{profileId}/learning-analysis verifies that the profile exists, then analyzes the evaluated experiment pool. It does not filter by the profile's imported evidence or account key. Profile ID is a route existence check, not a data-isolation boundary. Implement profile/account-scoped evidence selection and tenant authorization before multi-account use.
 
-The endpoint returns eligibility counts, signals, topic breakdown, a proposed summary and methodology. It does not persist a proposal, approval decision or profile version.
+The endpoint returns eligibility counts, signals, topic breakdown, a proposed summary and methodology. Learning Memory now persists a submitted draft with a profile-scoped evidence snapshot and algorithm version. Pending proposals can be approved or rejected; approval updates current guidance and creates an immutable profile version. The API accepts the generated summary as a draft payload, so the AI synthesis response must still be submitted to the proposal endpoint by its caller.
 
 ## 6. Creator review
 The Style Profiles UI requests analysis, can place the proposed summary into the editable Style Summary draft, and leaves the creator to review and save guidance. This is a manual edit step, not a formal approval workflow: no persisted Pending/Approved/Rejected proposal or immutable profile version history exists yet.
