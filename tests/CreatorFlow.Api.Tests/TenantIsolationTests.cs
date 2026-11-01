@@ -23,7 +23,7 @@ public sealed class TenantIsolationTests
         await SeedWorkspaceAsync(options, tenantA, "tenant-a", "Workspace A", now);
         await SeedWorkspaceAsync(options, tenantB, "tenant-b", "Workspace B", now);
 
-        using var contextA = new TenantContext();
+        var contextA = new TenantContext();
         contextA.Set(tenantA, TenantRole.Owner.ToString());
         using (var dbA = new CreatorFlowDbContext(options, contextA))
         {
@@ -33,7 +33,7 @@ public sealed class TenantIsolationTests
             Assert.Equal(tenantA, dbA.Entry(project).Property<Guid>("TenantId").CurrentValue);
         }
 
-        using var contextB = new TenantContext();
+        var contextB = new TenantContext();
         contextB.Set(tenantB, TenantRole.Owner.ToString());
         using (var dbB = new CreatorFlowDbContext(options, contextB))
         {
