@@ -6,9 +6,7 @@ using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.TestHost;
 using Xunit;
 
@@ -133,14 +131,10 @@ public sealed class TrendSelectionFeedbackApiTests
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseSetting("ConnectionStrings:CreatorFlow",
-                "Server=localhost;Database=CreatorFlowTests;User Id=test;Password=not-a-real-password;TrustServerCertificate=True");
+            builder.UseSetting("ConnectionStrings:CreatorFlow", string.Empty);
             builder.UseSetting("Authentication:ApiKey", ApiKey);
             builder.ConfigureTestServices(services =>
             {
-                services.RemoveAll<CreatorFlowDbContext>();
-                services.RemoveAll<DbContextOptions<CreatorFlowDbContext>>();
-                services.RemoveAll<IDbContextOptionsConfiguration<CreatorFlowDbContext>>();
                 services.AddDbContext<CreatorFlowDbContext>(options => options.UseInMemoryDatabase(_databaseName));
             });
         }
