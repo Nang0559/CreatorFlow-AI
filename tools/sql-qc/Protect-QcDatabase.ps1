@@ -15,8 +15,8 @@ SELECT d.state_desc AS StateDesc,d.is_read_only AS IsReadOnly,
  CAST(rp.value AS nvarchar(128)) AS RepositoryTag,
  IS_SRVROLEMEMBER(N'sysadmin') AS IsSysAdmin
 FROM sys.databases d
-LEFT JOIN sys.extended_properties ep ON ep.class=0 AND ep.name=N'CreatorFlowEnvironment'
-LEFT JOIN sys.extended_properties rp ON rp.class=0 AND rp.name=N'CreatorFlowRepository'
+LEFT JOIN [CreatorFlow_QC].sys.extended_properties ep ON ep.class=0 AND ep.name=N'CreatorFlowEnvironment'
+LEFT JOIN [CreatorFlow_QC].sys.extended_properties rp ON rp.class=0 AND rp.name=N'CreatorFlowRepository'
 WHERE d.name=N'CreatorFlow_QC';
 "@
 $rows=@(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database master -Query $query -ErrorAction Stop)
