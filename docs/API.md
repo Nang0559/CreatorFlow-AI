@@ -123,4 +123,13 @@ The authenticated .NET API exposes server-side proxy routes:
 Configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` in the API host. The proxy validates HTTPS (or localhost HTTP), requires a 32-character service key, and forwards provider responses/status without exposing the AI service key to the browser. Missing configuration and unavailable service return 503; timeout returns 504. The Python service separately requires its own provider credentials. The creator-facing Blazor controls are not yet wired to these proxy routes.
 
 
-Apply SQL scripts `database/schema/001_initial.sql` through `008_style_variant_metric_observations.sql` in numeric order. Script 008 is required for Style Lab measurement writes after this change.
+### Learning Memory
+- `GET /api/v1/style-profiles/{id}/learning-proposals` lists persisted proposals for a profile.
+- `POST /api/v1/style-profiles/{id}/learning-proposals` stores a reviewed-ready draft using the profile's imported evidence snapshot. Body: `{ "proposedSummary": "...", "algorithmVersion": "llm-synthesis-v1" }`. At least two imported evaluated experiments are required.
+- `POST /api/v1/style-profiles/{id}/learning-proposals/{proposalId}/approve` approves a pending proposal, updates current guidance and creates the next immutable profile version. Body: `{ "reviewerId": "...", "reason": "..." }`.
+- `POST /api/v1/style-profiles/{id}/learning-proposals/{proposalId}/reject` rejects a pending proposal; a reason is required.
+- `GET /api/v1/style-profiles/{id}/versions` returns immutable profile versions in descending version order.
+
+Review identity is currently supplied by the API caller because the bootstrap API-key authentication has no individual user identity/role model. Do not treat `reviewerId` as verified identity or expose this workflow to multiple creators until user/tenant authorization is implemented. Only Approved proposals create versions; AI generation itself does not activate a profile.
+
+Apply SQL scripts `database/schema/001_initial.sql` through `009_style_learning_memory.sql` in numeric order. Scripts 008 and 009 are required for metric history and Learning Memory respectively.
