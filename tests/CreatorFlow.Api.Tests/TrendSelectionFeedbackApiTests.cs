@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using CreatorFlow.Api.Security;
+using CreatorFlow.Api.Identity;
+using CreatorFlow.Domain.Identity;
 using CreatorFlow.Domain.Discovery;
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
@@ -133,11 +135,14 @@ public sealed class TrendSelectionFeedbackApiTests
     private sealed class CreatorFlowApiFactory : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = $"creatorflow-api-tests-{Guid.NewGuid():N}";
+        private static readonly Guid BootstrapTenantId = Guid.Parse("00000000-0000-4000-8000-000000000001");
 
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
             builder.UseSetting("ConnectionStrings:CreatorFlow", string.Empty);
             builder.UseSetting("Authentication:ApiKey", ApiKey);
+            builder.UseSetting("Tenant:AllowApiKeyBootstrap", "true");
+            builder.UseSetting("Tenant:BootstrapTenantId", BootstrapTenantId.ToString());
             builder.ConfigureTestServices(services =>
             {
                 services.AddDbContext<CreatorFlowDbContext>(options => options.UseInMemoryDatabase(_databaseName));
@@ -156,6 +161,13 @@ public sealed class TrendSelectionFeedbackApiTests
             using var scope = Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<CreatorFlowDbContext>();
             var now = DateTimeOffset.UtcNow;
+            var tenantContext = scope.ServiceProvider.GetRequiredService<ITenantContext>() as TenantContext
+                ?? throw new InvalidOperationException("Tenant context is not registered.");
+            var tenant = Tenant.Create("Legacy workspace", "legacy-workspace", now);
+            db.Tenants.Add(tenant);
+            db.Entry(tenant).Property(x => x.Id).CurrentValue = BootstrapTenantId;
+            await db.SaveChangesAsync();
+            tenantContext.Set(BootstrapTenantId, TenantRole.Owner.ToString());
             var candidate = DouyinVideoCandidate.Create("test-video-001", null,
                 "https://www.douyin.com/video/test-video-001", "Test candidate",
                 VideoDiscoveryMethod.Manual, null, now);
