@@ -23,3 +23,8 @@ This directory is the normative as-built design for the implemented CreatorFlow 
 The as-built design covers content projects, topic and Douyin discovery metadata, Vietnam trend observations, controlled 2–3-variant Style Lab experiments, creator style profiles/evidence, and deterministic topic-aware style learning.
 
 It does not claim Douyin/TikTok connectors, automatic trend/music ingestion, media downloading/rendering, product-cart integration, TikTok publishing, analytics synchronization, multi-tenant identity or durable background workers are implemented.
+
+
+## SaaS / hybrid deployment
+
+The selected target deployment profile is documented in [SaaS + Hybrid Architecture](../SAAS_HYBRID_ARCHITECTURE.md), [Deployment Guide](../DEPLOYMENT_GUIDE.md), [Deployment Runbook](../DEPLOYMENT_RUNBOOK.md) and [Public Launch Checklist](../PUBLIC_LAUNCH_CHECKLIST.md). These are target-state documents and do not imply unimplemented production components are available.
