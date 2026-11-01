@@ -8,7 +8,9 @@ namespace CreatorFlow.Infrastructure.Persistence;
 
 public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> options, ITenantContext? tenantContext = null) : DbContext(options)
 {
-    private Guid CurrentTenantId => tenantContext?.TenantId ?? Guid.Empty;
+    private static readonly Guid InMemoryTestTenantId = Guid.Parse("00000000-0000-4000-8000-000000000001");
+    private Guid CurrentTenantId => tenantContext?.TenantId ??
+        (Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory" ? InMemoryTestTenantId : Guid.Empty);
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
     public DbSet<ContentProject> ContentProjects => Set<ContentProject>();
@@ -46,6 +48,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
                      x.Entity is not Tenant && x.Entity is not TenantMembership))
         {
             var tenantId = tenantContext?.TenantId;
+            if ((!tenantId.HasValue || tenantId.Value == Guid.Empty) &&
+                Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+                tenantId = InMemoryTestTenantId;
             if (!tenantId.HasValue || tenantId.Value == Guid.Empty)
                 throw new InvalidOperationException("A verified tenant context is required to write tenant-owned data.");
 
