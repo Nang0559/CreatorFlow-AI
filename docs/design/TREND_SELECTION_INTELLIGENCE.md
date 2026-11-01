@@ -19,7 +19,7 @@ CreatorFlow learns the creator's selection preferences, measures market saturati
 6. Adaptation, publication and measured market results are appended as separate outcome observations.
 
 ## Implemented in migration 010
-TrendSelectionFeedback stores candidate FK, decision, reason code/note, candidate and feature JSON snapshots, and review time. It is append-only and indexed for candidate history and decision/reason analysis. TrendCandidateOutcomeObservations stores downstream outcome kind, value, metric snapshot, source and observation time. The current API supports feedback create/history; outcome write API is not yet implemented.
+TrendSelectionFeedback stores candidate FK, decision, reason code/note, candidate and feature JSON snapshots, and review time. It is append-only and indexed for candidate history and decision/reason analysis. TrendCandidateOutcomeObservations stores downstream outcome kind, value, metric snapshot, source and observation time. The API supports feedback create/history and outcome observation create/history. SQL triggers enforce append-only behavior for both tables; domain validation rejects undefined enum values and non-object/invalid JSON snapshots.
 
 ## TikTok Vietnam scanning design
 Planned entities: TikTokContentScanJobs, TikTokContentMatches, TikTokContentMetricSnapshots, TikTokSaturationAssessments, ContentRightsAssessments and TikTokPublishingRiskAssessments.
@@ -39,7 +39,7 @@ List-first paginated dashboard; indexed queries; creator feedback writes stay sy
 Proposed, unmeasured SLO targets: dashboard P95 <2s; feedback write P95 <500ms; status visibility <1s.
 
 ## API currently implemented
-POST and GET /api/v1/douyin/videos/{id}/feedback. FeatureSnapshotJson remains {} until a real extractor exists. Existing shared API-key auth is bootstrap-only; verified user identity and tenant ownership remain production blockers.
+POST and GET /api/v1/douyin/videos/{id}/feedback, plus POST and GET /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes. FeatureSnapshotJson remains {} until a real extractor exists. Existing shared API-key auth is bootstrap-only; verified user identity and tenant ownership remain production blockers.
 
 ## Release gates
 Migration tests on empty and schema-009 databases; decision validation and empty-note round-trip; append-only history; preference labels exclude Watch; connector compliance and coverage; rights review; calibrated risk model; human approval and official publishing API.
