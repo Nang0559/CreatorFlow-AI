@@ -23,7 +23,7 @@ jobs:
     runs-on: [self-hosted, Windows, X64, creatorflow-sql-qc]
     timeout-minutes: 45
     env:
-      CREATORFLOW_QC_SQL_INSTANCE: \${{ vars.CREATORFLOW_QC_SQL_INSTANCE }}
+      CREATORFLOW_QC_SQL_INSTANCE: ${{ vars.CREATORFLOW_QC_SQL_INSTANCE }}
       CREATORFLOW_QC_DATABASE: CreatorFlow_QC
     steps:
       - uses: actions/checkout@v4
