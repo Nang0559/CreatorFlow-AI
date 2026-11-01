@@ -171,7 +171,8 @@ trendFeedback.MapPost("/", async (Guid id, CreateTrendSelectionFeedbackRequest r
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var candidate = await db.DouyinVideoCandidates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
     if (candidate is null) return Results.NotFound();
-    if (!Enum.TryParse<TrendSelectionDecision>(request.Decision, true, out var decision))
+    if (!Enum.TryParse<TrendSelectionDecision>(request.Decision, true, out var decision) ||
+        !Enum.IsDefined(decision))
         return Results.ValidationProblem(new Dictionary<string, string[]> { ["decision"] = ["Use Select, Reject or Watch."] });
     try
     {
