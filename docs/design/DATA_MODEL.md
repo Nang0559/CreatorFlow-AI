@@ -17,6 +17,8 @@ This document records the current SQL Server/EF Core model. Numbered scripts und
 | StyleVariantMetricObservations | Append-only time-series snapshots for each variant | FK to variant, unique variant + ObservedAt; indexed for chronological reads |
 | CreatorStyleProfiles | Creator positioning and editable guidance | Unique ProfileKey |
 | CreatorStyleEvidence | Snapshot of confirmed winner and measured results | FK to profile, experiment and winner; unique profile + experiment |
+| StyleLearningProposals | Reviewable AI/statistical learning drafts with evidence snapshot and algorithm version | FK to profile; Pending/Approved/Rejected state |
+| CreatorStyleProfileVersions | Immutable approved creator-style guidance snapshots | FK to profile and optional approved proposal; unique profile + version number and proposal |
 
 ## 2. Important columns and enumerations
 
@@ -82,3 +84,9 @@ Migration 008 adds immutable StyleVariantMetricObservations. Every successful va
 - Experiment topic is one optional free-text value, not a normalized topic FK or multi-label taxonomy.
 - Trend observations lack source connector run IDs, licensing metadata and connector health.
 - No normalized media asset, product association, TikTok publication or analytics-sync entities exist yet.
+
+## 7. Learning Memory (migration 009)
+- `StyleLearningProposals` stores the proposed summary, source experiment IDs, immutable evidence JSON snapshot, algorithm version, status, reviewer, reason and review timestamps.
+- A proposal begins Pending and can transition exactly once to Approved or Rejected. Rejection requires a reason.
+- `CreatorStyleProfileVersions` stores a complete immutable copy of display name, positioning and style summary. Approval updates current guidance and inserts the next version in the same SaveChanges transaction.
+- The current API caller supplies `reviewerId`; this is audit metadata only, not a verified identity. User/tenant authorization remains a release blocker before multi-creator use.
