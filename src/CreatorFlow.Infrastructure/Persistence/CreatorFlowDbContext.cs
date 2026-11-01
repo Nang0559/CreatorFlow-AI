@@ -1,11 +1,14 @@
 using CreatorFlow.Domain.Content;
 using CreatorFlow.Domain.Discovery;
+using CreatorFlow.Domain.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace CreatorFlow.Infrastructure.Persistence;
 
 public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> options) : DbContext(options)
 {
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
     public DbSet<ContentProject> ContentProjects => Set<ContentProject>();
     public DbSet<ContentTopic> ContentTopics => Set<ContentTopic>();
     public DbSet<DouyinSourceChannel> DouyinSourceChannels => Set<DouyinSourceChannel>();
@@ -24,6 +27,29 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Tenant>(entity =>
+        {
+            entity.ToTable("Tenants");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.Slug).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.HasIndex(x => x.Slug).IsUnique();
+        });
+
+        modelBuilder.Entity<TenantMembership>(entity =>
+        {
+            entity.ToTable("TenantMemberships");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.IdentityIssuer).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.SubjectId).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasIndex(x => new { x.TenantId, x.IdentityIssuer, x.SubjectId }).IsUnique();
+            entity.HasIndex(x => new { x.IdentityIssuer, x.SubjectId, x.Status });
+        });
+
         modelBuilder.Entity<ContentProject>(entity =>
         {
             entity.ToTable("ContentProjects");
