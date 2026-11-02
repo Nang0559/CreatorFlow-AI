@@ -1,21 +1,39 @@
 @inherits LayoutComponentBase
 
-<div class="shell">
-    <aside class="sidebar">
-        <div class="brand">CreatorFlow <span>AI</span></div>
-        <nav>
-            <a href="/">Tổng quan</a>
+<div class="app-shell">
+    <aside class="sidebar desktop-sidebar">
+        <a class="brand" href="/" aria-label="CreatorFlow AI – Tổng quan">CreatorFlow <span>AI</span></a>
+        <p class="nav-caption">WORKSPACE</p>
+        <nav class="primary-nav" aria-label="Điều hướng chính">
+            <a href="/" Match="NavLinkMatch.All">Tổng quan</a>
+            <a href="/trends">Khám phá</a>
+            <a href="/style-lab">Studio</a>
+            <a href="/analytics">Hiệu quả</a>
+            <a href="/settings">Thiết lập</a>
+        </nav>
+        <div class="sidebar-secondary">
+            <p class="nav-caption">QUẢN LÝ</p>
             <a href="/projects">Dự án nội dung</a>
-            <a href="/trends">Xu hướng Việt Nam</a>
-            <a href="/style-lab">Style Lab</a>
             <a href="/style-profiles">Phong cách riêng</a>
             <a href="/assets">Thư viện media</a>
-            <a href="/analytics">Phân tích</a>
-            <a href="/settings">Cấu hình</a>
-        </nav>
-        <div class="sidebar-note">Human review before publishing</div>
+        </div>
+        <div class="sidebar-note"><span class="privacy-dot"></span> Duyệt thủ công trước khi xuất bản</div>
     </aside>
-    <main class="main">
+
+    <header class="mobile-topbar">
+        <a class="brand" href="/">CreatorFlow <span>AI</span></a>
+        <a class="mobile-settings" href="/settings" aria-label="Thiết lập">⚙</a>
+    </header>
+
+    <main class="main-content">
         @Body
     </main>
+
+    <nav class="mobile-bottom-nav" aria-label="Điều hướng chính trên điện thoại">
+        <a href="/" aria-label="Tổng quan"><span class="mobile-nav-icon">⌂</span><span>Tổng quan</span></a>
+        <a href="/trends" aria-label="Khám phá"><span class="mobile-nav-icon">⌕</span><span>Khám phá</span></a>
+        <a href="/style-lab" aria-label="Studio"><span class="mobile-nav-icon">✳</span><span>Studio</span></a>
+        <a href="/analytics" aria-label="Hiệu quả"><span class="mobile-nav-icon">▥</span><span>Hiệu quả</span></a>
+        <a href="/settings" aria-label="Thiết lập"><span class="mobile-nav-icon">⚙</span><span>Thiết lập</span></a>
+    </nav>
 </div>
