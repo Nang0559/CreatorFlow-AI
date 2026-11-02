@@ -143,6 +143,30 @@ WHERE name=N'$Database';
         Write-Warning 'Dotnet tests explicitly skipped.'
     }
 
+    Write-Stage '5b/8 - Detect optional video editors and hardware'
+    $capCutCandidates = @(
+        (Join-Path $env:LOCALAPPDATA 'CapCut\Apps\CapCut.exe'),
+        (Join-Path $env:ProgramFiles 'CapCut\CapCut.exe'),
+        'C:\Program Files\CapCut\CapCut.exe'
+    )
+    $capCutPath = $capCutCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    if ($capCutPath) { Write-Host "CapCut Desktop: FOUND ($capCutPath)" } else { Write-Host 'CapCut Desktop: not detected (optional; install from the official CapCut website).' }
+
+    $aeRender = $null
+    $adobeRoot = Join-Path $env:ProgramFiles 'Adobe'
+    if (Test-Path -LiteralPath $adobeRoot) {
+        $aeRender = Get-ChildItem -LiteralPath $adobeRoot -Directory -Filter 'Adobe After Effects*' -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName 'Support Files\aerender.exe' } |
+            Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    }
+    if ($aeRender) { Write-Host "After Effects renderer: FOUND ($aeRender)" } else { Write-Host 'After Effects: not detected (optional; requires an Adobe license).' }
+
+    $cpuInfo = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Name
+    $gpuInfo = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+    $ramGb = [math]::Round((Get-CimInstance Win32_ComputerSystem -ErrorAction SilentlyContinue).TotalPhysicalMemory / 1GB, 1)
+    Write-Host "CPU: $cpuInfo"
+    Write-Host "RAM: $ramGb GB"
+    Write-Host "GPU: $($gpuInfo -join '; ')"
     if (-not $SkipDocker) {
         Write-Stage '6/8 - Build/start AI and Web containers'
         docker info | Out-Null
