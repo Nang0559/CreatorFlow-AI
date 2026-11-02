@@ -282,9 +282,9 @@ SELECT CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NOT NULL
     }
 
     Write-Stage '8b/8 - Start native video renderer when fully configured'
-    $rendererPaths = @($env:VideoRendering__AfterEffectsExe, $env:VideoRendering__AerenderExe, $env:VideoRendering__FFmpegExe)
+    $rendererPaths = @($env:VideoRendering__AfterEffectsExe, $env:VideoRendering__AerenderExe, $env:VideoRendering__FFmpegExe, $env:VideoRendering__FFprobeExe)
     $rendererReady = -not [string]::IsNullOrWhiteSpace($env:VideoRendering__StorageRoot) -and
-        $rendererPaths.Count -eq 3 -and @($rendererPaths | Where-Object { [string]::IsNullOrWhiteSpace($_) -or -not (Test-Path -LiteralPath $_ -PathType Leaf) }).Count -eq 0
+        $rendererPaths.Count -eq 4 -and @($rendererPaths | Where-Object { [string]::IsNullOrWhiteSpace($_) -or -not (Test-Path -LiteralPath $_ -PathType Leaf) }).Count -eq 0
     if ($rendererReady) {
         & '.\scripts\Start-VideoRenderWorker.ps1' -RepositoryPath $RepositoryPath -SqlInstance $SqlInstance
     } else {
