@@ -1,6 +1,10 @@
 -- 016: tenant-scoped share inbox for links explicitly shared by the creator.
 -- URLs are stored only; this migration does not fetch, scrape, or authenticate to source platforms.
 SET XACT_ABORT ON;
+IF OBJECT_ID(N'dbo.Tenants',N'U') IS NULL
+    THROW 51016, 'Share inbox requires the tenant schema (migrations 011–013) to be installed and verified first.', 1;
+IF OBJECT_ID(N'dbo.DouyinSourceChannels',N'U') IS NULL
+    THROW 51017, 'Share inbox requires dbo.DouyinSourceChannels.', 1;
 BEGIN TRANSACTION;
 
 IF OBJECT_ID(N'dbo.SharedLinkInboxItems',N'U') IS NULL
