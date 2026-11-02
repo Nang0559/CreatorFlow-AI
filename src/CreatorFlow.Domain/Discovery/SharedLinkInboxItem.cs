@@ -36,7 +36,7 @@ public sealed class SharedLinkInboxItem
                        uri.Host.EndsWith("facebook.com", StringComparison.OrdinalIgnoreCase) ||
                        uri.Host.Equals("fb.watch", StringComparison.OrdinalIgnoreCase) ? "Facebook" : "Instagram";
 
-        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(safeUrl.ToLowerInvariant())));
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(uri.Scheme.ToLowerInvariant() + "://" + uri.IdnHost.ToLowerInvariant() + uri.PathAndQuery)));
         return new SharedLinkInboxItem
         {
             Id = Guid.NewGuid(), Platform = platform, SharedUrl = safeUrl,
