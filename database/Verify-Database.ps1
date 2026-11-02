@@ -90,52 +90,134 @@ WHERE COL_LENGTH(N'dbo.' + t.TableName, N'TenantId') IS NULL
          AND i.name=N'IX_' + t.TableName + N'_TenantId');
 "@)
     if ($tenantCheck.Count -gt 0) { throw "Tenant isolation is incomplete (TenantId/FK/index missing or FK untrusted): $(($tenantCheck | ForEach-Object { $_.TableName }) -join ', ')" }
-    $relationshipCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
-SELECT fk.name
-FROM sys.foreign_keys fk
-WHERE fk.name IN (N'FK_VideoRenderJobs_Tenant_Asset', N'FK_SharedLinkInboxItems_Tenant_Channel')
-  AND (fk.is_disabled=1 OR fk.is_not_trusted=1);
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name=N'FK_VideoRenderJobs_Tenant_Asset' AND is_disabled=0 AND is_not_trusted=0)
-    SELECT N'FK_VideoRenderJobs_Tenant_Asset' AS name;
-IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name=N'FK_SharedLinkInboxItems_Tenant_Channel' AND is_disabled=0 AND is_not_trusted=0)
-    SELECT N'FK_SharedLinkInboxItems_Tenant_Channel' AS name;
+    $integrityCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+DECLARE @ExpectedForeignKeys TABLE
+(
+    ConstraintName sysname NOT NULL,
+    ChildTable sysname NOT NULL,
+    ChildColumn sysname NOT NULL,
+    ParentTable sysname NOT NULL,
+    DeleteAction nvarchar(20) NOT NULL
+);
+INSERT @ExpectedForeignKeys VALUES
+(N'FK_VideoRenderJobs_Tenant_Asset',N'VideoRenderJobs',N'AssetId',N'VideoAssets',N'NO_ACTION'),
+(N'FK_SharedLinkInboxItems_Tenant_Channel',N'SharedLinkInboxItems',N'LinkedChannelId',N'DouyinSourceChannels',N'NO_ACTION'),
+(N'FK_StyleExperiments_Tenant_ContentProject',N'StyleExperiments',N'ContentProjectId',N'ContentProjects',N'NO_ACTION'),
+(N'FK_StyleExperiments_Tenant_WinningVariant',N'StyleExperiments',N'WinningVariantId',N'StyleExperimentVariants',N'NO_ACTION'),
+(N'FK_StyleExperimentVariants_Tenant_Experiment',N'StyleExperimentVariants',N'StyleExperimentId',N'StyleExperiments',N'CASCADE'),
+(N'FK_StyleVariantMetricObservations_Tenant_Variant',N'StyleVariantMetricObservations',N'StyleExperimentVariantId',N'StyleExperimentVariants',N'CASCADE'),
+(N'FK_CreatorStyleEvidence_Tenant_Profile',N'CreatorStyleEvidence',N'CreatorStyleProfileId',N'CreatorStyleProfiles',N'CASCADE'),
+(N'FK_CreatorStyleEvidence_Tenant_Experiment',N'CreatorStyleEvidence',N'StyleExperimentId',N'StyleExperiments',N'NO_ACTION'),
+(N'FK_CreatorStyleEvidence_Tenant_WinningVariant',N'CreatorStyleEvidence',N'WinningVariantId',N'StyleExperimentVariants',N'NO_ACTION'),
+(N'FK_StyleLearningProposals_Tenant_Profile',N'StyleLearningProposals',N'CreatorStyleProfileId',N'CreatorStyleProfiles',N'CASCADE'),
+(N'FK_CreatorStyleProfileVersions_Tenant_Profile',N'CreatorStyleProfileVersions',N'CreatorStyleProfileId',N'CreatorStyleProfiles',N'CASCADE'),
+(N'FK_CreatorStyleProfileVersions_Tenant_Proposal',N'CreatorStyleProfileVersions',N'ApprovedProposalId',N'StyleLearningProposals',N'NO_ACTION'),
+(N'FK_TrendSelectionFeedback_Tenant_Candidate',N'TrendSelectionFeedback',N'DouyinVideoCandidateId',N'DouyinVideoCandidates',N'NO_ACTION'),
+(N'FK_TrendCandidateOutcomeObservations_Tenant_Feedback',N'TrendCandidateOutcomeObservations',N'FeedbackId',N'TrendSelectionFeedback',N'NO_ACTION'),
+(N'FK_DouyinVideoCandidates_Tenant_Channel',N'DouyinVideoCandidates',N'SourceChannelId',N'DouyinSourceChannels',N'NO_ACTION'),
+(N'FK_DouyinVideoCandidates_Tenant_Topic',N'DouyinVideoCandidates',N'ContentTopicId',N'ContentTopics',N'NO_ACTION'),
+(N'FK_VietnamTrendMetricSnapshots_Tenant_Signal',N'VietnamTrendMetricSnapshots',N'TrendSignalId',N'VietnamTrendSignals',N'CASCADE');
+
+SELECT N'FK ' + e.ConstraintName AS Problem
+FROM @ExpectedForeignKeys e
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM sys.foreign_keys fk
+    WHERE fk.name=e.ConstraintName
+      AND fk.parent_object_id=OBJECT_ID(N'dbo.'+QUOTENAME(e.ChildTable))
+      AND fk.referenced_object_id=OBJECT_ID(N'dbo.'+QUOTENAME(e.ParentTable))
+      AND fk.is_disabled=0 AND fk.is_not_trusted=0
+      AND fk.delete_referential_action_desc=e.DeleteAction
+      AND (SELECT COUNT(*) FROM sys.foreign_key_columns fkc WHERE fkc.constraint_object_id=fk.object_id)=2
+      AND EXISTS
+      (
+          SELECT 1
+          FROM sys.foreign_key_columns fkc
+          JOIN sys.columns childColumn ON childColumn.object_id=fkc.parent_object_id AND childColumn.column_id=fkc.parent_column_id
+          JOIN sys.columns parentColumn ON parentColumn.object_id=fkc.referenced_object_id AND parentColumn.column_id=fkc.referenced_column_id
+          WHERE fkc.constraint_object_id=fk.object_id AND fkc.constraint_column_id=1
+            AND childColumn.name=N'TenantId' AND parentColumn.name=N'TenantId'
+      )
+      AND EXISTS
+      (
+          SELECT 1
+          FROM sys.foreign_key_columns fkc
+          JOIN sys.columns childColumn ON childColumn.object_id=fkc.parent_object_id AND childColumn.column_id=fkc.parent_column_id
+          JOIN sys.columns parentColumn ON parentColumn.object_id=fkc.referenced_object_id AND parentColumn.column_id=fkc.referenced_column_id
+          WHERE fkc.constraint_object_id=fk.object_id AND fkc.constraint_column_id=2
+            AND childColumn.name=e.ChildColumn AND parentColumn.name=N'Id'
+      )
+);
+
+DECLARE @ExpectedIndexKeys TABLE
+(
+    IndexName sysname NOT NULL,
+    TableName sysname NOT NULL,
+    KeyOrdinal int NOT NULL,
+    ColumnName sysname NOT NULL
+);
+INSERT @ExpectedIndexKeys VALUES
+(N'UX_ContentProjects_Tenant_Id',N'ContentProjects',1,N'TenantId'),
+(N'UX_ContentProjects_Tenant_Id',N'ContentProjects',2,N'Id'),
+(N'UX_ContentTopics_Tenant_Id',N'ContentTopics',1,N'TenantId'),
+(N'UX_ContentTopics_Tenant_Id',N'ContentTopics',2,N'Id'),
+(N'UX_DouyinSourceChannels_Tenant_Id',N'DouyinSourceChannels',1,N'TenantId'),
+(N'UX_DouyinSourceChannels_Tenant_Id',N'DouyinSourceChannels',2,N'Id'),
+(N'UX_DouyinVideoCandidates_Tenant_Id',N'DouyinVideoCandidates',1,N'TenantId'),
+(N'UX_DouyinVideoCandidates_Tenant_Id',N'DouyinVideoCandidates',2,N'Id'),
+(N'UX_VietnamTrendSignals_Tenant_Id',N'VietnamTrendSignals',1,N'TenantId'),
+(N'UX_VietnamTrendSignals_Tenant_Id',N'VietnamTrendSignals',2,N'Id'),
+(N'UX_StyleExperiments_Tenant_Id',N'StyleExperiments',1,N'TenantId'),
+(N'UX_StyleExperiments_Tenant_Id',N'StyleExperiments',2,N'Id'),
+(N'UX_StyleExperimentVariants_Tenant_Id',N'StyleExperimentVariants',1,N'TenantId'),
+(N'UX_StyleExperimentVariants_Tenant_Id',N'StyleExperimentVariants',2,N'Id'),
+(N'UX_CreatorStyleProfiles_Tenant_Id',N'CreatorStyleProfiles',1,N'TenantId'),
+(N'UX_CreatorStyleProfiles_Tenant_Id',N'CreatorStyleProfiles',2,N'Id'),
+(N'UX_StyleLearningProposals_Tenant_Id',N'StyleLearningProposals',1,N'TenantId'),
+(N'UX_StyleLearningProposals_Tenant_Id',N'StyleLearningProposals',2,N'Id'),
+(N'UX_TrendSelectionFeedback_Tenant_Id',N'TrendSelectionFeedback',1,N'TenantId'),
+(N'UX_TrendSelectionFeedback_Tenant_Id',N'TrendSelectionFeedback',2,N'Id'),
+(N'UX_VideoAssets_Tenant_Id',N'VideoAssets',1,N'TenantId'),
+(N'UX_VideoAssets_Tenant_Id',N'VideoAssets',2,N'Id'),
+(N'UX_DouyinSourceChannels_Tenant_SecUserId',N'DouyinSourceChannels',1,N'TenantId'),
+(N'UX_DouyinSourceChannels_Tenant_SecUserId',N'DouyinSourceChannels',2,N'DouyinSecUserId'),
+(N'UX_DouyinVideoCandidates_Tenant_VideoId',N'DouyinVideoCandidates',1,N'TenantId'),
+(N'UX_DouyinVideoCandidates_Tenant_VideoId',N'DouyinVideoCandidates',2,N'DouyinVideoId'),
+(N'UX_CreatorStyleProfiles_Tenant_ProfileKey',N'CreatorStyleProfiles',1,N'TenantId'),
+(N'UX_CreatorStyleProfiles_Tenant_ProfileKey',N'CreatorStyleProfiles',2,N'ProfileKey'),
+(N'UX_VietnamTrendSignals_Tenant_External',N'VietnamTrendSignals',1,N'TenantId'),
+(N'UX_VietnamTrendSignals_Tenant_External',N'VietnamTrendSignals',2,N'Platform'),
+(N'UX_VietnamTrendSignals_Tenant_External',N'VietnamTrendSignals',3,N'Kind'),
+(N'UX_VietnamTrendSignals_Tenant_External',N'VietnamTrendSignals',4,N'ExternalId');
+
+SELECT N'INDEX ' + expected.IndexName AS Problem
+FROM (SELECT DISTINCT IndexName,TableName FROM @ExpectedIndexKeys) expected
+WHERE NOT EXISTS
+(
+    SELECT 1
+    FROM sys.indexes i
+    WHERE i.object_id=OBJECT_ID(N'dbo.'+QUOTENAME(expected.TableName))
+      AND i.name=expected.IndexName
+      AND i.is_unique=1 AND i.is_disabled=0 AND i.has_filter=0
+      AND (SELECT COUNT(*) FROM sys.index_columns ic WHERE ic.object_id=i.object_id AND ic.index_id=i.index_id AND ic.key_ordinal>0)
+          =(SELECT COUNT(*) FROM @ExpectedIndexKeys k WHERE k.IndexName=expected.IndexName)
+      AND NOT EXISTS
+      (
+          SELECT 1 FROM @ExpectedIndexKeys k
+          WHERE k.IndexName=expected.IndexName
+            AND NOT EXISTS
+            (
+                SELECT 1
+                FROM sys.index_columns ic
+                JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id
+                WHERE ic.object_id=i.object_id AND ic.index_id=i.index_id
+                  AND ic.key_ordinal=k.KeyOrdinal AND c.name=k.ColumnName
+            )
+      )
+);
 "@)
-    if ($relationshipCheck.Count -gt 0) { throw 'Same-tenant foreign keys are missing, disabled, or untrusted.' }
-    $businessRelationshipCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
-SELECT expected.ConstraintName
-FROM (VALUES
- (N'FK_StyleExperiments_Tenant_ContentProject'),
- (N'FK_StyleExperiments_Tenant_WinningVariant'),
- (N'FK_StyleExperimentVariants_Tenant_Experiment'),
- (N'FK_StyleVariantMetricObservations_Tenant_Variant'),
- (N'FK_CreatorStyleEvidence_Tenant_Profile'),
- (N'FK_CreatorStyleEvidence_Tenant_Experiment'),
- (N'FK_CreatorStyleEvidence_Tenant_WinningVariant'),
- (N'FK_StyleLearningProposals_Tenant_Profile'),
- (N'FK_CreatorStyleProfileVersions_Tenant_Profile'),
- (N'FK_CreatorStyleProfileVersions_Tenant_Proposal'),
- (N'FK_TrendSelectionFeedback_Tenant_Candidate'),
- (N'FK_TrendCandidateOutcomeObservations_Tenant_Feedback'),
- (N'FK_DouyinVideoCandidates_Tenant_Channel'),
- (N'FK_DouyinVideoCandidates_Tenant_Topic'),
- (N'FK_VietnamTrendMetricSnapshots_Tenant_Signal')
-) expected(ConstraintName)
-LEFT JOIN sys.foreign_keys fk ON fk.name=expected.ConstraintName AND fk.is_disabled=0 AND fk.is_not_trusted=0
-WHERE fk.object_id IS NULL;
-"@)
-    if ($businessRelationshipCheck.Count -gt 0) { throw 'One or more core business relationships are missing a trusted same-tenant foreign key.' }
-    $uniqueCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
-SELECT expected.IndexName
-FROM (VALUES
- (N'UX_DouyinSourceChannels_Tenant_SecUserId'),
- (N'UX_DouyinVideoCandidates_Tenant_VideoId'),
- (N'UX_CreatorStyleProfiles_Tenant_ProfileKey'),
- (N'UX_VietnamTrendSignals_Tenant_External')
-) expected(IndexName)
-LEFT JOIN sys.indexes i ON i.name=expected.IndexName AND i.is_unique=1 AND i.is_disabled=0
-WHERE i.index_id IS NULL;
-"@)
-    if ($uniqueCheck.Count -gt 0) { throw 'Workspace-scoped unique indexes are missing or disabled.' }
+    if ($integrityCheck.Count -gt 0) { throw "Tenant relationship/index definition mismatch: $(($integrityCheck | ForEach-Object { $_.Problem }) -join ', ')" }
     $tenant = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query "SELECT COUNT(*) AS TenantCount FROM dbo.Tenants WHERE Id='00000000-0000-4000-8000-000000000001' AND Slug=N'legacy-workspace';")
     if ($tenant[0].TenantCount -ne 1) { throw 'The explicit legacy-workspace tenant is missing.' }
 }
