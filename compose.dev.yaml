@@ -1,0 +1,41 @@
+services:
+  ai:
+    build:
+      context: .
+      dockerfile: docker/ai/Dockerfile
+    environment:
+      CREATORFLOW_AI_API_KEY: \${CREATORFLOW_AI_API_KEY:?Set CREATORFLOW_AI_API_KEY in .env (at least 32 characters)}
+      CREATORFLOW_LLM_BASE_URL: \${CREATORFLOW_LLM_BASE_URL:-https://api.openai.com/v1}
+      CREATORFLOW_LLM_API_KEY: \${CREATORFLOW_LLM_API_KEY:-}
+      CREATORFLOW_LLM_MODEL: \${CREATORFLOW_LLM_MODEL:-}
+      CREATORFLOW_LLM_TIMEOUT_SECONDS: \${CREATORFLOW_LLM_TIMEOUT_SECONDS:-60}
+      CREATORFLOW_LLM_MAX_OUTPUT_TOKENS: \${CREATORFLOW_LLM_MAX_OUTPUT_TOKENS:-3000}
+    ports:
+      - "127.0.0.1:8001:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      CreatorFlowApi__BaseUrl: \${CreatorFlowApi__BaseUrl:-http://host.docker.internal:7001}
+      CreatorFlowApi__ApiKey: \${CreatorFlowApi__ApiKey:?Set CreatorFlowApi__ApiKey in .env (same value as Authentication__ApiKey)}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      ai:
+        condition: service_healthy
+    restart: unless-stopped

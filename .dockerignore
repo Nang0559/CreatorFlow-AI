@@ -1,0 +1,15 @@
+.git
+.github
+.vs
+**/bin
+**/obj
+**/__pycache__
+**/.pytest_cache
+**/.venv
+**/venv
+.env
+.env.*
+!.env.example
+artifacts
+media
+node_modules
