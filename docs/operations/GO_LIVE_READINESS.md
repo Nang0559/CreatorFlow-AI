@@ -1,6 +1,6 @@
 # CreatorFlow-AI – Go-live readiness gates
 
-This document prevents a green build or a healthy local URL from being mistaken for production readiness.
+This document prevents a green build or a healthy local URL from being mistaken for production readiness. See the [2026-11-02 repository audit report](RELEASE_AUDIT_2026-11-02.md) for the changes made and the remaining acceptance work.
 
 ## Implemented in the current branch
 - Responsive mobile/desktop workspace with five primary areas.
