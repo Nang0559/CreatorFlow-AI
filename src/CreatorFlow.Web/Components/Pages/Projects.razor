@@ -3,26 +3,28 @@
 
 <PageTitle>Dự án nội dung · CreatorFlow</PageTitle>
 <header class="page-header">
-    <div><p class="eyebrow">CONTENT WORKSPACE</p><h1>Dự án nội dung</h1>
+    <div><p class="eyebrow">KHÔNG GIAN DỰ ÁN</p><h1>Dự án nội dung</h1>
         <p class="muted">Quản lý ý tưởng và gom các thử nghiệm phong cách theo từng dự án.</p></div>
     <button class="primary" @onclick="LoadAsync" disabled="@busy">Làm mới</button>
 </header>
 @if (!string.IsNullOrWhiteSpace(error)) { <section class="notice"><strong>Không thể tải dự án</strong><p>@error</p></section> }
 <section class="panel">
-    <div class="panel-heading"><div><p class="eyebrow">NEW PROJECT</p><h2>Tạo dự án</h2></div></div>
+    <div class="panel-heading"><div><p class="eyebrow">DỰ ÁN MỚI</p><h2>Tạo dự án</h2></div></div>
     <div class="trend-form"><label>Tên dự án<input @bind="title" maxlength="200" placeholder="Ví dụ: Review đồ gia dụng tháng 11" /></label></div>
     <button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(title))" @onclick="CreateAsync">Tạo dự án</button>
 </section>
 <section class="panel">
-    <div class="panel-heading"><div><p class="eyebrow">PROJECT LIBRARY</p><h2>Danh sách dự án</h2></div><span class="status">@items.Count dự án</span></div>
+    <div class="panel-heading"><div><p class="eyebrow">THƯ VIỆN DỰ ÁN</p><h2>Danh sách dự án</h2></div><span class="status">@items.Count dự án</span></div>
     @if (loading) { <p class="muted">Đang tải dữ liệu…</p> }
-    else if (items.Count == 0) { <p class="muted">Chưa có dự án. Tạo dự án đầu tiên để liên kết các thử nghiệm Style Lab.</p> }
+    else if (items.Count == 0) { <p class="muted">Chưa có dự án. Tạo dự án đầu tiên để liên kết các thử nghiệm Phòng sáng tạo.</p> }
     @foreach (var item in items)
     {
-        <article class="trend-item"><div><span class="status">@item.Status</span><h3>@item.Title</h3><small class="muted">Tạo @item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small></div><div><small class="muted">Cập nhật</small><p>@item.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p></div></article>
+        <article class="trend-item"><div><span class="status">@StatusLabel(item.Status)</span><h3>@item.Title</h3><small class="muted">Tạo @item.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small></div><div><small class="muted">Cập nhật</small><p>@item.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p></div></article>
     }
 </section>
 @code {
+    private static string StatusLabel(string status) => status switch { "Draft" => "Bản nháp", "Active" => "Đang thực hiện", "Completed" => "Hoàn tất", "Archived" => "Đã lưu trữ", _ => "Chưa xác định" };
+
     private List<ProjectItem> items = [];
     private string title = "";
     private string error = "";
