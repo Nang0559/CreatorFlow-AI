@@ -2,39 +2,72 @@ using System.Net.Http.Json;
 
 namespace CreatorFlow.Web.Services;
 
-public sealed class CreatorFlowApiClient(HttpClient http)
+public sealed class CreatorFlowApiClient(
+    HttpClient http,
+    IHttpContextAccessor httpContextAccessor,
+    IServiceProvider scopedServices)
 {
     public bool IsConfigured => http.BaseAddress is not null;
 
     public async Task<T?> GetAsync<T>(string path, CancellationToken ct = default)
     {
         EnsureConfigured();
-        using var response = await http.GetAsync(path, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
     }
 
-    public async Task<TResponse?> PostAsync<TRequest, TResponse>(string path, TRequest request, CancellationToken ct = default)
+    public async Task<TResponse?> PostAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
     {
         EnsureConfigured();
-        using var response = await http.PostAsJsonAsync(path, request, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength == 0) return default;
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
     }
 
-    public async Task PostNoContentAsync<TRequest>(string path, TRequest request, CancellationToken ct = default)
+    public async Task PostNoContentAsync<TRequest>(string path, TRequest body, CancellationToken ct = default)
     {
         EnsureConfigured();
-        using var response = await http.PostAsJsonAsync(path, request, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
     }
 
-    public async Task PutNoContentAsync<TRequest>(string path, TRequest request, CancellationToken ct = default)
+    public async Task PutNoContentAsync<TRequest>(string path, TRequest body, CancellationToken ct = default)
     {
         EnsureConfigured();
-        using var response = await http.PutAsJsonAsync(path, request, ct);
+        using var request = new HttpRequestMessage(HttpMethod.Put, path) { Content = JsonContent.Create(body) };
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
+    }
+
+    private async Task AddIdentityHeadersAsync(HttpRequestMessage request)
+    {
+        var context = httpContextAccessor.HttpContext;
+        var principal = context?.User;
+        if (principal?.Identity?.IsAuthenticated != true)
+        {
+            var provider = scopedServices.GetService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>();
+            if (provider is not null)
+                principal = (await provider.GetAuthenticationStateAsync()).User;
+        }
+
+        if (principal?.Identity?.IsAuthenticated != true) return;
+        var token = context is not null ? await context.GetTokenAsync("access_token") : null;
+        token ??= principal.FindFirst("creatorflow_access_token")?.Value;
+        if (!string.IsNullOrWhiteSpace(token))
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        var tenantId = principal.FindFirst("creatorflow_tenant")?.Value;
+        if (Guid.TryParse(tenantId, out var parsed) && parsed != Guid.Empty)
+            request.Headers.TryAddWithoutValidation("X-CreatorFlow-Tenant", parsed.ToString("D"));
     }
 
     private void EnsureConfigured()

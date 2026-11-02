@@ -11,7 +11,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
-builder.Services.AddTransient<CreatorFlow.Web.Services.OidcAccessTokenHandler>();
 builder.Services.AddHttpClient<CreatorFlow.Web.Services.CreatorFlowApiClient>(client =>
 {
     var baseUrl = builder.Configuration["CreatorFlowApi:BaseUrl"];
@@ -19,7 +18,7 @@ builder.Services.AddHttpClient<CreatorFlow.Web.Services.CreatorFlowApiClient>(cl
     var apiKey = builder.Configuration["CreatorFlowApi:ApiKey"];
     if (builder.Environment.IsDevelopment() && !string.IsNullOrWhiteSpace(apiKey))
         client.DefaultRequestHeaders.Add("X-CreatorFlow-Api-Key", apiKey);
-}).AddHttpMessageHandler<CreatorFlow.Web.Services.OidcAccessTokenHandler>();
+});
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 var oidc = builder.Configuration.GetSection("Authentication:Oidc");
