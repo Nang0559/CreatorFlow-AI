@@ -59,7 +59,7 @@ For real LLM calls, configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_
 
 ## SQL database setup
 
-The repository now includes a guarded SQL Server initializer. It creates only the local `CreatorFlow_QC` database, applies numbered migrations 001–010 and 014–020 (plus 011–013 when explicitly selected), records SHA-256 checksums in `dbo.SchemaMigrations`, and verifies the resulting schema.
+The repository now includes a guarded SQL Server initializer. It creates only the local `CreatorFlow_QC` database, applies non-tenant migrations 001–010 and 014–015, and applies tenant migrations 011–013 plus tenant-dependent migrations 016–020 only when explicitly confirmed or already installed. It records SHA-256 checksums in `dbo.SchemaMigrations` and verifies the resulting schema.
 
 Install the SQL Server PowerShell module once from an elevated PowerShell session:
 
@@ -75,7 +75,7 @@ From the repository root, initialize the complete Trend Intelligence + tenant sc
 
 The tenant flag applies migrations 011–013. Migration 012 assigns existing rows in its listed single-workspace tables to the explicit `legacy-workspace` tenant; review that assumption before using it on a database containing multiple customers. Migration 013 adds invitation and security-audit tables. Migrations 014–020 add Discovery, share inbox, video rendering and tenant relationship/uniqueness safeguards. The initializer refuses to adopt an existing untagged database or a database with user tables but no migration ledger. It never drops or restores a database.
 
-To initialize only the original baseline schema (001–010), omit both tenant switches and use this only for legacy compatibility checks; the current CreatorFlow application requires later migrations for its newer features:
+To initialize only the non-tenant baseline (001–010 and 014–015), omit both tenant switches. Share Inbox and video rendering are not installed in this mode because they require tenant migrations:
 
 ```powershell
 .\database\Initialize-CreatorFlowDatabase.ps1 -SqlInstance localhost
