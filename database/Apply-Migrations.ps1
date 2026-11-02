@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($IncludeTenantMigrations -and -not $ConfirmLegacyWorkspaceAssignment) {
-    throw 'Tenant migrations 012/013 assign existing rows to legacy-workspace and extend tenant lifecycle. Pass -ConfirmLegacyWorkspaceAssignment only after reviewing that ownership assumption.'
+    throw 'Tenant migrations 011–013 create tenant identity, assign listed existing rows to legacy-workspace and extend tenant lifecycle. Pass -ConfirmLegacyWorkspaceAssignment only after reviewing that ownership assumption.'
 }
 $hostName = ($SqlInstance -split '\\')[0].Trim()
 if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { throw "Refusing non-local SQL instance '$SqlInstance'." }
