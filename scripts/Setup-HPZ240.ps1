@@ -96,7 +96,7 @@ try {
     Write-Stage '1/8 - Validate local secrets without displaying them'
     . '.\scripts\docker\Import-LocalPilotEnv.ps1'
     Import-LocalPilotEnv -Path (Join-Path $RepositoryPath '.env')
-    if ([string]::IsNullOrWhiteSpace($env:VideoRendering__StorageRoot)) { $env:VideoRendering__StorageRoot = 'C:\\CreatorFlowData\\Video' }
+    if ([string]::IsNullOrWhiteSpace($env:VideoRendering__StorageRoot)) { $env:VideoRendering__StorageRoot = 'C:\CreatorFlowData\Video' }
     if ($env:ConnectionStrings__CreatorFlow -notmatch 'Database=CreatorFlow_QC') {
         throw 'ConnectionStrings__CreatorFlow must target CreatorFlow_QC for this QC setup.'
     }
