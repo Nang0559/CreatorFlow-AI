@@ -24,4 +24,4 @@ foreach ($check in $checks) {
 if ($failed) { throw 'Thiếu thành phần dựng video. Kiểm tra cấu hình trong .env.' }
 & $FFmpegExe -version | Select-Object -First 1
 & $FFprobeExe -version | Select-Object -First 1
-Write-Host 'Đã kiểm tra đường dẫn công cụ. Chưa thực hiện dựng thử video.'
+Write-Host 'Đã kiểm tra đường dẫn và phiên bản công cụ. Đây chưa phải kiểm thử render thực tế; cần chạy job mẫu trong CreatorFlow để nghiệm thu After Effects.'
