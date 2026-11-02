@@ -43,11 +43,11 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
             UPDATE q SET Status=N'Rendering',ProgressPercent=5,StartedAt=SYSUTCDATETIME(),
               AttemptCount=AttemptCount+1,ErrorMessage=NULL
             OUTPUT inserted.Id,inserted.SourcePath,inserted.OutputPath,inserted.Title,
-              inserted.Hook,inserted.CallToAction;
+              inserted.Hook,inserted.CallToAction,inserted.StyleKey;
             """;
         await using var r = await cmd.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) return null;
-        return new(r.GetGuid(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.IsDBNull(5)?null:r.GetString(5));
+        return new(r.GetGuid(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.IsDBNull(5)?null:r.GetString(5),r.GetString(6));
     }
 
     private async Task RenderAsync(Job j,CancellationToken ct)
@@ -61,7 +61,7 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
             Require(afterFx); Require(aerender); Require(ffmpeg);
             if(!File.Exists(j.Source)) throw new FileNotFoundException("Không tìm thấy video nguồn.",j.Source);
             await SetStateAsync(j.Id,"Rendering",12,null,ct);
-            var payload=JsonSerializer.Serialize(new { source=j.Source,project,title=j.Title,hook=j.Hook,cta=j.Cta });
+            var payload=JsonSerializer.Serialize(new { source=j.Source,project,title=j.Title,hook=j.Hook,cta=j.Cta,style=j.StyleKey });
             await File.WriteAllTextAsync(jsx,BuildJsx(payload),new System.Text.UTF8Encoding(false),ct);
             await RunAsync(afterFx,["-r",jsx],work,TimeSpan.FromMinutes(10),ct);
             if(!File.Exists(project)) throw new InvalidOperationException("After Effects không tạo được dự án dựng.");
@@ -104,7 +104,13 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
         layer.property("Opacity").setValueAtTime(0,0);
         layer.property("Opacity").setValueAtTime(0.35,100);
       }
-      caption(d.title,h*0.70,66);caption(d.hook,h*0.80,52);caption(d.cta,h*0.91,40);
+      if(d.style==="Kể chuyện"){
+        caption(d.title,h*0.20,72);caption(d.hook,h*0.36,60);caption(d.cta,h*0.90,42);
+      }else if(d.style==="Đánh giá sản phẩm"){
+        caption(d.title,h*0.16,64);caption(d.hook,h*0.73,58);caption(d.cta,h*0.90,44);
+      }else{
+        caption(d.title,h*0.70,66);caption(d.hook,h*0.80,52);caption(d.cta,h*0.91,40);
+      }
       p.save(new File(d.project));app.endSuppressDialogs(false);app.quit();
       """.Replace("__PAYLOAD__",payload);
 
@@ -150,5 +156,5 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
     }
     private static async Task<string> HashAsync(string path,CancellationToken ct){await using var s=File.OpenRead(path);return Convert.ToHexString(await SHA256.HashDataAsync(s,ct)).ToLowerInvariant();}
     private static void Require(string path){if(string.IsNullOrWhiteSpace(path)||!File.Exists(path))throw new FileNotFoundException("Chưa cấu hình công cụ dựng video.",path);}
-    private sealed record Job(Guid Id,string Source,string Output,string Title,string Hook,string? Cta);
+    private sealed record Job(Guid Id,string Source,string Output,string Title,string Hook,string? Cta,string StyleKey);
 }
