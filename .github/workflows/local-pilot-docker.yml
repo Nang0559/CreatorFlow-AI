@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify local Docker engine
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           docker version
@@ -44,11 +44,11 @@ jobs:
           docker info --format "CPUs={{.NCPU}} Memory={{.MemTotal}} OperatingSystem={{.OperatingSystem}}"
 
       - name: Validate Compose configuration without printing secrets
-        shell: pwsh
+        shell: powershell
         run: docker compose -f compose.dev.yaml config --quiet
 
       - name: Build Web and AI images on HP Z240
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           docker compose -f compose.dev.yaml build --pull
@@ -57,7 +57,7 @@ jobs:
 
       - name: Publish runner build summary
         if: always()
-        shell: pwsh
+        shell: powershell
         run: |
           "Commit: $env:GITHUB_SHA" >> $env:GITHUB_STEP_SUMMARY
           "Runner: $env:RUNNER_NAME" >> $env:GITHUB_STEP_SUMMARY
