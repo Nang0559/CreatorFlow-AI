@@ -1,7 +1,8 @@
-"""Transparent, versioned baseline ranker. This is heuristic ML baseline, not a trained model."""
+"""Transparent, versioned baseline ranker. This is heuristic ranking baseline, not a trained model."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 
 ALGORITHM_VERSION = "heuristic-discovery-v1"
@@ -20,6 +21,8 @@ class DiscoveryFeatures:
 
 
 def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
+    if not isfinite(value):
+        return low
     return max(low, min(high, value))
 
 
@@ -39,7 +42,8 @@ def rank_discovery_candidate(features: DiscoveryFeatures) -> dict[str, object]:
     base = 0.38 * topic + 0.27 * momentum + 0.20 * market + 0.15 * creator
     learned_adjustment = _clamp(features.learned_adjustment, -30.0, 30.0)
     score = round(_clamp(base + priority_boost + learned_adjustment), 4)
-    confidence = round(coverage * min(1.0, 0.35 + 0.65 * (0.5 + min(0.5, features.views_per_hour / 10000.0))), 4)
+    views_per_hour = max(0.0, features.views_per_hour) if isfinite(features.views_per_hour) else 0.0
+    confidence = round(coverage * min(1.0, 0.35 + 0.65 * (0.5 + min(0.5, views_per_hour / 10000.0))), 4)
     return {
         "algorithm_version": ALGORITHM_VERSION,
         "score": score,
