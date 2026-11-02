@@ -38,6 +38,12 @@ jobs:
       - name: Verify local Docker engine
         shell: cmd
         run: |
+          set "PATH=C:\Program Files\Docker\Docker\resources\bin;%PATH%"
+          if not exist "C:\Program Files\Docker\Docker\resources\bin\docker.exe" (
+            echo Docker CLI not found at the standard Docker Desktop path.
+            where docker
+            exit /b 1
+          )
           docker version
           if errorlevel 1 exit /b 1
           docker compose version
@@ -47,11 +53,14 @@ jobs:
 
       - name: Validate Compose configuration without printing secrets
         shell: cmd
-        run: docker compose -f compose.dev.yaml config --quiet
+        run: |
+          set "PATH=C:\Program Files\Docker\Docker\resources\bin;%PATH%"
+          docker compose -f compose.dev.yaml config --quiet
 
       - name: Build Web and AI images on HP Z240
         shell: cmd
         run: |
+          set "PATH=C:\Program Files\Docker\Docker\resources\bin;%PATH%"
           docker compose -f compose.dev.yaml build --pull
           if errorlevel 1 exit /b 1
           docker image ls --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
