@@ -122,13 +122,17 @@ WHERE name=N'$Database';
         throw "Database $Database must already exist, be ONLINE and writable. This script will not create, drop, restore or retag databases."
     }
 
-    $tenantReadiness = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate -ErrorAction Stop -Query @"
-SELECT
-    CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NOT NULL
-       AND (SELECT COUNT(*) FROM dbo.SchemaMigrations WHERE MigrationId IN (N'011_tenant_identity_foundation',N'012_tenant_data_isolation',N'013_tenant_membership_lifecycle')) = 3
+    $ledgerReadiness = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate -ErrorAction Stop -Query "SELECT CASE WHEN OBJECT_ID(N'dbo.SchemaMigrations',N'U') IS NULL THEN 0 ELSE 1 END AS LedgerReady;")
+    $tenantSchemaReady = $false
+    if ($ledgerReadiness.Count -eq 1 -and $ledgerReadiness[0].LedgerReady -eq 1) {
+        $tenantReadiness = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate -ErrorAction Stop -Query @"
+SELECT CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NOT NULL
+    AND (SELECT COUNT(*) FROM dbo.SchemaMigrations
+         WHERE MigrationId IN (N'011_tenant_identity_foundation',N'012_tenant_data_isolation',N'013_tenant_membership_lifecycle')) = 3
     THEN 1 ELSE 0 END AS TenantSchemaReady;
 "@)
-    $tenantSchemaReady = $tenantReadiness.Count -eq 1 -and $tenantReadiness[0].TenantSchemaReady -eq 1
+        $tenantSchemaReady = $tenantReadiness.Count -eq 1 -and $tenantReadiness[0].TenantSchemaReady -eq 1
+    }
     if (-not $tenantSchemaReady -and -not $ConfirmLegacyWorkspaceAssignment) {
         throw 'Tenant schema 011–013 is not fully installed. Review the tenant migration ownership rules first; only then rerun with -ConfirmLegacyWorkspaceAssignment. No tenant migration has been applied by this script.'
     }
