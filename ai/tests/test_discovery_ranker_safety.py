@@ -19,6 +19,7 @@ def test_ranker_clamps_non_finite_feature_values() -> None:
     for key in ("score", "topic_fit", "momentum", "market_fit", "creator_quality", "confidence"):
         assert isfinite(float(result[key]))
     assert 0 <= result["score"] <= 100
+    assert result["learned_adjustment"] == 0
     assert 0 <= result["confidence"] <= 1
 
 
