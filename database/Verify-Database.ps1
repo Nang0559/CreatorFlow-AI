@@ -12,7 +12,7 @@ $hostName = ($SqlInstance -split '\\')[0].Trim()
 if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { throw "Refusing non-local SQL instance '$SqlInstance'." }
 Import-Module SqlServer -ErrorAction Stop
 
-$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_', '017_', '018_', '019_')
+$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_', '017_', '018_', '019_', '020_')
 if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_') }
 $schemaPath = Join-Path $PSScriptRoot 'schema'
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
@@ -124,6 +124,18 @@ LEFT JOIN sys.foreign_keys fk ON fk.name=expected.ConstraintName AND fk.is_disab
 WHERE fk.object_id IS NULL;
 "@)
     if ($businessRelationshipCheck.Count -gt 0) { throw 'One or more core business relationships are missing a trusted same-tenant foreign key.' }
+    $uniqueCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+SELECT expected.IndexName
+FROM (VALUES
+ (N'UX_DouyinSourceChannels_Tenant_SecUserId'),
+ (N'UX_DouyinVideoCandidates_Tenant_VideoId'),
+ (N'UX_CreatorStyleProfiles_Tenant_ProfileKey'),
+ (N'UX_VietnamTrendSignals_Tenant_External')
+) expected(IndexName)
+LEFT JOIN sys.indexes i ON i.name=expected.IndexName AND i.is_unique=1 AND i.is_disabled=0
+WHERE i.index_id IS NULL;
+"@)
+    if ($uniqueCheck.Count -gt 0) { throw 'Workspace-scoped unique indexes are missing or disabled.' }
     $tenant = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query "SELECT COUNT(*) AS TenantCount FROM dbo.Tenants WHERE Id='00000000-0000-4000-8000-000000000001' AND Slug=N'legacy-workspace';")
     if ($tenant[0].TenantCount -ne 1) { throw 'The explicit legacy-workspace tenant is missing.' }
 }
