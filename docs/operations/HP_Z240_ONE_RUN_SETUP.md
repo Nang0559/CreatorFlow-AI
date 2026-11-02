@@ -44,7 +44,7 @@ The script checks the branch and clean working tree, fast-forward pulls the bran
 ## Security
 The setup preserves the phone-only Douyin rule. It does not log in to Douyin/TikTok, scan login QR codes, create a browser/device session, access cookies, follow, like, comment, or publish. The AI discovery service may only use sources separately reviewed and enabled for permitted access.
 
-## Important boundary
+## Go-live gate\nReview `docs/operations/GO_LIVE_READINESS.md` before calling this a production release. A successful local setup is still a Local Pilot / Pre-Go-live until every applicable acceptance gate has evidence.\n\n## Important boundary
 A successful local setup proves database migrations, builds, container startup and health endpoints. It does not prove that live Douyin/TikTok discovery providers are connected or that feedback is already persisted end-to-end; those require their own integration and acceptance tests.
 
 ## Share links from iPhone
