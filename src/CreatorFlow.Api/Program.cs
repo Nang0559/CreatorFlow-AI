@@ -201,6 +201,77 @@ channels.MapPost("/{id:guid}/unfollow", async (Guid id, CreatorFlowDbContext? db
 });
 
 
+
+// Share inbox: accept only creator-submitted HTTPS links; never fetch the supplied URL server-side.
+var shareInbox = app.MapGroup("/api/v1/share-inbox").RequireAuthorization();
+shareInbox.MapGet("/", async (string? status, int? take, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var size = take ?? 50;
+    if (size is < 1 or > 100) return Results.ValidationProblem(new Dictionary<string, string[]> { ["take"] = ["Must be between 1 and 100."] });
+    var query = db.SharedLinkInboxItems.AsNoTracking().AsQueryable();
+    if (!string.IsNullOrWhiteSpace(status))
+    {
+        if (!Enum.TryParse<SharedLinkStatus>(status, true, out var parsed) || !Enum.IsDefined(parsed))
+            return Results.BadRequest(new { error = "Unknown share inbox status." });
+        query = query.Where(x => x.Status == parsed);
+    }
+    var items = await query.OrderByDescending(x => x.SharedAt).Take(size)
+        .Select(x => new SharedLinkInboxResponse(x.Id, x.Platform, x.SharedUrl, x.SharedAt,
+            x.Status.ToString(), x.ReviewNote, x.LinkedChannelId)).ToArrayAsync(ct);
+    return Results.Ok(items);
+});
+shareInbox.MapPost("/", async (CreateSharedLinkRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    try
+    {
+        var item = SharedLinkInboxItem.Create(request.SharedUrl, DateTimeOffset.UtcNow);
+        var existing = await db.SharedLinkInboxItems.AsNoTracking().SingleOrDefaultAsync(x => x.UrlHash == item.UrlHash, ct);
+        if (existing is not null)
+            return Results.Ok(new SharedLinkInboxResponse(existing.Id, existing.Platform, existing.SharedUrl,
+                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId));
+        db.SharedLinkInboxItems.Add(item);
+        await db.SaveChangesAsync(ct);
+        return Results.Created($"/api/v1/share-inbox/{item.Id}",
+            new SharedLinkInboxResponse(item.Id, item.Platform, item.SharedUrl, item.SharedAt,
+                item.Status.ToString(), item.ReviewNote, item.LinkedChannelId));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["sharedUrl"] = [ex.Message] });
+    }
+});
+shareInbox.MapPost("/{id:guid}/review", async (Guid id, ReviewSharedLinkRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var item = await db.SharedLinkInboxItems.SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (item is null) return Results.NotFound();
+    try { item.MarkReviewed(request.Note); await db.SaveChangesAsync(ct); return Results.NoContent(); }
+    catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["note"] = [ex.Message] }); }
+    catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
+});
+shareInbox.MapPost("/{id:guid}/ignore", async (Guid id, ReviewSharedLinkRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var item = await db.SharedLinkInboxItems.SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (item is null) return Results.NotFound();
+    try { item.Ignore(request.Note); await db.SaveChangesAsync(ct); return Results.NoContent(); }
+    catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["note"] = [ex.Message] }); }
+    catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
+});
+shareInbox.MapPost("/{id:guid}/link-channel/{channelId:guid}", async (Guid id, Guid channelId, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var item = await db.SharedLinkInboxItems.SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (item is null) return Results.NotFound();
+    if (!await db.DouyinSourceChannels.AnyAsync(x => x.Id == channelId, ct)) return Results.NotFound(new { error = "Channel not found." });
+    try { item.LinkChannel(channelId); await db.SaveChangesAsync(ct); return Results.NoContent(); }
+    catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["channelId"] = [ex.Message] }); }
+    catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
+});
+
+
 var trendFeedback = app.MapGroup("/api/v1/douyin/videos/{id:guid}/feedback").RequireAuthorization();
 trendFeedback.MapGet("/", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
@@ -825,6 +896,12 @@ public sealed record CreateChannelRequest(string DouyinSecUserId, string Display
 public sealed record ChannelResponse(Guid Id, string DouyinSecUserId, string DisplayName, string ProfileUrl, bool IsFollowed, DateTimeOffset? FollowedAt, DateTimeOffset? LastCheckedAt);
 public sealed record CreateVideoCandidateRequest(string DouyinVideoId, Guid? SourceChannelId, Guid? ContentTopicId, string SourceUrl, string? Title, string DiscoveryMethod, DateTimeOffset? PublishedAt);
 public sealed record VideoCandidateResponse(Guid Id, string DouyinVideoId, Guid? SourceChannelId, Guid? ContentTopicId, string SourceUrl, string Title, string DiscoveryMethod, string Status, DateTimeOffset? PublishedAt, DateTimeOffset DiscoveredAt);
+
+public sealed record CreateSharedLinkRequest(string SharedUrl);
+public sealed record ReviewSharedLinkRequest(string? Note);
+public sealed record SharedLinkInboxResponse(Guid Id, string Platform, string SharedUrl,
+    DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId);
+
 public partial class Program;
 
 public sealed record AiLearningEvidence(string ExperimentId, string? Topic, string WinningVariantId,
