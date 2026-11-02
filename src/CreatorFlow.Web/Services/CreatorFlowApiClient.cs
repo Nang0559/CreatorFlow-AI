@@ -20,6 +20,20 @@ public sealed class CreatorFlowApiClient(
         return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
     }
 
+    public async Task<(byte[] Content, string FileName, string ContentType)> GetDownloadAsync(string path, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+        var content = await response.Content.ReadAsByteArrayAsync(ct);
+        var fileName = response.Content.Headers.ContentDisposition?.FileNameStar ??
+                       response.Content.Headers.ContentDisposition?.FileName ??
+                       "creatorflow-download.zip";
+        return (content, fileName.Trim('"'), response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream");
+    }
+
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
     {
         EnsureConfigured();
