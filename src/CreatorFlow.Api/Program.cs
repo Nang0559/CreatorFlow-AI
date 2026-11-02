@@ -3,6 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
+using System.Text;
+using System.IO.Compression;
 using CreatorFlow.Api.Security;
 using CreatorFlow.Application.Content;
 using CreatorFlow.Domain.Discovery;
@@ -501,6 +503,111 @@ styleLab.MapGet("/", async (string? status, int? skip, int? take, CreatorFlowDbC
         .ToArrayAsync(ct);
     return Results.Ok(items);
 });
+
+styleLab.MapGet("/{id:guid}/variants/{variantId:guid}/editing-package", async (Guid id, Guid variantId, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var experiment = await db.StyleExperiments.AsNoTracking().Include(x => x.Variants)
+        .SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (experiment is null) return Results.NotFound();
+    var variant = experiment.Variants.SingleOrDefault(x => x.Id == variantId);
+    if (variant is null) return Results.NotFound();
+
+    var plan = new
+    {
+        schemaVersion = "creatorflow-edit-plan-v1",
+        experimentId = experiment.Id,
+        experiment = experiment.Name,
+        hypothesis = experiment.Hypothesis,
+        topic = experiment.Topic,
+        variantId = variant.Id,
+        variant = variant.Name,
+        format = new { width = 1080, height = 1920, fps = 30, aspectRatio = "9:16" },
+        hook = variant.Hook,
+        speakingStyle = variant.SpeakingStyle,
+        editPacing = variant.EditPacing,
+        audioApproach = variant.AudioApproach,
+        script = variant.Script,
+        creativeNotes = variant.CreativeNotes,
+        mediaPolicy = "Use original footage or media you are authorized to use. This package contains no copied source video, licensed music or third-party effects."
+    };
+    var planJson = JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true });
+    var safeName = string.Concat(variant.Name.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '_'));
+    var readme = $"""
+CREATORFLOW – VIDEO EDIT HANDOFF
+Experiment: {experiment.Name}
+Variant: {variant.Name}
+Topic: {experiment.Topic ?? "Not specified"}
+
+CAPCUT DESKTOP
+1. Create a new 9:16 project (1080 x 1920); use 30 fps unless your source footage requires another rate.
+2. Import your own/authorized footage and audio.
+3. Follow shot-list.csv and script.txt to assemble the timeline.
+4. Apply CapCut transitions, effects, typography, color and sound design manually.
+5. Review product claims, music rights, captions and platform requirements before export.
+
+AFTER EFFECTS
+1. Open After Effects.
+2. Choose File > Scripts > Run Script File and select after-effects/CreatorFlow-AE-Starter.jsx.
+3. The script creates an editable 9:16 composition with hook, script and shot placeholders, then asks where to save the .aep project.
+4. Replace shot placeholders with your own footage and apply your preferred effects/plugins.
+5. Render and review in After Effects. The starter does not pretend to recreate CapCut's proprietary effects or third-party plugins.
+
+This is an editable handoff/starter package, not a finished MP4 and not a CapCut project file.
+""";
+    var shotCsv = new StringBuilder("Shot,Visual direction,Edit note\n");
+    for (var i = 1; i <= 5; i++)
+        shotCsv.Append(i).Append(",").Append(Csv(i == 1 ? "Opening visual / product context" : i == 5 ? "Result / closing visual" : "Demonstration detail / supporting footage"))
+            .Append(",").Append(Csv(variant.EditPacing)).Append('\n');
+
+    var hookJs = JsonSerializer.Serialize(variant.Hook);
+    var scriptJs = JsonSerializer.Serialize(variant.Script);
+    var nameJs = JsonSerializer.Serialize(experiment.Name + " – " + variant.Name);
+    var jsx = string.Join(Environment.NewLine, new[]
+    {
+        "// CreatorFlow After Effects editable starter. No third-party effects are bundled.",
+        "app.beginUndoGroup('CreatorFlow – Build editable starter');",
+        "if (!app.project) app.newProject();",
+        $"var comp = app.project.items.addComp({nameJs}, 1080, 1920, 1, 45, 30);",
+        "function addText(txt, layerName, y, size) {",
+        "  var layer = comp.layers.addText(txt); layer.name = layerName;",
+        "  var prop = layer.property('Source Text'); var doc = prop.value;",
+        "  doc.fontSize = size; doc.fillColor = [0.94, 0.91, 1.0]; prop.setValue(doc);",
+        "  layer.property('Transform').property('Position').setValue([540, y]); return layer;",
+        "}",
+        $"addText({hookJs}, '01 – Hook', 260, 64);",
+        $"addText({scriptJs}, '02 – Script – replace with timed captions', 720, 34);",
+        "addText('SHOT 01 – Replace with authorized footage', '03 – Shot placeholder 01', 1120, 28);",
+        "addText('SHOT 02 – Replace with authorized footage', '04 – Shot placeholder 02', 1280, 28);",
+        "addText('SHOT 03 – Replace with authorized footage', '05 – Shot placeholder 03', 1440, 28);",
+        "addText('CREATORFLOW – END CARD', '06 – End card', 1760, 42);",
+        "comp.openInViewer();",
+        "var folder = Folder.selectDialog('Choose where to save your CreatorFlow After Effects starter');",
+        "if (folder) app.project.save(File(folder.fsName + '/CreatorFlow_AE_Starter.aep'));",
+        "app.endUndoGroup();"
+    });
+
+    using var memory = new MemoryStream();
+    using (var archive = new ZipArchive(memory, ZipArchiveMode.Create, true))
+    {
+        void AddEntry(string name, string content)
+        {
+            var entry = archive.CreateEntry(name, CompressionLevel.Optimal);
+            using var stream = entry.Open();
+            using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+            writer.Write(content);
+        }
+        AddEntry("README-CapCut-AfterEffects.txt", readme);
+        AddEntry("edit-plan.json", planJson);
+        AddEntry("script.txt", variant.Script);
+        AddEntry("shot-list.csv", shotCsv.ToString());
+        AddEntry("after-effects/CreatorFlow-AE-Starter.jsx", jsx);
+    }
+    return Results.File(memory.ToArray(), "application/zip", $"CreatorFlow_{safeName}_EditingPackage.zip");
+});
+
+static string Csv(string value) => "\"" + value.Replace("\"", "\"\"") + "\"";
+
 styleLab.MapPost("/", async (CreateStyleExperimentRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
