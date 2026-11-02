@@ -4,7 +4,7 @@
 
 <PageTitle>Xu hướng Việt Nam · CreatorFlow</PageTitle>
 <header class="page-header">
-    <div><p class="eyebrow">VIETNAM TREND INTELLIGENCE</p><h1>Xu hướng Việt Nam</h1>
+    <div><p class="eyebrow">TRÍ TUỆ XU HƯỚNG VIỆT NAM</p><h1>Xu hướng Việt Nam</h1>
         <p class="muted">Theo dõi kênh, video và âm thanh; lưu lịch sử chỉ số để nhận biết xu hướng tăng tốc.</p></div>
     <button class="primary" @onclick="LoadAsync">Làm mới</button>
 </header>
@@ -19,10 +19,10 @@
 }
 <section class="panel share-inbox-panel">
     <div class="panel-heading">
-        <div><p class="eyebrow">SHARE INBOX</p><h2>Nhận link chia sẻ từ Douyin / TikTok</h2>
+        <div><p class="eyebrow">HỘP THƯ LIÊN KẾT</p><h2>Nhận liên kết chia sẻ từ Douyin / TikTok</h2>
             <p class="muted">Trong Douyin, chọn Chia sẻ → Sao chép liên kết, quay lại đây và dán. Link được lưu riêng làm dữ liệu ưu tiên do bạn cung cấp; hệ thống chưa tự mở rộng link ngắn hoặc thay đổi điểm xếp hạng từ link này. AI vẫn có thể khám phá theo chủ đề mà không cần chia sẻ.</p>
         </div>
-        <span class="status">@shareItems.Count link</span>
+        <span class="status">@shareItems.Count liên kết</span>
     </div>
     <label>Liên kết vừa chia sẻ
         <textarea @bind="sharedUrl" rows="2" maxlength="1200" placeholder="Dán link Douyin / TikTok / YouTube / Facebook / Instagram tại đây"></textarea>
@@ -36,25 +36,25 @@
     @foreach (var shared in shareItems)
     {
         <article class="share-item">
-            <div><span class="status">@shared.Platform · @shared.Status</span>
+            <div><span class="status">@PlatformLabel(shared.Platform) · @ShareStatusLabel(shared.Status)</span>
                 <p class="share-url">@shared.SharedUrl</p>
                 <small class="muted">@shared.SharedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
             </div>
-            <a href="@shared.SharedUrl" target="_blank" rel="noopener noreferrer">Mở link ↗</a>
+            <a href="@shared.SharedUrl" target="_blank" rel="noopener noreferrer">Mở liên kết ↗</a>
         </article>
     }
     <small class="muted">iPhone: bạn có thể dùng Shortcut “CreatorFlow – Nhận link” để chọn ngay trong bảng Chia sẻ; nếu chưa tạo Shortcut, hãy Sao chép liên kết rồi dán vào ô này. Hướng dẫn: docs/operations/IOS_SHARE_TO_CREATORFLOW.md.</small>
 </section>
 
 <section class="panel">
-    <div class="panel-heading"><div><p class="eyebrow">OBSERVATIONS</p><h2>Ghi nhận xu hướng mới</h2></div></div>
+    <div class="panel-heading"><div><p class="eyebrow">GHI NHẬN</p><h2>Ghi nhận xu hướng mới</h2></div></div>
     <div class="trend-form">
-        <label>Loại<select @bind="kind"><option>Video</option><option>CreatorChannel</option><option>Sound</option></select></label>
-        <label>Nền tảng<select @bind="platform"><option>TikTokVietnam</option><option>YouTubeShortsVietnam</option><option>FacebookReelsVietnam</option><option>Other</option></select></label>
-        <label>Mã nguồn<input @bind="externalId" placeholder="Video ID / creator ID / sound ID" /></label>
+        <label>Loại<select @bind="kind"><option>Video</option><option value="CreatorChannel">Kênh sáng tạo</option><option value="Sound">Âm thanh</option></select></label>
+        <label>Nền tảng<select @bind="platform"><option value="TikTokVietnam">TikTok Việt Nam</option><option value="YouTubeShortsVietnam">YouTube Shorts Việt Nam</option><option value="FacebookReelsVietnam">Facebook Reels Việt Nam</option><option value="Other">Khác</option></select></label>
+        <label>Mã nguồn<input @bind="externalId" placeholder="Mã video / mã kênh / mã âm thanh" /></label>
         <label>Tiêu đề<input @bind="title" placeholder="Tên video, kênh hoặc âm thanh" /></label>
         <label>Người sáng tạo<input @bind="creator" /></label>
-        <label>URL HTTPS<input @bind="sourceUrl" placeholder="https://..." /></label>
+        <label>Đường dẫn HTTPS<input @bind="sourceUrl" placeholder="https://..." /></label>
         <label>Chủ đề<input @bind="topic" placeholder="Ví dụ: gia dụng, làm đẹp" /></label>
         <label>Tên nhạc<input @bind="soundName" /></label>
         <label>Lượt xem<input type="number" min="0" @bind="views" /></label>
@@ -67,13 +67,13 @@
 </section>
 
 <section class="panel">
-    <div class="panel-heading"><div><p class="eyebrow">TREND LIBRARY</p><h2>Dữ liệu đã ghi nhận</h2></div><span class="status">@items.Count mục</span></div>
+    <div class="panel-heading"><div><p class="eyebrow">THƯ VIỆN XU HƯỚNG</p><h2>Dữ liệu đã ghi nhận</h2></div><span class="status">@items.Count mục</span></div>
     @if (items.Count == 0) { <p class="muted">Chưa có dữ liệu xu hướng. Có thể thêm thủ công hoặc tích hợp connector sau.</p> }
     @foreach (var item in items)
     {
         <article class="trend-item">
-            <div><span class="status">@item.Kind · @item.Platform</span><h3>@item.Title</h3><p class="muted">@item.CreatorName · @item.Topic</p><a href="@item.SourceUrl" target="_blank" rel="noopener noreferrer">Mở nguồn ↗</a></div>
-            <div class="trend-metrics"><strong>@item.Views.ToString("N0")</strong><small>Views</small><strong>@item.Likes.ToString("N0")</strong><small>Likes</small><strong>@item.Shares.ToString("N0")</strong><small>Shares</small><small>Ghi nhận @item.ObservedAt.ToLocalTime().ToString("dd/MM HH:mm")</small></div>
+            <div><span class="status">@KindLabel(item.Kind) · @PlatformLabel(item.Platform)</span><h3>@item.Title</h3><p class="muted">@item.CreatorName · @item.Topic</p><a href="@item.SourceUrl" target="_blank" rel="noopener noreferrer">Mở nguồn ↗</a></div>
+            <div class="trend-metrics"><strong>@item.Views.ToString("N0")</strong><small>Lượt xem</small><strong>@item.Likes.ToString("N0")</strong><small>Lượt thích</small><strong>@item.Shares.ToString("N0")</strong><small>Lượt chia sẻ</small><small>Ghi nhận @item.ObservedAt.ToLocalTime().ToString("dd/MM HH:mm")</small></div>
         </article>
     }
 </section>
@@ -134,6 +134,10 @@
         catch (Exception ex) { shareMessage = ex.Message; }
         finally { busy = false; }
     }
+
+    private static string KindLabel(string value) => value switch { "Video" => "Video", "CreatorChannel" => "Kênh sáng tạo", "Sound" => "Âm thanh", _ => "Khác" };
+    private static string PlatformLabel(string value) => value switch { "TikTokVietnam" => "TikTok Việt Nam", "YouTubeShortsVietnam" => "YouTube Shorts Việt Nam", "FacebookReelsVietnam" => "Facebook Reels Việt Nam", "Douyin" => "Douyin", _ => "Khác" };
+    private static string ShareStatusLabel(string value) => value switch { "Pending" => "Chờ xem xét", "Reviewed" => "Đã xem xét", "Linked" => "Đã liên kết", "Ignored" => "Đã bỏ qua", _ => "Chưa xác định" };
 
     private sealed record SharedLinkItem(Guid Id, string Platform, string SharedUrl,
         DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId);
