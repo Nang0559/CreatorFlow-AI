@@ -157,10 +157,23 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
         var probe=config["VideoRendering:FFprobeExe"]??Path.Combine(Path.GetDirectoryName(ffmpeg)!,"ffprobe.exe");
         using var p=new Process{StartInfo=new ProcessStartInfo(probe){UseShellExecute=false,RedirectStandardOutput=true,RedirectStandardError=true,CreateNoWindow=true}};
         foreach(var a in new[]{"-v","error","-select_streams","v:0","-show_entries","stream=width,height:format=duration","-of","json",path})p.StartInfo.ArgumentList.Add(a);
-        p.Start();var json=await p.StandardOutput.ReadToEndAsync(ct);await p.WaitForExitAsync(ct);
-        if(p.ExitCode!=0)throw new InvalidOperationException("FFprobe không đọc được MP4.");
-        using var doc=JsonDocument.Parse(json);var stream=doc.RootElement.GetProperty("streams")[0];var format=doc.RootElement.GetProperty("format");
-        return(double.Parse(format.GetProperty("duration").GetString()!,System.Globalization.CultureInfo.InvariantCulture),stream.GetProperty("width").GetInt32(),stream.GetProperty("height").GetInt32());
+        Require(probe);
+        p.Start();
+        var jsonTask=p.StandardOutput.ReadToEndAsync(ct);
+        var errorTask=p.StandardError.ReadToEndAsync(ct);
+        using var timeout=CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        try { await p.WaitForExitAsync(timeout.Token); }
+        catch { try { p.Kill(true); } catch { } throw; }
+        var json=await jsonTask;
+        var error=await errorTask;
+        if(p.ExitCode!=0)throw new InvalidOperationException($"FFprobe không đọc được video: {error[..Math.Min(error.Length,800)]}");
+        using var doc=JsonDocument.Parse(json);
+        if(!doc.RootElement.TryGetProperty("streams",out var streams)||streams.GetArrayLength()==0||
+           !doc.RootElement.TryGetProperty("format",out var format)||!format.TryGetProperty("duration",out var durationValue))
+            throw new InvalidOperationException("Video không có luồng hình ảnh hoặc thời lượng hợp lệ.");
+        var stream=streams[0];
+        return(double.Parse(durationValue.GetString()!,System.Globalization.CultureInfo.InvariantCulture),stream.GetProperty("width").GetInt32(),stream.GetProperty("height").GetInt32());
     }
     private static async Task<string> HashAsync(string path,CancellationToken ct){await using var s=File.OpenRead(path);return Convert.ToHexString(await SHA256.HashDataAsync(s,ct)).ToLowerInvariant();}
     private static void Require(string path){if(string.IsNullOrWhiteSpace(path)||!File.Exists(path))throw new FileNotFoundException("Chưa cấu hình công cụ dựng video.",path);}
