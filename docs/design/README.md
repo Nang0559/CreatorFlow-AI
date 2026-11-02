@@ -22,7 +22,7 @@ This directory is the normative as-built design for the implemented CreatorFlow 
 ## Scope
 The as-built design covers content projects, topic and Douyin discovery metadata, Vietnam trend observations, controlled 2–3-variant Style Lab experiments, creator style profiles/evidence, and deterministic topic-aware style learning.
 
-It does not claim Douyin/TikTok connectors, automatic trend/music ingestion, media downloading/rendering, product-cart integration, TikTok publishing, analytics synchronization, multi-tenant identity or durable background workers are implemented.
+It does not claim Douyin/TikTok connectors, automatic trend/music ingestion, source-media downloading, product-cart integration, TikTok publishing or analytics synchronization are implemented. Tenant identity/isolation foundations and a local AE+FFmpeg render worker exist, but production OIDC/RLS acceptance, Discovery feedback-learning orchestration and provider workers remain incomplete.
 
 
 ## SaaS / hybrid deployment
