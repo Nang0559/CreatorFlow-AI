@@ -21,8 +21,9 @@ public sealed class SharedLinkInboxItem
     public static SharedLinkInboxItem Create(string sharedUrl, DateTimeOffset now)
     {
         if (!Uri.TryCreate(sharedUrl?.Trim(), UriKind.Absolute, out var uri) ||
-            uri.Scheme != Uri.UriSchemeHttps || !IsSupportedHost(uri.Host))
-            throw new ArgumentException("Chỉ chấp nhận liên kết HTTPS từ Douyin, TikTok, YouTube, Facebook hoặc Instagram.", nameof(sharedUrl));
+            uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort ||
+            !string.IsNullOrEmpty(uri.UserInfo) || !IsSupportedHost(uri.Host))
+            throw new ArgumentException("Chỉ chấp nhận liên kết HTTPS hợp lệ từ Douyin, TikTok, YouTube, Facebook hoặc Instagram; không chấp nhận cổng hoặc thông tin đăng nhập nhúng.", nameof(sharedUrl));
 
         var safeUrl = uri.GetLeftPart(UriPartial.Path) + uri.Query;
         if (safeUrl.Length > 1200)
