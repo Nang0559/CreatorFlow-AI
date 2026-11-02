@@ -1,16 +1,16 @@
 @page "/settings"
 @inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
 <PageTitle>Cấu hình · CreatorFlow</PageTitle>
-<header class="page-header"><div><p class="eyebrow">WORKSPACE CONFIGURATION</p><h1>Cấu hình hệ thống</h1><p class="muted">Kiểm tra trạng thái kết nối và các thành phần của môi trường local pilot.</p></div><button class="primary" @onclick="CheckAsync" disabled="@checking">Kiểm tra kết nối</button></header>
-<section class="panel"><div class="panel-heading"><div><p class="eyebrow">SERVICE STATUS</p><h2>Kết nối API</h2></div><span class="status">@status</span></div>
+<header class="page-header"><div><p class="eyebrow">CẤU HÌNH KHÔNG GIAN LÀM VIỆC</p><h1>Cấu hình hệ thống</h1><p class="muted">Kiểm tra trạng thái kết nối và các thành phần của môi trường local pilot.</p></div><button class="primary" @onclick="CheckAsync" disabled="@checking">Kiểm tra kết nối</button></header>
+<section class="panel"><div class="panel-heading"><div><p class="eyebrow">TRẠNG THÁI DỊCH VỤ</p><h2>Kết nối API</h2></div><span class="status">@status</span></div>
     <p>@message</p>
     <div class="variant-stats"><span>Web API client: @(Api.IsConfigured ? "Đã cấu hình Base URL" : "Chưa cấu hình")</span><span>API key: Không hiển thị trên giao diện</span><span>Environment: Development</span></div>
 </section>
-<section class="panel"><div class="panel-heading"><div><p class="eyebrow">LOCAL ARCHITECTURE</p><h2>Thành phần triển khai</h2></div></div>
+<section class="panel"><div class="panel-heading"><div><p class="eyebrow">KIẾN TRÚC TRIỂN KHAI</p><h2>Thành phần triển khai</h2></div></div>
     <div class="pipeline">
-        <div><b>01</b><strong>Web</strong><small>Docker · localhost:8080</small></div>
+        <div><b>01</b><strong>Giao diện</strong><small>Docker · localhost:8080</small></div>
         <div><b>02</b><strong>API</strong><small>Windows · localhost:7001</small></div>
-        <div><b>03</b><strong>AI</strong><small>Docker · localhost:8001</small></div>
+        <div><b>03</b><strong>Trí tuệ nhân tạo</strong><small>Docker · localhost:8001</small></div>
         <div><b>04</b><strong>SQL Server</strong><small>Windows · CreatorFlow_QC</small></div>
     </div>
 </section>
