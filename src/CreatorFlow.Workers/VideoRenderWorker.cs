@@ -54,7 +54,8 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
     {
         var work=Path.Combine(root,"work",j.Id.ToString("N")); Directory.CreateDirectory(work);
         var project=Path.Combine(work,"creatorflow.aep"); var jsx=Path.Combine(work,"build.jsx");
-        var sequence=Path.Combine(work,"frame_[#####].png"); var output=Path.GetFullPath(j.Output);
+        var aeSequence=Path.Combine(work,"frame_[#####].png");
+        var ffmpegSequence=Path.Combine(work,"frame_%05d.png"); var output=Path.GetFullPath(j.Output);
         Directory.CreateDirectory(Path.GetDirectoryName(output)!);
         try
         {
@@ -66,9 +67,9 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
             await RunAsync(afterFx,["-r",jsx],work,TimeSpan.FromMinutes(10),ct);
             if(!File.Exists(project)) throw new InvalidOperationException("After Effects không tạo được dự án dựng.");
             await SetStateAsync(j.Id,"Rendering",30,null,ct);
-            await RunAsync(aerender,["-project",project,"-comp","CreatorFlow 9x16","-OMtemplate","PNG Sequence","-output",sequence],work,TimeSpan.FromMinutes(90),ct);
+            await RunAsync(aerender,["-project",project,"-comp","CreatorFlow 9x16","-OMtemplate","PNG Sequence","-output",aeSequence],work,TimeSpan.FromMinutes(90),ct);
             await SetStateAsync(j.Id,"Encoding",80,null,ct);
-            await RunAsync(ffmpeg,["-y","-hide_banner","-loglevel","error","-framerate","30","-i",sequence,
+            await RunAsync(ffmpeg,["-y","-hide_banner","-loglevel","error","-framerate","30","-i",ffmpegSequence,
               "-i",j.Source,"-map","0:v:0","-map","1:a?","-c:v","libx264","-preset","medium","-crf","20",
               "-pix_fmt","yuv420p","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",output],
               work,TimeSpan.FromMinutes(45),ct);
@@ -87,7 +88,7 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
       app.beginSuppressDialogs();
       var p=app.newProject();
       var footage=p.importFile(new ImportOptions(new File(d.source)));
-      var w=1080,h=1920,fps=30,duration=Math.min(Math.max(footage.duration,1),60);
+      var w=1080,h=1920,fps=30,duration=Math.max(footage.duration,1);
       var comp=p.items.addComp("CreatorFlow 9x16",w,h,1,duration,fps);
       var video=comp.layers.add(footage);
       var scale=Math.max(w/footage.width,h/footage.height)*100;
