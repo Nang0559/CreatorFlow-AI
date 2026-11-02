@@ -126,8 +126,8 @@ Configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` in the API host
 ### Learning Memory
 - `GET /api/v1/style-profiles/{id}/learning-proposals` lists persisted proposals for a profile.
 - `POST /api/v1/style-profiles/{id}/learning-proposals` stores a reviewed-ready draft using the profile's imported evidence snapshot. Body: `{ "proposedSummary": "...", "algorithmVersion": "llm-synthesis-v1" }`. At least two imported evaluated experiments are required.
-- `POST /api/v1/style-profiles/{id}/learning-proposals/{proposalId}/approve` approves a pending proposal, updates current guidance and creates the next immutable profile version. Body: `{ "reviewerId": "...", "reason": "..." }`.
-- `POST /api/v1/style-profiles/{id}/learning-proposals/{proposalId}/reject` rejects a pending proposal; a reason is required.
+- `POST /api/v1/style-profiles/{id}/learning-proposals/{proposalId}/approve` approves a pending proposal, updates current guidance and creates the next immutable profile version. Body: `{ "reason": "..." }`; reviewer identity is derived from the authenticated principal.
+- `POST /api/v1/style-profiles/{id}/learning-proposals/{proposalId}/reject` rejects a pending proposal; a reason is required and reviewer identity is derived from the authenticated principal.
 - `GET /api/v1/style-profiles/{id}/versions` returns immutable profile versions in descending version order.
 
 Review identity is derived from authenticated `sub`/NameIdentifier claims; caller-supplied reviewer IDs are ignored, and the shared API-key scheme is rejected as a human reviewer. Production OIDC configuration and role-policy acceptance remain required. Only Approved proposals create versions; AI generation itself does not activate a profile.
