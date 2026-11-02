@@ -9,12 +9,15 @@ from pydantic import ValidationError
 
 from creatorflow_ai.contracts import (
     AnalyzeRequest,
+    DiscoveryRankRequest, DiscoveryRankResponse,
+    DiscoveryQueryPlanRequest, DiscoveryQueryPlanResponse,
     AnalyzeResponse,
     GenerateVariantsRequest,
     GenerateVariantsResponse,
     LearningSynthesisResponse,
     SynthesizeLearningRequest,
 )
+from creatorflow_ai.discovery_ranker import DiscoveryFeatures, rank_discovery_candidate
 from creatorflow_ai.llm import (
     AIConfigurationError,
     AIInvalidOutputError,
@@ -65,6 +68,38 @@ def ready() -> dict[str, object]:
         configured = False
         model = None
     return {"service": "creatorflow-ai", "ready": configured, "llm_configured": configured, "model": model}
+
+
+
+@app.post("/v1/discovery/rank", response_model=DiscoveryRankResponse,
+          dependencies=[Depends(require_service_key)])
+def rank_candidate(request: DiscoveryRankRequest) -> DiscoveryRankResponse:
+    """Fast deterministic ranking; a shared link only adds a capped priority signal."""
+    result = rank_discovery_candidate(DiscoveryFeatures(**request.model_dump()))
+    return DiscoveryRankResponse.model_validate(result)
+
+
+@app.post("/v1/discovery/query-plan", response_model=DiscoveryQueryPlanResponse,
+          dependencies=[Depends(require_service_key)])
+async def discovery_query_plan(
+    request: DiscoveryQueryPlanRequest,
+    client: OpenAICompatibleLLM = Depends(get_llm_client),
+) -> DiscoveryQueryPlanResponse:
+    system_prompt = (
+        "You are a discovery query planner, not a data collector. Create diverse search queries for permitted "
+        "public/official sources only. Never suggest login, cookies, session extraction, private endpoints, "
+        "automated account interaction, or scraping that violates platform terms. A user-shared URL is optional "
+        "priority context, never a prerequisite. Return JSON with topic, queries, related_topics, intent_signals, exclusions. "
+        "Queries must target observable content and creator profiles; do not invent trend metrics or claim results exist."
+    )
+    raw = await invoke_llm(client, system_prompt, request.model_dump())
+    try:
+        result = DiscoveryQueryPlanResponse.model_validate({**raw, "requires_human_review": True})
+        if len(result.queries) > request.max_queries:
+            raise ValueError("The model returned more queries than requested.")
+    except (ValidationError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="Discovery query plan did not match the required contract.") from exc
+    return result
 
 
 @app.post("/v1/analyze", response_model=AnalyzeResponse, dependencies=[Depends(require_service_key)])
