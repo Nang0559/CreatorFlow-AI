@@ -6,7 +6,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 | Capability | Evidence in repository | Status |
 |---|---|---|
-| SaaS tenant identity and row-isolation foundation | Tenant/Membership entities; configurable OIDC JWT validation; issuer+subject+active membership resolution; default API tenant authorization; EF tenant filters and write stamping; migration 011 + 012 | Implemented in code; production OIDC configuration, role matrix, SQL execution and cross-tenant security tests remain pending |
+| SaaS tenant identity and row-isolation foundation | Tenant/Membership/Invitation entities; API JWT validation; Web OIDC Authorization Code + PKCE; issuer+subject membership; one-time Owner bootstrap; invitation acceptance and membership administration; EF tenant filters; migrations 011–013 | Baseline implemented in code; real provider configuration, email delivery, full role matrix, SQL execution and cross-tenant security tests remain pending |
 | Content project foundation | Domain, API, EF mapping and SQL | Implemented foundation |
 | Topic management | Topic domain/API/UI and SQL | Metadata workflow |
 | Douyin source channel records | Channel domain/API/UI and SQL | Metadata workflow; no live Douyin follow |
@@ -33,8 +33,9 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Product catalog, product matching, cart attachment and order attribution.
 - TikTok OAuth, official publishing, scheduling and post reconciliation.
 - Durable jobs, outbox/inbox, retries and connector observability.
-- Production OIDC provider configuration, MFA, invitations and membership administration UI/API.
-- Fine-grained role policies are not yet applied per endpoint; active tenant membership is the current API-wide gate.
+- Production OIDC provider configuration and contract tests; MFA enforcement is delegated to the provider.
+- Invitation and membership administration APIs exist; invitation delivery is manual until SMTP/provider integration.
+- Analyst writes are blocked centrally and Publisher writes are blocked outside future publishing routes; full endpoint-specific role policies remain incomplete.
 - SQL Server Row-Level Security and composite same-tenant foreign keys are not yet configured.
 - SQL migration 012 has not yet been executed against SQL Server; its legacy-workspace backfill assumes all existing business rows belong to one workspace.
 - Background workers must establish an explicit tenant context before accessing business data.
@@ -57,7 +58,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 
 ## Learning Memory update
-Migration 009 and EF mappings now persist `StyleLearningProposals` and immutable `CreatorStyleProfileVersions`. The API exposes proposal list/create, approve/reject, and version-history routes. Approval updates current guidance and inserts a version; rejection requires a reason. The proposal-create route snapshots the profile's already-imported evidence and requires at least two distinct experiments. Review endpoints now derive the reviewer from the authenticated `sub`/NameIdentifier claim and ignore caller-supplied reviewer IDs; the shared API-key scheme is explicitly rejected as a human reviewer. Because OIDC is not yet configured, approve/reject currently fail closed for all existing API-key callers. Multi-creator/tenant deployment remains blocked until OIDC and tenant authorization are implemented. The AI synthesis endpoint still returns a draft; its caller must submit that draft to Learning Memory.
+Migration 009 and EF mappings now persist `StyleLearningProposals` and immutable `CreatorStyleProfileVersions`. The API exposes proposal list/create, approve/reject, and version-history routes. Approval updates current guidance and inserts a version; rejection requires a reason. The proposal-create route snapshots the profile's already-imported evidence and requires at least two distinct experiments. Review endpoints now derive the reviewer from the authenticated `sub`/NameIdentifier claim and ignore caller-supplied reviewer IDs; the shared API-key scheme is explicitly rejected as a human reviewer. Because production OIDC is not yet configured, approve/reject remain unavailable to API-key callers. Configure the provider and API audience before enabling interactive review. The AI synthesis endpoint still returns a draft; its caller must submit that draft to Learning Memory.
 
 
 ## Trend Selection Intelligence (migration 010)

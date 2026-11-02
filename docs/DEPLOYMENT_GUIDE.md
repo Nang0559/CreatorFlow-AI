@@ -22,10 +22,11 @@ The repository currently contains:
 - .NET API and Blazor Server workspace.
 - SQL Server persistence for implemented project, trend, Style Lab, style-learning and Trend Selection foundations.
 - Python FastAPI AI service with OpenAI-compatible LLM calls.
-- API-key service authentication.
+- API-key service authentication for isolated Development bootstrap only.
+- OIDC Web login (Authorization Code + PKCE), protected cookie sessions, issuer+subject identity mapping, tenant selection and membership lifecycle API.
 - CI for .NET build/tests and Python tests.
 
-The following are not yet production-ready: multi-user identity/tenant isolation, TikTok/Douyin OAuth and provider adapters, trend crawling, durable background queue, object/media storage, similarity/saturation engines, rights registry, calibrated publishing/account risk, and official publishing/analytics. Do not advertise or deploy those as available features until implemented and tested.
+The tenant identity foundation and baseline isolation are implemented in code, but a production OIDC provider must still be configured and contract-tested; MFA policy, invitation email delivery, full per-operation RBAC, SQL Server migration validation and cross-tenant negative tests remain release gates. TikTok/Douyin OAuth and provider adapters, trend crawling, durable background queue, object/media storage, similarity/saturation engines, rights registry, calibrated publishing/account risk, and official publishing/analytics are also not production-ready.
 
 ## 3. Platform account setup
 
@@ -96,6 +97,9 @@ Keep Select/Reject/Watch distinct. Watch is uncertain, not a negative label. Do 
 Use a secret manager per environment. Never commit production credentials or place service keys in browser code.
 
 Current bootstrap settings (verify exact binding in deployed build):
+- Web OIDC: `Authentication:Oidc:Authority`, `Authentication:Oidc:ClientId`, `Authentication:Oidc:ClientSecret`, `Authentication:Oidc:ApiScope`.
+- API OIDC: `Authentication:Oidc:Authority`, `Authentication:Oidc:Audience`.
+- First Owner: `Authentication:OwnerBootstrapToken` (one-time secret; never commit it).
 - API: `ConnectionStrings__CreatorFlow`, `Authentication__ApiKey`, `CREATORFLOW_AI_BASE_URL`, `CREATORFLOW_AI_API_KEY`.
 - Web: `CreatorFlowApi__BaseUrl`, `CreatorFlowApi__ApiKey` (server-side only).
 - Python: `CREATORFLOW_AI_API_KEY`, `CREATORFLOW_LLM_API_KEY`, `CREATORFLOW_LLM_MODEL`.
@@ -107,7 +111,8 @@ Future platform secrets must be separate per provider and environment: client ke
 ## 8. SaaS security and operations release gates
 
 Before inviting external customers:
-- OIDC identity, MFA for privileged users, RBAC, tenant membership and verified tenant context.
+- Configure and contract-test the production OIDC provider; enforce MFA for Owner/Admin at the provider; verify email_verified, API audience/scope and logout callbacks.
+- Complete fine-grained RBAC, invitation email delivery and central session revocation.
 - Tenant-scoped persistence/repositories, EF filters and cross-tenant negative tests.
 - Per-tenant platform OAuth connections, token encryption, consent, revocation and audit.
 - Rights/provenance evidence, retention/deletion and media validation.
@@ -117,4 +122,4 @@ Before inviting external customers:
 - Human approval before publishing; provider idempotency and post reconciliation.
 - SQL migration 010 execution tests against an empty database and schema-009 upgrade database.
 
-Follow [Deployment Runbook](DEPLOYMENT_RUNBOOK.md) in each environment and use [Public Launch Checklist](PUBLIC_LAUNCH_CHECKLIST.md) as the release sign-off. Current repository status remains a pilot foundation, not a public multi-tenant SaaS release.
+Follow [Deployment Runbook](DEPLOYMENT_RUNBOOK.md) in each environment and use [Public Launch Checklist](PUBLIC_LAUNCH_CHECKLIST.md) as the release sign-off. Current repository status remains a pilot foundation, not a public multi-tenant SaaS release. See [OIDC identity setup](IDENTITY_SETUP.md) for account bootstrap and member lifecycle.

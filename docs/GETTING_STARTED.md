@@ -35,7 +35,7 @@ The selected deployment target is SaaS multi-tenant on hybrid infrastructure, wi
 - [Deployment Runbook](DEPLOYMENT_RUNBOOK.md)
 - [Public Launch Checklist](PUBLIC_LAUNCH_CHECKLIST.md)
 
-The current repository is a pilot foundation, not yet a public multi-tenant SaaS release. The shared API key is bootstrap service authentication, not customer identity. Do not connect customer accounts until tenant isolation and per-tenant OAuth are implemented.
+The repository now contains the baseline OIDC login and tenant membership lifecycle, but is not yet a public multi-tenant SaaS release. Configure a real OIDC provider and complete the remaining release gates before inviting external customers. The shared API key is Development-only bootstrap service authentication, not customer identity. See [OIDC identity setup](IDENTITY_SETUP.md).
 
 ## Local creator workspace
 
@@ -73,7 +73,7 @@ From the repository root, initialize the complete Trend Intelligence + tenant sc
 .\database\Initialize-CreatorFlowDatabase.ps1 -SqlInstance localhost -IncludeTenantMigrations -ConfirmLegacyWorkspaceAssignment
 ```
 
-The tenant flag applies migrations 011–012. Migration 012 assigns existing rows in its listed single-workspace tables to the explicit `legacy-workspace` tenant; review that assumption before using it on a database containing multiple customers. The initializer refuses to adopt an existing untagged database or a database with user tables but no migration ledger. It never drops or restores a database.
+The tenant flag applies migrations 011–013. Migration 012 assigns existing rows in its listed single-workspace tables to the explicit `legacy-workspace` tenant; review that assumption before using it on a database containing multiple customers. Migration 013 adds invitation and security-audit tables. The initializer refuses to adopt an existing untagged database or a database with user tables but no migration ledger. It never drops or restores a database.
 
 To initialize only the baseline schema (001–010), omit both tenant switches:
 

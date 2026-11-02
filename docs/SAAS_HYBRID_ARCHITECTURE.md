@@ -145,11 +145,12 @@ Capacity is driven by concurrent users, media minutes, job throughput, retention
 
 ## 9. Architecture implementation gates
 
-- [x] Tenant and membership domain model + identity migration.
-- [x] OIDC JWT bearer validation hook and issuer+subject membership resolution.
+- [x] Tenant and membership domain model + migrations 011–013.
+- [x] OIDC JWT bearer validation and issuer+subject membership resolution; Web Authorization Code + PKCE login and protected cookie session.
 - [x] EF tenant query filters, write stamping and TenantId immutability; SQL migration 012.
-- [ ] Production identity-provider configuration, MFA, invitation and membership lifecycle.
-- [ ] Fine-grained role policies, tenant-local unique indexes, composite same-tenant FKs, SQL Server RLS and cross-tenant tests.
+- [x] One-time first Owner bootstrap, expiring single-use invitations, verified-email acceptance, membership role/suspension API and security audit events.
+- [ ] Production identity-provider configuration and contract tests; enforce MFA at the provider; invitation email delivery and central session revocation.
+- [ ] Complete fine-grained role policies, tenant-local unique indexes, composite same-tenant FKs, SQL Server RLS and cross-tenant tests.
 - [ ] Object storage adapter, malware/file validation and signed URL authorization.
 - [ ] Secret vault and encrypted per-tenant provider tokens.
 - [ ] TikTok and Douyin provider contracts and isolated OAuth clients.
