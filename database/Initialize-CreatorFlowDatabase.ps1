@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($IncludeTenantMigrations -and -not $ConfirmLegacyWorkspaceAssignment) {
-    throw 'To apply tenant migrations 012/013, review the legacy-workspace ownership rule and pass -ConfirmLegacyWorkspaceAssignment.'
+    throw 'To apply tenant migrations 011–013, review the legacy-workspace ownership rule and pass -ConfirmLegacyWorkspaceAssignment.'
 }
 $create = Join-Path $PSScriptRoot 'Create-Database.ps1'
 $apply = Join-Path $PSScriptRoot 'Apply-Migrations.ps1'
