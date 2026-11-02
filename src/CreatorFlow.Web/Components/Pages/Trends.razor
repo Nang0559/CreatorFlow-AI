@@ -16,6 +16,35 @@
 {
     <section class="notice"><strong>Có lỗi khi tải dữ liệu</strong><p>@error</p></section>
 }
+<section class="panel share-inbox-panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">SHARE INBOX</p><h2>Nhận link chia sẻ từ Douyin / TikTok</h2>
+            <p class="muted">Trong Douyin, chọn Chia sẻ → Sao chép liên kết, quay lại đây và dán. Link chỉ là tín hiệu ưu tiên; AI vẫn tự khám phá theo chủ đề khi bạn không chia sẻ.</p>
+        </div>
+        <span class="status">@shareItems.Count link</span>
+    </div>
+    <label>Liên kết vừa chia sẻ
+        <textarea @bind="sharedUrl" rows="2" maxlength="1200" placeholder="Dán link Douyin / TikTok / YouTube / Facebook / Instagram tại đây"></textarea>
+    </label>
+    <div class="share-actions">
+        <button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(sharedUrl))" @onclick="SaveSharedLinkAsync">Nhận link chia sẻ</button>
+        <button class="secondary" disabled="@busy" @onclick="LoadShareInboxAsync">Làm mới hộp thư</button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(shareMessage)) { <p class="muted" role="status">@shareMessage</p> }
+    @if (shareItems.Count == 0) { <p class="muted">Hộp thư đang trống.</p> }
+    @foreach (var shared in shareItems)
+    {
+        <article class="share-item">
+            <div><span class="status">@shared.Platform · @shared.Status</span>
+                <p class="share-url">@shared.SharedUrl</p>
+                <small class="muted">@shared.SharedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
+            </div>
+            <a href="@shared.SharedUrl" target="_blank" rel="noopener noreferrer">Mở link ↗</a>
+        </article>
+    }
+    <small class="muted">Lưu ý iPhone: ứng dụng web nội bộ chưa thể tự xuất hiện như một đích nhận trong bảng Chia sẻ iOS. Bản này nhận link ngay khi bạn dán vào ô trên; không yêu cầu đăng nhập Douyin trên HP.</small>
+</section>
+
 <section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">OBSERVATIONS</p><h2>Ghi nhận xu hướng mới</h2></div></div>
     <div class="trend-form">
@@ -54,8 +83,11 @@
     private bool busy;
     private string kind = "Video", platform = "TikTokVietnam", externalId = "", title = "", creator = "", sourceUrl = "", topic = "", soundName = "";
     private long views, likes, comments, shares, saves;
+    private string sharedUrl = "";
+    private string shareMessage = "";
+    private List<SharedLinkItem> shareItems = [];
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync() { await LoadAsync(); await LoadShareInboxAsync(); }
 
     private async Task LoadAsync()
     {
@@ -63,6 +95,34 @@
         try { error = ""; items = await Api.GetAsync<List<CreatorFlow.Web.Services.VietnamTrendItem>>("/api/v1/vietnam-trends?take=100") ?? []; }
         catch (Exception ex) { error = ex.Message; }
     }
+
+
+    private async Task LoadShareInboxAsync()
+    {
+        if (!Api.IsConfigured) return;
+        try { shareItems = await Api.GetAsync<List<SharedLinkItem>>("/api/v1/share-inbox?take=30") ?? []; }
+        catch (Exception ex) { shareMessage = $"Không tải được hộp thư chia sẻ: {ex.Message}"; }
+    }
+
+    private async Task SaveSharedLinkAsync()
+    {
+        try
+        {
+            busy = true; shareMessage = "";
+            var saved = await Api.PostAsync<object, SharedLinkItem>("/api/v1/share-inbox", new { sharedUrl = sharedUrl.Trim() });
+            if (saved is not null)
+            {
+                shareMessage = "Đã nhận link. Link này chỉ tăng ưu tiên cho AI, không tự follow hoặc tương tác trên Douyin.";
+                sharedUrl = "";
+                await LoadShareInboxAsync();
+            }
+        }
+        catch (Exception ex) { shareMessage = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private sealed record SharedLinkItem(Guid Id, string Platform, string SharedUrl,
+        DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId);
 
     private async Task CreateAsync()
     {
