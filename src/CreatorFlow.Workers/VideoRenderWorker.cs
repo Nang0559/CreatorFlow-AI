@@ -66,7 +66,7 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
             await RunAsync(afterFx,["-r",jsx],work,TimeSpan.FromMinutes(10),ct);
             if(!File.Exists(project)) throw new InvalidOperationException("After Effects không tạo được dự án dựng.");
             await SetStateAsync(j.Id,"Rendering",30,null,ct);
-            await RunAsync(aerender,["-project",project,"-comp","CreatorFlow 9x16","-output",sequence],work,TimeSpan.FromMinutes(90),ct);
+            await RunAsync(aerender,["-project",project,"-comp","CreatorFlow 9x16","-OMtemplate","PNG Sequence","-output",sequence],work,TimeSpan.FromMinutes(90),ct);
             await SetStateAsync(j.Id,"Encoding",80,null,ct);
             await RunAsync(ffmpeg,["-y","-hide_banner","-loglevel","error","-framerate","30","-i",sequence,
               "-i",j.Source,"-map","0:v:0","-map","1:a?","-c:v","libx264","-preset","medium","-crf","20",
@@ -141,7 +141,7 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
     private async Task FailAsync(Guid id,string error)
     {
         await using var c=new SqlConnection(connectionString);await c.OpenAsync();await using var cmd=c.CreateCommand();
-        cmd.CommandText="UPDATE dbo.VideoRenderJobs SET Status=N'Failed',ErrorMessage=@e,CompletedAt=SYSUTCDATETIME() WHERE Id=@id AND Status IN(N'Rendering',N'Encoding')";
+        cmd.CommandText="UPDATE dbo.VideoRenderJobs SET Status=CASE WHEN AttemptCount<3 THEN N'Queued' ELSE N'Failed' END,ProgressPercent=CASE WHEN AttemptCount<3 THEN 0 ELSE ProgressPercent END,ErrorMessage=@e,CompletedAt=CASE WHEN AttemptCount<3 THEN NULL ELSE SYSUTCDATETIME() END WHERE Id=@id AND Status IN(N'Rendering',N'Encoding')";
         cmd.Parameters.AddWithValue("@e",error[..Math.Min(error.Length,1800)]);cmd.Parameters.AddWithValue("@id",id);await cmd.ExecuteNonQueryAsync();
     }
     private async Task<(double Duration,int Width,int Height)> ProbeAsync(string path,CancellationToken ct)
