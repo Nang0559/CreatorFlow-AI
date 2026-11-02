@@ -41,9 +41,34 @@ BEGIN
         EXEC sys.sp_executesql @Sql;
     END;
 
-    SET @Sql = N'UPDATE dbo.' + QUOTENAME(@TableName) +
-               N' SET TenantId = @TenantId WHERE TenantId IS NULL;';
-    EXEC sys.sp_executesql @Sql, N'@TenantId uniqueidentifier', @TenantId = @LegacyTenantId;
+    /*
+       TenantId backfill is a one-time ownership-metadata operation, not a change to
+       the immutable observation/decision payload. The append-only triggers intentionally
+       reject application UPDATE/DELETE statements, so briefly disable only the known
+       immutable trigger on the current table while assigning TenantId, then immediately
+       re-enable it. The whole migration is transactional (XACT_ABORT ON); a failure
+       rolls back the trigger state and the backfill together.
+    */
+    IF @TableName = N'TrendSelectionFeedback'
+       AND EXISTS (SELECT 1 FROM dbo.TrendSelectionFeedback WHERE TenantId IS NULL)
+    BEGIN
+        DISABLE TRIGGER dbo.TR_TrendSelectionFeedback_Immutable ON dbo.TrendSelectionFeedback;
+        UPDATE dbo.TrendSelectionFeedback SET TenantId = @LegacyTenantId WHERE TenantId IS NULL;
+        ENABLE TRIGGER dbo.TR_TrendSelectionFeedback_Immutable ON dbo.TrendSelectionFeedback;
+    END
+    ELSE IF @TableName = N'TrendCandidateOutcomeObservations'
+       AND EXISTS (SELECT 1 FROM dbo.TrendCandidateOutcomeObservations WHERE TenantId IS NULL)
+    BEGIN
+        DISABLE TRIGGER dbo.TR_TrendCandidateOutcomeObservations_Immutable ON dbo.TrendCandidateOutcomeObservations;
+        UPDATE dbo.TrendCandidateOutcomeObservations SET TenantId = @LegacyTenantId WHERE TenantId IS NULL;
+        ENABLE TRIGGER dbo.TR_TrendCandidateOutcomeObservations_Immutable ON dbo.TrendCandidateOutcomeObservations;
+    END
+    ELSE
+    BEGIN
+        SET @Sql = N'UPDATE dbo.' + QUOTENAME(@TableName) +
+                   N' SET TenantId = @TenantId WHERE TenantId IS NULL;';
+        EXEC sys.sp_executesql @Sql, N'@TenantId uniqueidentifier', @TenantId = @LegacyTenantId;
+    END;
 
     SET @Sql = N'ALTER TABLE dbo.' + QUOTENAME(@TableName) + N' ALTER COLUMN TenantId uniqueidentifier NOT NULL;';
     EXEC sys.sp_executesql @Sql;
