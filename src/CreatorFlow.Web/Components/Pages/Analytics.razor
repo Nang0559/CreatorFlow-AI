@@ -1,0 +1,42 @@
+@page "/analytics"
+@inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
+<PageTitle>Phân tích · CreatorFlow</PageTitle>
+<header class="page-header"><div><p class="eyebrow">PERFORMANCE INTELLIGENCE</p><h1>Phân tích hiệu quả</h1><p class="muted">Tổng hợp dữ liệu quan sát xu hướng và kết quả thử nghiệm phong cách đã ghi nhận.</p></div><button class="primary" @onclick="LoadAsync" disabled="@busy">Làm mới</button></header>
+@if (!string.IsNullOrWhiteSpace(error)) { <section class="notice"><strong>Không thể tải dữ liệu phân tích</strong><p>@error</p></section> }
+<section class="stats">
+    <article><span>Quan sát xu hướng</span><strong>@trendCount</strong><small>Dữ liệu đã lưu</small></article>
+    <article><span>Thử nghiệm phong cách</span><strong>@experimentCount</strong><small>Tổng số thử nghiệm</small></article>
+    <article><span>Đã đánh giá</span><strong>@evaluatedCount</strong><small>Có phương án thắng</small></article>
+</section>
+<section class="panel"><div class="panel-heading"><div><p class="eyebrow">TREND SIGNALS</p><h2>Tín hiệu thị trường</h2></div></div>
+    @if (trends.Count == 0) { <p class="muted">Chưa có quan sát. Hãy ghi nhận video, kênh hoặc âm thanh tại trang Xu hướng Việt Nam.</p> }
+    else { <div class="trend-form"><article><small class="muted">Tổng lượt xem đã ghi nhận</small><h2>@totalViews.ToString("N0")</h2></article><article><small class="muted">Tổng lượt thích</small><h2>@totalLikes.ToString("N0")</h2></article><article><small class="muted">Tổng lượt chia sẻ</small><h2>@totalShares.ToString("N0")</h2></article></div>
+    @foreach (var item in trends.Take(10)) { <article class="trend-item"><div><span class="status">@item.Kind · @item.Platform</span><h3>@item.Title</h3><small class="muted">@item.ObservedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small></div><div class="trend-metrics"><strong>@item.Views.ToString("N0")</strong><small>Views</small></div></article> } }
+</section>
+<section class="panel"><div class="panel-heading"><div><p class="eyebrow">STYLE EXPERIMENTS</p><h2>Kết quả thử nghiệm</h2></div></div>
+    @if (experiments.Count == 0) { <p class="muted">Chưa có thử nghiệm Style Lab để phân tích.</p> }
+    @foreach (var item in experiments) { <article class="trend-item"><div><span class="status">@item.Status</span><h3>@item.Name</h3><small class="muted">@item.Hypothesis</small></div><div>@(item.WinningVariantId.HasValue ? "Đã chọn phương án thắng" : "Chưa có kết luận")</div></article> }
+</section>
+<p class="muted">Các số liệu trên là tổng hợp thô từ bản ghi hiện có, không phải dự báo hiệu quả hoặc số liệu lấy trực tiếp từ TikTok.</p>
+@code {
+    private List<CreatorFlow.Web.Services.VietnamTrendItem> trends = [];
+    private List<CreatorFlow.Web.Services.StyleExperimentItem> experiments = [];
+    private int trendCount, experimentCount, evaluatedCount;
+    private long totalViews, totalLikes, totalShares;
+    private string error = "";
+    private bool busy;
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private async Task LoadAsync()
+    {
+        if (!Api.IsConfigured) { error = "Web chưa cấu hình CreatorFlow API."; return; }
+        try {
+            busy = true; error = "";
+            trends = await Api.GetAsync<List<CreatorFlow.Web.Services.VietnamTrendItem>>("/api/v1/vietnam-trends?take=100") ?? [];
+            experiments = await Api.GetAsync<List<CreatorFlow.Web.Services.StyleExperimentItem>>("/api/v1/style-experiments?take=100") ?? [];
+            trendCount = trends.Count; experimentCount = experiments.Count;
+            evaluatedCount = experiments.Count(x => x.WinningVariantId.HasValue);
+            totalViews = trends.Sum(x => x.Views); totalLikes = trends.Sum(x => x.Likes); totalShares = trends.Sum(x => x.Shares);
+        } catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}
