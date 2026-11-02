@@ -93,23 +93,24 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
       var scale=Math.max(w/footage.width,h/footage.height)*100;
       video.property("Scale").setValue([scale,scale]);
       video.property("Position").setValue([w/2,h/2]);
-      function caption(value,y,size){
+      function caption(value,y,size,color){
         if(!value)return;
         var layer=comp.layers.addText(value),doc=layer.property("Source Text").value;
-        doc.font="Arial";doc.fontSize=size;doc.fillColor=[1,1,1];
+        doc.font="Arial";doc.fontSize=Math.max(38,size-Math.max(0,value.length-28)*0.7);doc.boxText=true;doc.boxTextSize=[w*0.88,h*0.18];doc.fillColor=color;
         doc.applyStroke=true;doc.strokeColor=[0.12,0.08,0.2];doc.strokeWidth=3;
         doc.justification=ParagraphJustification.CENTER_JUSTIFY;
         layer.property("Source Text").setValue(doc);
-        layer.property("Position").setValue([w/2,y]);
+        layer.property("Position").setValueAtTime(0,[w/2,y+48]);
+        layer.property("Position").setValueAtTime(0.42,[w/2,y]);
         layer.property("Opacity").setValueAtTime(0,0);
-        layer.property("Opacity").setValueAtTime(0.35,100);
+        layer.property("Opacity").setValueAtTime(0.42,100);
       }
       if(d.style==="Kể chuyện"){
-        caption(d.title,h*0.20,72);caption(d.hook,h*0.36,60);caption(d.cta,h*0.90,42);
+        caption(d.title,h*0.20,72,[0.82,0.66,1]);caption(d.hook,h*0.36,60,[1,1,1]);caption(d.cta,h*0.90,42,[0.82,0.66,1]);
       }else if(d.style==="Đánh giá sản phẩm"){
-        caption(d.title,h*0.16,64);caption(d.hook,h*0.73,58);caption(d.cta,h*0.90,44);
+        caption(d.title,h*0.16,64,[1,0.84,0.42]);caption(d.hook,h*0.73,58,[1,1,1]);caption(d.cta,h*0.90,44,[1,0.84,0.42]);
       }else{
-        caption(d.title,h*0.70,66);caption(d.hook,h*0.80,52);caption(d.cta,h*0.91,40);
+        caption(d.title,h*0.70,66,[1,1,1]);caption(d.hook,h*0.80,52,[1,1,1]);caption(d.cta,h*0.91,40,[0.82,0.66,1]);
       }
       p.save(new File(d.project));app.endSuppressDialogs(false);app.quit();
       """.Replace("__PAYLOAD__",payload);
