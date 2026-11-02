@@ -8,6 +8,27 @@ Set-StrictMode -Version Latest
 Set-Location -LiteralPath $RepositoryPath
 . '.\scripts\docker\Import-LocalPilotEnv.ps1'
 Import-LocalPilotEnv -Path (Join-Path $RepositoryPath '.env')
+if ([string]::IsNullOrWhiteSpace($env:VideoRendering__StorageRoot)) { $env:VideoRendering__StorageRoot = 'C:\CreatorFlowData\Video' }
+$adobeRoot = Join-Path $env:ProgramFiles 'Adobe'
+if (Test-Path -LiteralPath $adobeRoot) {
+    $detectedAerender = Get-ChildItem -LiteralPath $adobeRoot -Directory -Filter 'Adobe After Effects*' -ErrorAction SilentlyContinue |
+        ForEach-Object { Join-Path $_.FullName 'Support Files\aerender.exe' } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+    if ($detectedAerender) {
+        if (-not (Test-Path -LiteralPath $env:VideoRendering__AerenderExe -PathType Leaf)) { $env:VideoRendering__AerenderExe = $detectedAerender }
+        $detectedAfterFx = Join-Path (Split-Path $detectedAerender -Parent) 'AfterFX.exe'
+        if (-not (Test-Path -LiteralPath $env:VideoRendering__AfterEffectsExe -PathType Leaf)) { $env:VideoRendering__AfterEffectsExe = $detectedAfterFx }
+    }
+}
+if (-not (Test-Path -LiteralPath $env:VideoRendering__FFmpegExe -PathType Leaf)) {
+    $ffmpegCommand = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+    if ($ffmpegCommand) { $env:VideoRendering__FFmpegExe = $ffmpegCommand.Source }
+}
+if (-not (Test-Path -LiteralPath $env:VideoRendering__FFprobeExe -PathType Leaf) -and
+    (Test-Path -LiteralPath $env:VideoRendering__FFmpegExe -PathType Leaf)) {
+    $probeCandidate = Join-Path (Split-Path $env:VideoRendering__FFmpegExe -Parent) 'ffprobe.exe'
+    if (Test-Path -LiteralPath $probeCandidate -PathType Leaf) { $env:VideoRendering__FFprobeExe = $probeCandidate }
+}
 
 $required = @('VideoRendering__StorageRoot','VideoRendering__AfterEffectsExe',
     'VideoRendering__AerenderExe','VideoRendering__FFmpegExe')
