@@ -240,7 +240,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasOne<StyleExperimentVariant>().WithMany().HasForeignKey(x => x.WinningVariantId)
                 .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<ContentProject>().WithMany().HasForeignKey(x => x.ContentProjectId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<StyleExperimentVariant>(entity =>
@@ -312,9 +312,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasIndex(x => x.DouyinVideoId).IsUnique();
             entity.HasIndex(x => new { x.Status, x.DiscoveredAt });
             entity.HasOne<DouyinSourceChannel>().WithMany().HasForeignKey(x => x.SourceChannelId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<ContentTopic>().WithMany().HasForeignKey(x => x.ContentTopicId)
-                .OnDelete(DeleteBehavior.SetNull);
+                .OnDelete(DeleteBehavior.NoAction);
         });
         modelBuilder.Entity<SharedLinkInboxItem>(entity =>
         {
