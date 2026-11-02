@@ -152,6 +152,26 @@ if (oidcEnabled)
 }
 app.UseAntiforgery();
 
+app.MapGet("/media/video/{id:guid}", async (Guid id, HttpContext context, CreatorFlow.Web.Services.CreatorFlowApiClient api) =>
+{
+    var download = context.Request.Query.ContainsKey("download");
+    var endpoint = download ? "download" : "preview";
+    using var upstream = await api.GetRawResponseAsync($"/api/v1/video/render-jobs/{id}/{endpoint}",
+        context.Request.Headers.Range.ToString(), context.RequestAborted);
+    context.Response.StatusCode = (int)upstream.StatusCode;
+    if (upstream.Content.Headers.ContentType is not null)
+        context.Response.ContentType = upstream.Content.Headers.ContentType.ToString();
+    if (upstream.Content.Headers.ContentLength.HasValue)
+        context.Response.ContentLength = upstream.Content.Headers.ContentLength.Value;
+    if (upstream.Headers.AcceptRanges.Count > 0)
+        context.Response.Headers.AcceptRanges = string.Join(",", upstream.Headers.AcceptRanges);
+    if (upstream.Content.Headers.ContentRange is not null)
+        context.Response.Headers.ContentRange = upstream.Content.Headers.ContentRange.ToString();
+    if (upstream.Content.Headers.ContentDisposition is not null)
+        context.Response.Headers.ContentDisposition = upstream.Content.Headers.ContentDisposition.ToString();
+    if (upstream.IsSuccessStatusCode)
+        await upstream.Content.CopyToAsync(context.Response.Body, context.RequestAborted);
+});
 var components = app.MapRazorComponents<CreatorFlow.Web.Components.App>().AddInteractiveServerRenderMode();
 if (oidcEnabled) components.RequireAuthorization();
 app.Run();
