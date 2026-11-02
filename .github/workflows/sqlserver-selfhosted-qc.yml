@@ -1,0 +1,35 @@
+name: SQL Server self-hosted QC
+on:
+  push:
+    branches: [main, "feature/**"]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "database/**"
+      - "tools/sql-qc/**"
+      - ".github/workflows/sqlserver-selfhosted-qc.yml"
+      - "CreatorFlow.sln"
+      - "*.props"
+      - "*.targets"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: creatorflow-sqlserver-qc
+  cancel-in-progress: false
+jobs:
+  sqlserver-qc:
+    # No pull_request trigger: do not execute untrusted fork code on a local SQL host.
+    runs-on: [self-hosted, Windows, X64, creatorflow-sql-qc]
+    timeout-minutes: 45
+    env:
+      CREATORFLOW_QC_SQL_INSTANCE: ${{ vars.CREATORFLOW_QC_SQL_INSTANCE }}
+      CREATORFLOW_QC_DATABASE: CreatorFlow_QC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Preflight, database guard, SQL smoke and tests
+        shell: pwsh
+        run: ./tools/sql-qc/Invoke-SqlServerQc.ps1

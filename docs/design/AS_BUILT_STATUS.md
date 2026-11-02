@@ -6,6 +6,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 | Capability | Evidence in repository | Status |
 |---|---|---|
+| SaaS tenant identity and row-isolation foundation | Tenant/Membership entities; configurable OIDC JWT validation; issuer+subject+active membership resolution; default API tenant authorization; EF tenant filters and write stamping; migration 011 + 012 | Implemented in code; production OIDC configuration, role matrix, SQL execution and cross-tenant security tests remain pending |
 | Content project foundation | Domain, API, EF mapping and SQL | Implemented foundation |
 | Topic management | Topic domain/API/UI and SQL | Metadata workflow |
 | Douyin source channel records | Channel domain/API/UI and SQL | Metadata workflow; no live Douyin follow |
@@ -32,8 +33,12 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Product catalog, product matching, cart attachment and order attribution.
 - TikTok OAuth, official publishing, scheduling and post reconciliation.
 - Durable jobs, outbox/inbox, retries and connector observability.
-- Multi-user identity, role/tenant model, per-profile ownership and audit actor.
-- Persisted style proposal approval/rejection and profile version history.
+- Production OIDC provider configuration, MFA, invitations and membership administration UI/API.
+- Fine-grained role policies are not yet applied per endpoint; active tenant membership is the current API-wide gate.
+- SQL Server Row-Level Security and composite same-tenant foreign keys are not yet configured.
+- SQL migration 012 has not yet been executed against SQL Server; its legacy-workspace backfill assumes all existing business rows belong to one workspace.
+- Background workers must establish an explicit tenant context before accessing business data.
+
 - Profile-scoped deterministic style learning analysis; current deterministic analysis reads the global evaluated experiment pool. LLM synthesis is scoped to imported profile evidence.
 - Trained ML prediction, durable model registry/retraining and KPI/retention-aware optimization.
 - Persisted LLM proposals, prompt registry/version history and immutable approved profile versions.
@@ -52,4 +57,14 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 
 ## Learning Memory update
-Migration 009 and EF mappings now persist `StyleLearningProposals` and immutable `CreatorStyleProfileVersions`. The API exposes proposal list/create, approve/reject, and version-history routes. Approval updates current guidance and inserts a version; rejection requires a reason. The proposal-create route snapshots the profile's already-imported evidence and requires at least two distinct experiments. Important limitation: `reviewerId` is caller-supplied audit metadata under the existing shared API-key authentication, not a verified user identity. Multi-creator/tenant deployment remains blocked until identity and authorization are implemented. The AI synthesis endpoint still returns a draft; its caller must submit that draft to Learning Memory.
+Migration 009 and EF mappings now persist `StyleLearningProposals` and immutable `CreatorStyleProfileVersions`. The API exposes proposal list/create, approve/reject, and version-history routes. Approval updates current guidance and inserts a version; rejection requires a reason. The proposal-create route snapshots the profile's already-imported evidence and requires at least two distinct experiments. Review endpoints now derive the reviewer from the authenticated `sub`/NameIdentifier claim and ignore caller-supplied reviewer IDs; the shared API-key scheme is explicitly rejected as a human reviewer. Because OIDC is not yet configured, approve/reject currently fail closed for all existing API-key callers. Multi-creator/tenant deployment remains blocked until OIDC and tenant authorization are implemented. The AI synthesis endpoint still returns a draft; its caller must submit that draft to Learning Memory.
+
+
+## Trend Selection Intelligence (migration 010)
+Creator-authored Select/Reject/Watch feedback is persisted as append-only history with reason code, optional empty note and candidate metadata snapshot. Authenticated API supports feedback capture/history and downstream outcome observation write/history. Domain tests cover decision validation and JSON snapshots; API integration tests cover authentication, feedback round-trip, outcome round-trip, invalid numeric enums and missing candidates. Migration 010 independently guards index creation and installs SQL triggers that reject UPDATE/DELETE on both history tables. Versioned feature snapshot schema v1 is now extracted at creator review and persisted with feedback (discovery method, source/topic presence, title shape, publication age and discovery age); creator decision and mutable candidate status are excluded to prevent label leakage. The schema is deterministic and metadata-only; it is not a trained preference model. SQL Server migration execution against empty/schema-009 databases is still awaiting a dedicated integration test. TikTok connector, similarity extraction, saturation scoring, rights registry, calibrated risk model and durable worker remain outstanding. No live TikTok feed is claimed.
+
+
+## SaaS tenant identity and data isolation (migrations 011–012)
+Implemented in code: `Tenant` and `TenantMembership` domain entities; configurable OIDC JWT bearer validation; request tenant selection validated against exact issuer+subject membership; API default authorization requires a resolved active tenant; EF Core applies tenant filters to business entities and stamps/locks TenantId on writes. The local API-key path is restricted to a fixed legacy workspace in Development only. Migration 011 creates identity tables; migration 012 adds TenantId, tenant FK and index to all current business tables and backfills existing single-workspace data to `legacy-workspace`.
+
+Not yet release-complete: production OIDC provider configuration, MFA, invitation/membership administration, endpoint-specific role policies, SQL Server execution tests, composite same-tenant relationship constraints, RLS, and cross-tenant negative tests. Migration 012 must not be applied to a database containing multiple customer workspaces until a reviewed row-ownership mapping is prepared.

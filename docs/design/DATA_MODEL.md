@@ -6,6 +6,8 @@ This document records the current SQL Server/EF Core model. Numbered scripts und
 
 | Entity/table | Purpose | Relationships and constraints |
 |---|---|---|
+| Tenants | SaaS workspace identity with unique slug and Active/Suspended lifecycle | Unique Slug |
+| TenantMemberships | External OIDC issuer+subject membership and workspace role | Unique TenantId + issuer + subject; tenant FK; Owner/Admin/Editor/Analyst/Publisher |
 | ContentProjects | Work container for a content idea/production | Optional reference from StyleExperiments; deleting project sets link to NULL |
 | ContentTopics | Creator-defined topic and keywords | Can classify a Douyin candidate |
 | DouyinSourceChannels | Douyin creator/channel metadata and follow state | Unique DouyinSecUserId; index on follow state/last checked |
@@ -19,6 +21,8 @@ This document records the current SQL Server/EF Core model. Numbered scripts und
 | CreatorStyleEvidence | Snapshot of confirmed winner and measured results | FK to profile, experiment and winner; unique profile + experiment |
 | StyleLearningProposals | Reviewable AI/statistical learning drafts with evidence snapshot and algorithm version | FK to profile; Pending/Approved/Rejected state |
 | CreatorStyleProfileVersions | Immutable approved creator-style guidance snapshots | FK to profile and optional approved proposal; unique profile + version number and proposal |
+| TrendSelectionFeedback | Immutable creator Select/Reject/Watch decisions with candidate and feature snapshots | FK to candidate; indexed by candidate/time and decision/reason/time; SQL trigger blocks UPDATE/DELETE |
+| TrendCandidateOutcomeObservations | Downstream adaptation, publishing and measured outcome evidence | FK to feedback; indexed by feedback/time; SQL trigger blocks UPDATE/DELETE |
 
 ## 2. Important columns and enumerations
 
@@ -90,3 +94,18 @@ Migration 008 adds immutable StyleVariantMetricObservations. Every successful va
 - A proposal begins Pending and can transition exactly once to Approved or Rejected. Rejection requires a reason.
 - `CreatorStyleProfileVersions` stores a complete immutable copy of display name, positioning and style summary. Approval updates current guidance and inserts the next version in the same SaveChanges transaction.
 - The current API caller supplies `reviewerId`; this is audit metadata only, not a verified identity. User/tenant authorization remains a release blocker before multi-creator use.
+
+
+## Trend Selection feedback and outcomes (migration 010)
+
+- Feedback stores the creator-authored decision separately from model features. Empty reason notes are valid; Select/Reject/Watch are the only decisions.
+- Outcome observations are separate rows linked to a feedback decision. Their source and observed time are preserved with a JSON metrics snapshot.
+- Both tables are append-only at the SQL Server boundary through DML triggers. Migration index creation is independently guarded so a partially applied migration can be rerun.
+- Feature snapshots currently use an empty object placeholder; do not train a preference model until a versioned extractor has populated real feature vectors.
+
+
+## SaaS identity foundation (migration 011)
+- `Tenants` stores workspace identity, unique normalized slug and Active/Suspended lifecycle.
+- `TenantMemberships` maps immutable external identity issuer + subject to a tenant role and membership status. The issuer/subject pair is not an email address and must come from a validated OIDC principal.
+- Migration 011 deliberately does not backfill or add `TenantId` to existing content, trend, experiment or profile tables. This avoids inventing ownership for existing data.
+- No tenant-facing business endpoints should be enabled until OIDC validation, membership resolution, row ownership, query scoping and cross-tenant negative tests are implemented.

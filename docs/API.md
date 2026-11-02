@@ -133,3 +133,22 @@ Configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` in the API host
 Review identity is currently supplied by the API caller because the bootstrap API-key authentication has no individual user identity/role model. Do not treat `reviewerId` as verified identity or expose this workflow to multiple creators until user/tenant authorization is implemented. Only Approved proposals create versions; AI generation itself does not activate a profile.
 
 Apply SQL scripts `database/schema/001_initial.sql` through `009_style_learning_memory.sql` in numeric order. Scripts 008 and 009 are required for metric history and Learning Memory respectively.
+
+
+## Trend Selection Intelligence
+- POST /api/v1/douyin/videos/{id}/feedback with { "decision": "Select", "reasonCode": "Hook", "reasonNote": "" }.
+- GET /api/v1/douyin/videos/{id}/feedback returns immutable history.
+- Decisions are Select, Reject and Watch; Watch is not a negative training label.
+- Candidate metadata is snapshotted by the API. FeatureSnapshotJson remains {} until a real extractor is connected.
+- Migration: database/schema/010_trend_selection_feedback.sql.
+- TikTok scanning and calibrated account-risk prediction are not implemented by this migration.
+
+
+## Trend Selection feedback and outcome observations
+
+- `POST /api/v1/douyin/videos/{id}/feedback` with `decision` (`Select`, `Reject`, `Watch`), `reasonCode` and optional `reasonNote`. An empty note is valid.
+- `GET /api/v1/douyin/videos/{id}/feedback` returns append-only decision history.
+- `POST /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes` with `outcomeKind` (`Adapted`, `Published`, `MarketPerformance`, `CreatorAssessment`), optional `outcomeValue`, object-valued `metricsSnapshotJson` and `source`.
+- `GET /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes` returns append-only downstream outcome observations.
+
+Feedback and outcome routes require the API key. Both validate that the feedback belongs to the candidate in the route. SQL triggers reject UPDATE and DELETE for both history tables. `Watch` remains an uncertain/deferred decision and must not be converted to a negative preference label. `FeatureSnapshotJson` is still `{}` until the versioned feature extractor is implemented. The current API key is a bootstrap service credential, not an individual creator identity.

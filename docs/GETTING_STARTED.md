@@ -1,10 +1,10 @@
 # Getting started
 
 ## Prerequisites
-- .NET 9 SDK
+- .NET 9 SDK (current branch baseline only; migrate to .NET 10 LTS before public launch)
 - Python 3.11+
 - SQL Server 2022+ (optional for API health endpoint)
-- FFmpeg (when media processing is introduced)
+- FFmpeg only when media processing is introduced
 
 ## .NET
 ```bash
@@ -24,12 +24,21 @@ pip install -e ai
 uvicorn creatorflow_ai.main:app --app-dir ai --reload --port 8001
 ```
 
-Never commit API keys, database passwords, publishing tokens, or licensed media.
+Never commit API keys, database passwords, publishing tokens or licensed media.
 
+## Deployment and public launch
 
-## Creator workspace (Blazor)
+The selected deployment target is SaaS multi-tenant on hybrid infrastructure, with separate TikTok Vietnam and Douyin China integrations. See:
+- [SaaS + Hybrid Architecture](SAAS_HYBRID_ARCHITECTURE.md)
+- [Deployment Guide](DEPLOYMENT_GUIDE.md)
+- [Deployment Runbook](DEPLOYMENT_RUNBOOK.md)
+- [Public Launch Checklist](PUBLIC_LAUNCH_CHECKLIST.md)
 
-Run the API with SQL Server and a server-side API key, then configure the Web project to call it:
+The current repository is a pilot foundation, not yet a public multi-tenant SaaS release. The shared API key is bootstrap service authentication, not customer identity. Do not connect customer accounts until tenant isolation and per-tenant OAuth are implemented.
+
+## Local creator workspace
+
+Run the API with SQL Server and a server-side bootstrap API key, then configure the Web project to call it:
 
 ```bash
 # API process
@@ -43,16 +52,14 @@ CreatorFlowApi__ApiKey="<same-api-secret>"
 dotnet run --project src/CreatorFlow.Web
 ```
 
-The API URL must match the actual local API address/certificate. On Windows PowerShell, set these values with `$env:NAME="value"` before starting each process. For production, store the API key in the deployment secret manager rather than a committed settings file.
+The API URL must match the actual local API address/certificate. On Windows PowerShell, set these values with `$env:NAME="value"` before starting each process. For production, use a deployment secret manager.
 
-For real LLM calls, configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` on the .NET API, plus `CREATORFLOW_AI_API_KEY`, `CREATORFLOW_LLM_API_KEY` and `CREATORFLOW_LLM_MODEL` on the Python service. Use a separate internal service key and provider key; never expose either to the browser.\n\nThe interactive Web workspace includes:
-- `/trends`: manually record Vietnam creator/video/sound trend observations.
-- `/style-lab`: create 2–3 style variants, mark them ready/published, enter performance metrics and evaluate a winner.
-- `/style-profiles`: create a creator style profile, add evaluated winners as evidence and maintain an editable style summary.
+For real LLM calls, configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` on the .NET API, plus `CREATORFLOW_AI_API_KEY`, `CREATORFLOW_LLM_API_KEY` and `CREATORFLOW_LLM_MODEL` on the Python service. Use separate internal service and provider keys; never expose either to the browser.
 
-Apply SQL scripts in numeric order to the dedicated CreatorFlow database. The Vietnam trend/style workflow uses scripts `005_vietnam_trends_and_style_lab.sql`, `006_creator_style_profiles.sql`, `007_style_learning_topic.sql` and `008_style_variant_metric_observations.sql` and `009_style_learning_memory.sql` after the earlier foundation scripts. Apply all numbered scripts in order (001–009) to the dedicated CreatorFlow database. Migration 008 is required for immutable Style Lab metric history; migration 009 is required for Learning Memory proposal review and profile versioning. Apply both before deploying the corresponding API routes.
+## SQL setup
 
+Apply all numbered SQL scripts in order (001–010) to the dedicated CreatorFlow database, following the migration-specific notes in this repository. Do not apply to an unrelated or production database without backup and review. Migration 010 SQL Server execution tests against both an empty database and schema-009 upgrade database remain an outstanding release gate.
 
 ## Design documentation
 
-Start at [docs/design/README.md](design/README.md) for the as-built system overview, data model, Style Lab/Style Learning design and implementation gaps. These documents distinguish implemented workflows from future platform connectors and production capabilities.
+Start at [docs/design/README.md](design/README.md) for the as-built system overview, data model, Style Lab/Style Learning design and implementation gaps.

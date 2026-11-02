@@ -1,15 +1,24 @@
 using CreatorFlow.Domain.Content;
 using CreatorFlow.Domain.Discovery;
+using CreatorFlow.Domain.Identity;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 
 namespace CreatorFlow.Infrastructure.Persistence;
 
-public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> options) : DbContext(options)
+public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> options, ITenantContext? tenantContext = null) : DbContext(options)
 {
+    private static readonly Guid InMemoryTestTenantId = Guid.Parse("00000000-0000-4000-8000-000000000001");
+    private Guid CurrentTenantId => tenantContext?.TenantId ??
+        (Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory" ? InMemoryTestTenantId : Guid.Empty);
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
     public DbSet<ContentProject> ContentProjects => Set<ContentProject>();
     public DbSet<ContentTopic> ContentTopics => Set<ContentTopic>();
     public DbSet<DouyinSourceChannel> DouyinSourceChannels => Set<DouyinSourceChannel>();
     public DbSet<DouyinVideoCandidate> DouyinVideoCandidates => Set<DouyinVideoCandidate>();
+    public DbSet<TrendSelectionFeedback> TrendSelectionFeedback => Set<TrendSelectionFeedback>();
+    public DbSet<TrendCandidateOutcomeObservation> TrendCandidateOutcomeObservations => Set<TrendCandidateOutcomeObservation>();
     public DbSet<VietnamTrendSignal> VietnamTrendSignals => Set<VietnamTrendSignal>();
     public DbSet<VietnamTrendMetricSnapshot> VietnamTrendMetricSnapshots => Set<VietnamTrendMetricSnapshot>();
     public DbSet<StyleExperiment> StyleExperiments => Set<StyleExperiment>();
@@ -20,8 +29,65 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<StyleLearningProposal> StyleLearningProposals => Set<StyleLearningProposal>();
     public DbSet<CreatorStyleProfileVersion> CreatorStyleProfileVersions => Set<CreatorStyleProfileVersion>();
 
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampTenantOwnership();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StampTenantOwnership();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void StampTenantOwnership()
+    {
+        foreach (var entry in ChangeTracker.Entries().Where(x =>
+                     x.State is EntityState.Added or EntityState.Modified &&
+                     x.Entity is not Tenant && x.Entity is not TenantMembership))
+        {
+            var tenantId = tenantContext?.TenantId;
+            if ((!tenantId.HasValue || tenantId.Value == Guid.Empty) &&
+                Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory")
+                tenantId = InMemoryTestTenantId;
+            if (!tenantId.HasValue || tenantId.Value == Guid.Empty)
+                throw new InvalidOperationException("A verified tenant context is required to write tenant-owned data.");
+
+            var tenantProperty = entry.Property("TenantId");
+            if (entry.State == EntityState.Added)
+                tenantProperty.CurrentValue = tenantId.Value;
+            else if (!Equals(tenantProperty.OriginalValue, tenantId.Value) ||
+                     !Equals(tenantProperty.CurrentValue, tenantId.Value))
+                throw new InvalidOperationException("Tenant ownership is immutable; cross-tenant row moves are forbidden.");
+        }
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Tenant>(entity =>
+        {
+            entity.ToTable("Tenants");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.Slug).HasMaxLength(80).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.HasIndex(x => x.Slug).IsUnique();
+        });
+
+        modelBuilder.Entity<TenantMembership>(entity =>
+        {
+            entity.ToTable("TenantMemberships");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.IdentityIssuer).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.SubjectId).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasIndex(x => new { x.TenantId, x.IdentityIssuer, x.SubjectId }).IsUnique();
+            entity.HasIndex(x => new { x.IdentityIssuer, x.SubjectId, x.Status });
+        });
+
         modelBuilder.Entity<ContentProject>(entity =>
         {
             entity.ToTable("ContentProjects");
@@ -189,6 +255,33 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasIndex(x => new { x.ObservedAt, x.StyleExperimentVariantId });
         });
 
+
+        modelBuilder.Entity<TrendSelectionFeedback>(entity =>
+        {
+            entity.ToTable("TrendSelectionFeedback");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Decision).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(x => x.ReasonCode).HasMaxLength(60).IsRequired();
+            entity.Property(x => x.ReasonNote).HasMaxLength(2000).IsRequired();
+            entity.Property(x => x.CandidateSnapshotJson).IsRequired();
+            entity.Property(x => x.FeatureSnapshotJson).IsRequired();
+            entity.HasOne<DouyinVideoCandidate>().WithMany().HasForeignKey(x => x.DouyinVideoCandidateId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasIndex(x => new { x.DouyinVideoCandidateId, x.ReviewedAt });
+            entity.HasIndex(x => new { x.Decision, x.ReasonCode, x.ReviewedAt });
+        });
+
+        modelBuilder.Entity<TrendCandidateOutcomeObservation>(entity =>
+        {
+            entity.ToTable("TrendCandidateOutcomeObservations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.OutcomeKind).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.Property(x => x.OutcomeValue).HasMaxLength(1000);
+            entity.Property(x => x.MetricsSnapshotJson).IsRequired();
+            entity.Property(x => x.Source).HasMaxLength(80).IsRequired();
+            entity.HasOne<TrendSelectionFeedback>().WithMany().HasForeignKey(x => x.FeedbackId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasIndex(x => new { x.FeedbackId, x.ObservedAt });
+        });
+
         modelBuilder.Entity<DouyinVideoCandidate>(entity =>
         {
             entity.ToTable("DouyinVideoCandidates");
@@ -205,5 +298,25 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasOne<ContentTopic>().WithMany().HasForeignKey(x => x.ContentTopicId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+        // Apply one tenant filter and tenant FK to every business entity. Identity tables are
+        // intentionally unfiltered because membership resolution happens before authorization.
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes()
+                     .Where(x => x.ClrType != typeof(Tenant) && x.ClrType != typeof(TenantMembership))
+                     .ToArray())
+        {
+            var entityBuilder = modelBuilder.Entity(entityType.ClrType);
+            entityBuilder.Property<Guid>("TenantId").IsRequired();
+            entityBuilder.HasOne(typeof(Tenant)).WithMany().HasForeignKey("TenantId")
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName($"FK_{entityType.GetTableName()}_Tenants");
+            entityBuilder.HasIndex("TenantId");
+
+            var parameter = Expression.Parameter(entityType.ClrType, "row");
+            var tenantProperty = Expression.Call(typeof(EF), nameof(EF.Property),
+                new[] { typeof(Guid) }, parameter, Expression.Constant("TenantId"));
+            var currentTenant = Expression.Property(Expression.Constant(this), nameof(CurrentTenantId));
+            var filter = Expression.Lambda(Expression.Equal(tenantProperty, currentTenant), parameter);
+            entityBuilder.HasQueryFilter(filter);
+        }
     }
 }

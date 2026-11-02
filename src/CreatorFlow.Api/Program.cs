@@ -1,3 +1,7 @@
+using CreatorFlow.Api.Identity;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
 using CreatorFlow.Api.Security;
 using CreatorFlow.Application.Content;
@@ -11,13 +15,51 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpClient<CreatorFlowAiClient>();
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddTransient<TenantContextMiddleware>();
+builder.Services.AddScoped<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
+
+var oidcAuthority = builder.Configuration["Authentication:Oidc:Authority"];
+var oidcAudience = builder.Configuration["Authentication:Oidc:Audience"];
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = ApiKeyAuthenticationHandler.SchemeName;
-    options.DefaultChallengeScheme = ApiKeyAuthenticationHandler.SchemeName;
-}).AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
-    ApiKeyAuthenticationHandler.SchemeName, _ => { });
-builder.Services.AddAuthorization();
+    options.DefaultScheme = "CreatorFlow";
+    options.DefaultAuthenticateScheme = "CreatorFlow";
+    options.DefaultChallengeScheme = "CreatorFlow";
+})
+.AddPolicyScheme("CreatorFlow", "OIDC bearer or local API key", options =>
+{
+    options.ForwardDefaultSelector = context =>
+        context.Request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? JwtBearerDefaults.AuthenticationScheme
+            : ApiKeyAuthenticationHandler.SchemeName;
+})
+.AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+    ApiKeyAuthenticationHandler.SchemeName, _ => { })
+.AddJwtBearer(JwtBearerDefaults.AuthenticationScheme, options =>
+{
+    options.Authority = oidcAuthority;
+    options.Audience = oidcAudience;
+    options.RequireHttpsMetadata = true;
+    options.MapInboundClaims = false;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        NameClaimType = "name",
+        RoleClaimType = "role"
+    };
+});
+builder.Services.AddAuthorization(options =>
+{
+    var tenantPolicy = new AuthorizationPolicyBuilder("CreatorFlow")
+        .RequireAuthenticatedUser()
+        .AddRequirements(new TenantMembershipRequirement())
+        .Build();
+    options.DefaultPolicy = tenantPolicy;
+});
 
 var connectionString = builder.Configuration.GetConnectionString("CreatorFlow");
 if (!string.IsNullOrWhiteSpace(connectionString))
@@ -31,6 +73,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 var app = builder.Build();
 app.UseExceptionHandler();
 app.UseAuthentication();
+app.UseMiddleware<TenantContextMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" }));
@@ -152,6 +195,84 @@ channels.MapPost("/{id:guid}/unfollow", async (Guid id, CreatorFlowDbContext? db
     channel.Unfollow(DateTimeOffset.UtcNow);
     await db.SaveChangesAsync(ct);
     return Results.NoContent();
+});
+
+
+var trendFeedback = app.MapGroup("/api/v1/douyin/videos/{id:guid}/feedback").RequireAuthorization();
+trendFeedback.MapGet("/", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (!await db.DouyinVideoCandidates.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+    var items = await db.TrendSelectionFeedback.AsNoTracking().Where(x => x.DouyinVideoCandidateId == id)
+        .OrderByDescending(x => x.ReviewedAt)
+        .Select(x => new TrendSelectionFeedbackResponse(x.Id, x.DouyinVideoCandidateId, x.Decision.ToString(),
+            x.ReasonCode, x.ReasonNote, x.CandidateSnapshotJson, x.FeatureSnapshotJson, x.ReviewedAt)).ToArrayAsync(ct);
+    return Results.Ok(items);
+});
+trendFeedback.MapPost("/", async (Guid id, CreateTrendSelectionFeedbackRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var candidate = await db.DouyinVideoCandidates.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (candidate is null) return Results.NotFound();
+    if (!Enum.TryParse<TrendSelectionDecision>(request.Decision, true, out var decision) ||
+        !Enum.IsDefined(decision))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["decision"] = ["Use Select, Reject or Watch."] });
+    try
+    {
+        var snapshot = JsonSerializer.Serialize(new { candidate.DouyinVideoId, candidate.SourceUrl, candidate.Title,
+            candidate.DiscoveryMethod, candidate.Status, candidate.PublishedAt, candidate.DiscoveredAt });
+        var reviewedAt = DateTimeOffset.UtcNow;
+        var featureSnapshot = TrendSelectionFeatureSnapshot.Create(candidate, reviewedAt).ToJson();
+        var feedback = TrendSelectionFeedback.Create(id, decision, request.ReasonCode, request.ReasonNote,
+            snapshot, featureSnapshot, reviewedAt);
+        db.TrendSelectionFeedback.Add(feedback);
+        await db.SaveChangesAsync(ct);
+        return Results.Created($"/api/v1/douyin/videos/{id}/feedback",
+            new TrendSelectionFeedbackResponse(feedback.Id, id, feedback.Decision.ToString(), feedback.ReasonCode,
+                feedback.ReasonNote, feedback.CandidateSnapshotJson, feedback.FeatureSnapshotJson, feedback.ReviewedAt));
+    }
+    catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["feedback"] = [ex.Message] }); }
+});
+
+var trendOutcomes = app.MapGroup("/api/v1/douyin/videos/{id:guid}/feedback/{feedbackId:guid}/outcomes").RequireAuthorization();
+trendOutcomes.MapGet("/", async (Guid id, Guid feedbackId, CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var feedbackExists = await db.TrendSelectionFeedback.AnyAsync(
+        x => x.Id == feedbackId && x.DouyinVideoCandidateId == id, ct);
+    if (!feedbackExists) return Results.NotFound();
+    var items = await db.TrendCandidateOutcomeObservations.AsNoTracking()
+        .Where(x => x.FeedbackId == feedbackId)
+        .OrderByDescending(x => x.ObservedAt)
+        .Select(x => new TrendCandidateOutcomeObservationResponse(x.Id, x.FeedbackId,
+            x.OutcomeKind.ToString(), x.OutcomeValue, x.MetricsSnapshotJson, x.Source, x.ObservedAt))
+        .ToArrayAsync(ct);
+    return Results.Ok(items);
+});
+trendOutcomes.MapPost("/", async (Guid id, Guid feedbackId, CreateTrendCandidateOutcomeObservationRequest request,
+    CreatorFlowDbContext? db, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var feedbackExists = await db.TrendSelectionFeedback.AnyAsync(
+        x => x.Id == feedbackId && x.DouyinVideoCandidateId == id, ct);
+    if (!feedbackExists) return Results.NotFound();
+    if (!Enum.TryParse<TrendCandidateOutcomeKind>(request.OutcomeKind, true, out var outcomeKind) ||
+        !Enum.IsDefined(outcomeKind))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["outcomeKind"] = ["Use Adapted, Published, MarketPerformance or CreatorAssessment."] });
+    try
+    {
+        var outcome = TrendCandidateOutcomeObservation.Create(feedbackId, outcomeKind,
+            request.OutcomeValue, request.MetricsSnapshotJson, request.Source, DateTimeOffset.UtcNow);
+        db.TrendCandidateOutcomeObservations.Add(outcome);
+        await db.SaveChangesAsync(ct);
+        return Results.Created($"/api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes",
+            new TrendCandidateOutcomeObservationResponse(outcome.Id, feedbackId, outcome.OutcomeKind.ToString(),
+                outcome.OutcomeValue, outcome.MetricsSnapshotJson, outcome.Source, outcome.ObservedAt));
+    }
+    catch (ArgumentException ex)
+    {
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["outcome"] = [ex.Message] });
+    }
 });
 
 // Video intake accepts metadata/links. It deliberately does not claim to download media.
@@ -512,8 +633,10 @@ styleProfiles.MapPost("/{id:guid}/learning-proposals", async (Guid id, CreateSty
 });
 
 styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/approve", async (Guid id,
-    Guid proposalId, ReviewStyleLearningProposalRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+    Guid proposalId, ReviewStyleLearningProposalRequest request, HttpContext httpContext, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
+    var reviewerId = VerifiedReviewerIdentity.Resolve(httpContext.User);
+    if (reviewerId is null) return Results.Forbid();
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var profile = await db.CreatorStyleProfiles.SingleOrDefaultAsync(x => x.Id == id, ct);
     if (profile is null) return Results.NotFound();
@@ -523,12 +646,12 @@ styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/approve",
     try
     {
         var now = DateTimeOffset.UtcNow;
-        proposal.Approve(request.ReviewerId, request.Reason, now);
+        proposal.Approve(reviewerId, request.Reason, now);
         profile.UpdateGuidance(profile.DisplayName, profile.Positioning, proposal.ProposedSummary, now);
         var nextVersion = (await db.CreatorStyleProfileVersions.Where(x => x.CreatorStyleProfileId == id)
             .Select(x => (int?)x.VersionNumber).MaxAsync(ct) ?? 0) + 1;
         db.CreatorStyleProfileVersions.Add(CreatorStyleProfileVersion.Capture(
-            profile, nextVersion, proposal.Id, request.ReviewerId, now));
+            profile, nextVersion, proposal.Id, reviewerId, now));
         await db.SaveChangesAsync(ct);
         return Results.Ok(new { proposalId, status = proposal.Status.ToString(), version = nextVersion, profile.StyleSummary });
     }
@@ -537,15 +660,17 @@ styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/approve",
 });
 
 styleProfiles.MapPost("/{id:guid}/learning-proposals/{proposalId:guid}/reject", async (Guid id,
-    Guid proposalId, ReviewStyleLearningProposalRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
+    Guid proposalId, ReviewStyleLearningProposalRequest request, HttpContext httpContext, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
+    var reviewerId = VerifiedReviewerIdentity.Resolve(httpContext.User);
+    if (reviewerId is null) return Results.Forbid();
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var proposal = await db.StyleLearningProposals.SingleOrDefaultAsync(
         x => x.Id == proposalId && x.CreatorStyleProfileId == id, ct);
     if (proposal is null) return Results.NotFound();
     try
     {
-        proposal.Reject(request.ReviewerId, request.Reason, DateTimeOffset.UtcNow);
+        proposal.Reject(reviewerId, request.Reason, DateTimeOffset.UtcNow);
         await db.SaveChangesAsync(ct);
         return Results.Ok(new { proposalId, status = proposal.Status.ToString() });
     }
@@ -652,7 +777,7 @@ static CreatorStyleEvidenceResponse ToStyleEvidenceResponse(CreatorStyleEvidence
 public sealed record CreatorStyleProfileVersionResponse(Guid Id, int VersionNumber, Guid? ApprovedProposalId,
     string DisplayName, string Positioning, string StyleSummary, DateTimeOffset CreatedAt, string CreatedBy);
 public sealed record CreateStyleLearningProposalRequest(string ProposedSummary, string AlgorithmVersion);
-public sealed record ReviewStyleLearningProposalRequest(string ReviewerId, string? Reason);
+public sealed record ReviewStyleLearningProposalRequest(string? Reason);
 public sealed record StyleLearningProposalResponse(Guid Id, Guid CreatorStyleProfileId, string ProposedSummary,
     string EvidenceExperimentIdsJson, string AlgorithmVersion, string Status, string? ReviewReason,
     string? ReviewerId, DateTimeOffset CreatedAt, DateTimeOffset? ReviewedAt);
@@ -708,3 +833,10 @@ public sealed record StyleVariantMetricObservationResponse(Guid Id, Guid StyleEx
     long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds,
     decimal? VideoDurationSeconds, decimal? EngagementRate, decimal? FollowRate,
     decimal? ProductClickRate, decimal? OrderRate, decimal? WatchRetentionRate);
+
+public sealed record CreateTrendSelectionFeedbackRequest(string Decision, string ReasonCode, string? ReasonNote);
+public sealed record CreateTrendCandidateOutcomeObservationRequest(string OutcomeKind, string? OutcomeValue,
+    string MetricsSnapshotJson, string Source);
+public sealed record TrendCandidateOutcomeObservationResponse(Guid Id, Guid FeedbackId, string OutcomeKind,
+    string? OutcomeValue, string MetricsSnapshotJson, string Source, DateTimeOffset ObservedAt);
+public sealed record TrendSelectionFeedbackResponse(Guid Id, Guid DouyinVideoCandidateId, string Decision, string ReasonCode, string? ReasonNote, string CandidateSnapshotJson, string FeatureSnapshotJson, DateTimeOffset ReviewedAt);
