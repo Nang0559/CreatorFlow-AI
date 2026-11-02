@@ -15,7 +15,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpClient<CreatorFlowAiClient>();
-builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddScoped<TenantContext>();
+builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
 builder.Services.AddTransient<TenantContextMiddleware>();
 builder.Services.AddScoped<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
 
@@ -59,6 +60,7 @@ builder.Services.AddAuthorization(options =>
         .AddRequirements(new TenantMembershipRequirement())
         .Build();
     options.DefaultPolicy = tenantPolicy;
+    options.FallbackPolicy = tenantPolicy;
 });
 
 var connectionString = builder.Configuration.GetConnectionString("CreatorFlow");
@@ -74,9 +76,10 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseMiddleware<TenantContextMiddleware>();
+app.UseMiddleware<TenantRoleGuardMiddleware>();
 app.UseAuthorization();
-app.MapHealthChecks("/health");
-app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" }));
+app.MapHealthChecks("/health").AllowAnonymous();
+app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" })).AllowAnonymous();
 
 app.MapGet("/api/v1/content-projects", async (int? skip, int? take, HttpContext context, CancellationToken cancellationToken) =>
 {
@@ -734,6 +737,7 @@ styleProfiles.MapPost("/{id:guid}/ai-learning-synthesis", async (Guid id, Creato
         new AiSynthesizeLearningRequest(profile.ProfileKey, profile.Positioning, profile.StyleSummary, evidence), ct);
 });
 
+app.MapTenantAccountEndpoints();
 app.Run();
 
 static async Task<IResult> ChangeVideoStatus(Guid id, CreatorFlowDbContext? db, CancellationToken ct, Action<DouyinVideoCandidate, DateTimeOffset> transition)

@@ -13,6 +13,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         (Database.ProviderName == "Microsoft.EntityFrameworkCore.InMemory" ? InMemoryTestTenantId : Guid.Empty);
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantMembership> TenantMemberships => Set<TenantMembership>();
+    public DbSet<TenantInvitation> TenantInvitations => Set<TenantInvitation>();
     public DbSet<ContentProject> ContentProjects => Set<ContentProject>();
     public DbSet<ContentTopic> ContentTopics => Set<ContentTopic>();
     public DbSet<DouyinSourceChannel> DouyinSourceChannels => Set<DouyinSourceChannel>();
@@ -86,6 +87,22 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.NoAction);
             entity.HasIndex(x => new { x.TenantId, x.IdentityIssuer, x.SubjectId }).IsUnique();
             entity.HasIndex(x => new { x.IdentityIssuer, x.SubjectId, x.Status });
+        });
+
+        modelBuilder.Entity<TenantInvitation>(entity =>
+        {
+            entity.ToTable("TenantInvitations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Email).HasMaxLength(320).IsRequired();
+            entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(x => x.TokenHash).HasMaxLength(64).IsFixedLength().IsRequired();
+            entity.Property(x => x.CreatedByIssuer).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.CreatedBySubject).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.AcceptedByIssuer).HasMaxLength(500);
+            entity.Property(x => x.AcceptedBySubject).HasMaxLength(200);
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.HasIndex(x => x.TokenHash).IsUnique();
+            entity.HasIndex(x => new { x.TenantId, x.Status, x.ExpiresAt });
         });
 
         modelBuilder.Entity<ContentProject>(entity =>

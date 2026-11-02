@@ -4,7 +4,7 @@ namespace CreatorFlow.Web.Services;
 
 public sealed class CreatorFlowApiClient(HttpClient http)
 {
-    public bool IsConfigured => http.BaseAddress is not null && http.DefaultRequestHeaders.Contains("X-CreatorFlow-Api-Key");
+    public bool IsConfigured => http.BaseAddress is not null;
 
     public async Task<T?> GetAsync<T>(string path, CancellationToken ct = default)
     {
@@ -40,7 +40,7 @@ public sealed class CreatorFlowApiClient(HttpClient http)
     private void EnsureConfigured()
     {
         if (!IsConfigured)
-            throw new InvalidOperationException("CreatorFlow API chưa được cấu hình. Hãy thiết lập CreatorFlowApi:BaseUrl và CreatorFlowApi:ApiKey ở phía server.");
+            throw new InvalidOperationException("CreatorFlow API chưa được cấu hình. Hãy thiết lập CreatorFlowApi:BaseUrl và xác thực OIDC hoặc API key bootstrap trong Development.");
     }
 }
 
