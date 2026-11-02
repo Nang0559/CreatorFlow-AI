@@ -35,20 +35,23 @@ public static class VideoRenderEndpoints
         if(!new[]{".mp4",".mov",".m4v"}.Contains(ext,StringComparer.OrdinalIgnoreCase))return Results.BadRequest(new{error="Chỉ nhận video MP4, MOV hoặc M4V."});
         var root=StorageRoot(cfg);var dir=Path.Combine(root,"sources");Directory.CreateDirectory(dir);
         var id=Guid.NewGuid();var stored=id.ToString("N")+ext.ToLowerInvariant();var path=Path.Combine(dir,stored);
-        await using(var input=file.OpenReadStream())
+        try
         {
+            await using var input=file.OpenReadStream(MaxBytes);
             var header=new byte[12];var n=await input.ReadAsync(header.AsMemory(),ct);
             if(n<8||System.Text.Encoding.ASCII.GetString(header,4,4)!="ftyp")return Results.BadRequest(new{error="Tệp không có cấu trúc MP4/MOV hợp lệ."});
             input.Position=0;await using var output=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None,1024*1024,true);
             await input.CopyToAsync(output,ct);await output.FlushAsync(ct);
         }
+        catch { if(File.Exists(path))File.Delete(path); throw; }
         string hash;await using(var stream=File.OpenRead(path))hash=Convert.ToHexString(await SHA256.HashDataAsync(stream,ct)).ToLowerInvariant();
         try
         {
             await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
             await using var cmd=c.CreateCommand();
-            cmd.CommandText="INSERT dbo.VideoAssets(Id,TenantId,OriginalFileName,StoredFileName,StoragePath,ContentType,FileSizeBytes,Sha256,RightsNote,CreatedAt) VALUES(@id,@t,@name,@stored,@path,'video/mp4',@size,@hash,@rights,SYSUTCDATETIME())";
-            Add(cmd,"@id",id);Add(cmd,"@t",tenant.TenantId.Value);Add(cmd,"@name",Path.GetFileName(file.FileName));Add(cmd,"@stored",stored);
+            var contentType=ext.ToLowerInvariant() switch { ".mov"=>"video/quicktime", ".m4v"=>"video/x-m4v", _=>"video/mp4" };
+            cmd.CommandText="INSERT dbo.VideoAssets(Id,TenantId,OriginalFileName,StoredFileName,StoragePath,ContentType,FileSizeBytes,Sha256,RightsNote,CreatedAt) VALUES(@id,@t,@name,@stored,@path,@contentType,@size,@hash,@rights,SYSUTCDATETIME())";
+            Add(cmd,"@id",id);Add(cmd,"@t",tenant.TenantId.Value);Add(cmd,"@name",Path.GetFileName(file.FileName));Add(cmd,"@stored",stored);Add(cmd,"@contentType",contentType);
             Add(cmd,"@path",path);Add(cmd,"@size",file.Length);Add(cmd,"@hash",hash);Add(cmd,"@rights",TrimTo(form["rightsNote"].ToString(),1000));
             await cmd.ExecuteNonQueryAsync(ct);
         }
@@ -71,8 +74,9 @@ public static class VideoRenderEndpoints
     {
         if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);
         if(!tenant.TenantId.HasValue)return Results.Forbid();
-        if(req.AssetId==Guid.Empty||string.IsNullOrWhiteSpace(req.Title)||req.Title.Length>180||string.IsNullOrWhiteSpace(req.Hook)||req.Hook.Length>500||req.CallToAction?.Length>300)
-            return Results.ValidationProblem(new Dictionary<string,string[]>{{"video",new[]{"Vui lòng kiểm tra video nguồn, tiêu đề và câu mở đầu."}}});
+        var allowedStyles=new[]{"Tự nhiên","Kể chuyện","Đánh giá sản phẩm"};
+        if(req.AssetId==Guid.Empty||string.IsNullOrWhiteSpace(req.Title)||req.Title.Trim().Length>180||string.IsNullOrWhiteSpace(req.Hook)||req.Hook.Trim().Length>500||req.CallToAction?.Trim().Length>300||(!string.IsNullOrWhiteSpace(req.StyleKey)&&!allowedStyles.Contains(req.StyleKey,StringComparer.Ordinal)))
+            return Results.ValidationProblem(new Dictionary<string,string[]>{{"video",new[]{"Vui lòng kiểm tra video nguồn, tiêu đề, câu mở đầu và phong cách dựng."}}});
         await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var find=c.CreateCommand();find.CommandText="SELECT StoragePath FROM dbo.VideoAssets WHERE Id=@id AND TenantId=@t";Add(find,"@id",req.AssetId);Add(find,"@t",tenant.TenantId.Value);
         var source=(string?)await find.ExecuteScalarAsync(ct);if(string.IsNullOrWhiteSpace(source)||!File.Exists(source))return Results.NotFound(new{error="Không tìm thấy video nguồn trong thư viện."});
