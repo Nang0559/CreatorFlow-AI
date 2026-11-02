@@ -109,6 +109,7 @@ public static class VideoRenderEndpoints
         await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var find=c.CreateCommand();find.CommandText="SELECT StoragePath FROM dbo.VideoAssets WHERE Id=@id AND TenantId=@t";Add(find,"@id",req.AssetId);Add(find,"@t",tenant.TenantId.Value);
         var source=(string?)await find.ExecuteScalarAsync(ct);if(string.IsNullOrWhiteSpace(source)||!File.Exists(source))return Results.NotFound(new{error="Không tìm thấy video nguồn trong thư viện."});
+        if(!IsWithinDirectory(source,Path.Combine(StorageRoot(cfg),"sources",tenant.TenantId.Value.ToString("N"))))return Results.Problem("Đường dẫn video nguồn không thuộc workspace hiện tại.",statusCode:500);
         var outputDir=Path.Combine(StorageRoot(cfg),"renders",tenant.TenantId.Value.ToString("N"));Directory.CreateDirectory(outputDir);
         var id=Guid.NewGuid();var output=Path.Combine(outputDir,id.ToString("N")+".mp4");
         await using var cmd=c.CreateCommand();cmd.CommandText="INSERT dbo.VideoRenderJobs(Id,TenantId,AssetId,StyleKey,Title,Hook,CallToAction,Status,ProgressPercent,SourcePath,OutputPath,CreatedAt) VALUES(@id,@t,@a,@style,@title,@hook,@cta,N'Queued',0,@src,@out,SYSUTCDATETIME())";
@@ -137,6 +138,7 @@ public static class VideoRenderEndpoints
         Add(find,"@id",req.AssetId);Add(find,"@t",tenant.TenantId.Value);
         var source=(string?)await find.ExecuteScalarAsync(ct);
         if(string.IsNullOrWhiteSpace(source)||!File.Exists(source))return Results.NotFound(new{error="Không tìm thấy video nguồn trong thư viện."});
+        if(!IsWithinDirectory(source,Path.Combine(StorageRoot(cfg),"sources",tenant.TenantId.Value.ToString("N"))))return Results.Problem("Đường dẫn video nguồn không thuộc workspace hiện tại.",statusCode:500);
         var outputDir=Path.Combine(StorageRoot(cfg),"renders",tenant.TenantId.Value.ToString("N"));
         Directory.CreateDirectory(outputDir);
         var jobs=new List<object>();
@@ -183,6 +185,11 @@ public static class VideoRenderEndpoints
         return Results.File(path,"video/mp4",download?$"{id:N}.mp4":null,enableRangeProcessing:true);
     }
     private static object JobDto(IDataRecord r)=>new{id=r.GetGuid(0),assetId=r.GetGuid(1),styleKey=r.GetString(2),title=r.GetString(3),status=r.GetString(4),progressPercent=r.GetByte(5),errorMessage=r.IsDBNull(6)?null:r.GetString(6),createdAt=(DateTimeOffset)r.GetValue(7),completedAt=r.IsDBNull(8)?(DateTimeOffset?)null:(DateTimeOffset)r.GetValue(8),durationSeconds=r.IsDBNull(9)?(decimal?)null:r.GetDecimal(9),width=r.IsDBNull(10)?(int?)null:r.GetInt32(10),height=r.IsDBNull(11)?(int?)null:r.GetInt32(11),sha256=r.IsDBNull(12)?null:r.GetString(12)};
+    private static bool IsWithinDirectory(string path,string directory)
+    {
+        var root=Path.GetFullPath(directory)+Path.DirectorySeparatorChar;
+        return Path.GetFullPath(path).StartsWith(root,StringComparison.OrdinalIgnoreCase);
+    }
     private static string StorageRoot(IConfiguration c)=>Path.GetFullPath(c["VideoRendering:StorageRoot"]??Path.Combine(AppContext.BaseDirectory,"data","video"));
     private static string? TrimTo(string? s,int n)=>string.IsNullOrWhiteSpace(s)?null:s.Trim()[..Math.Min(s.Trim().Length,n)];
     private static void Add(IDbCommand c,string key,object? value){var p=c.CreateParameter();p.ParameterName=key;p.Value=value??DBNull.Value;c.Parameters.Add(p);}
