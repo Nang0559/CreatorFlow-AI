@@ -10,13 +10,13 @@ See [SaaS + Hybrid Architecture](SAAS_HYBRID_ARCHITECTURE.md) for tenancy, provi
 
 - Creator workspace: editorial review and creator actions.
 - API: authenticated, versioned application contracts.
-- Identity/tenant: user authentication, membership, roles and tenant context (target; not implemented as production SaaS yet).
+- Identity/tenant: configurable OIDC validation, issuer+subject membership resolution, tenant query filters and write ownership checks are implemented as a foundation; production identity configuration, complete role policy and security acceptance remain open.
 - Domain: content lifecycle invariants, independent of infrastructure.
 - Application: use cases coordinated through ports.
 - Infrastructure: SQL Server, private object storage, durable queue and provider adapters.
 - Workers: durable asynchronous orchestration with idempotency and bounded retries.
 - AI services: model capabilities behind provider-neutral interfaces; output is always a draft.
-- Media engine: deterministic FFmpeg operations from validated job specifications.
+- Media engine: Windows After Effects project/PNG-sequence rendering plus FFmpeg H.264/AAC MP4 encoding through SQL-backed video jobs; advanced effects, STT/TTS and hardware acceptance remain open.
 - Platform connectors: separate TikTok and Douyin OAuth clients, token stores, scopes, rate limits and audit trails.
 
 ## Target workflow
@@ -41,4 +41,4 @@ Public cloud edge (WAF/TLS) fronts stateless Web/API. SQL Server, queue and obje
 
 ## Current implementation boundary
 
-The current bootstrap has .NET API/Blazor, SQL Server foundations and Python FastAPI LLM adapter. It does not yet implement production identity/tenant isolation, object/media storage, durable queue/workers, TikTok/Douyin OAuth/connectors or publishing. The Style Learning API has known profile-scoping limitations described in [as-built status](design/AS_BUILT_STATUS.md). Do not infer implementation from this target architecture.
+The current branch has .NET API/Blazor, SQL Server migrations, a Python FastAPI LLM adapter, tenant identity/isolation foundations, a user-shared-link inbox and a local Windows AE+FFmpeg render worker. It does not yet implement production OIDC configuration, full RLS/negative-test coverage, cloud object storage, live TikTok/Douyin trend providers, the complete Discovery feedback-learning loop, speech/music analysis, product/cart attribution or publishing. Video rendering is a local pilot pipeline, not a production media platform. The Style Learning API has known profile-scoping limitations described in [as-built status](design/AS_BUILT_STATUS.md). Do not infer implementation from this target architecture.
