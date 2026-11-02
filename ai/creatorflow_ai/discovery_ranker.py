@@ -40,7 +40,7 @@ def rank_discovery_candidate(features: DiscoveryFeatures) -> dict[str, object]:
     coverage = _clamp(features.data_coverage, 0.0, 1.0)
     priority_boost = 20.0 if features.priority_signal else 0.0
     base = 0.38 * topic + 0.27 * momentum + 0.20 * market + 0.15 * creator
-    learned_adjustment = _clamp(features.learned_adjustment, -30.0, 30.0)
+    learned_adjustment = _clamp(features.learned_adjustment, -30.0, 30.0) if isfinite(features.learned_adjustment) else 0.0
     score = round(_clamp(base + priority_boost + learned_adjustment), 4)
     views_per_hour = max(0.0, features.views_per_hour) if isfinite(features.views_per_hour) else 0.0
     confidence = round(coverage * min(1.0, 0.35 + 0.65 * (0.5 + min(0.5, views_per_hour / 10000.0))), 4)
