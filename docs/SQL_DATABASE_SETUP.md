@@ -34,12 +34,12 @@ From the repository root:
 The initializer runs three stages:
 
 1. `Create-Database.ps1`: creates `CreatorFlow_QC` if absent and tags it. If it already exists, exact tags and ONLINE/read-write state must be present; existing tags are not changed.
-2. `Apply-Migrations.ps1`: applies migrations 001–010 and 014–020; when tenant migrations are requested, it also applies 011–013 in numeric order. Each applied file is recorded with its SHA-256 checksum.
+2. `Apply-Migrations.ps1`: applies non-tenant migrations 001–010 and 014–015. When tenant migrations 011–013 are explicitly requested (or already fully installed), it also applies tenant-dependent migrations 016–020. Each applied file is recorded with its SHA-256 checksum.
 3. `Verify-Database.ps1`: checks migration history against repository files, required tables, tenant ownership constraints, trusted composite foreign keys and workspace-scoped unique indexes.
 
 Migration 012 explicitly assigns existing rows in its tenant-owned table list to `legacy-workspace`. The confirmation switch is mandatory whenever tenant migrations are requested. This is suitable for a fresh, single-workspace development database. Do not use it to infer ownership for a database already containing multiple customers.
 
-For legacy baseline-only compatibility checks (001–010), run:
+For the non-tenant baseline (001–010 and 014–015), run:
 
 ```powershell
 .\database\Initialize-CreatorFlowDatabase.ps1 -SqlInstance localhost
@@ -51,7 +51,7 @@ For legacy baseline-only compatibility checks (001–010), run:
 .\database\Verify-Database.ps1 -SqlInstance localhost -RequireTenantMigrations
 ```
 
-Omit `-RequireTenantMigrations` to verify the non-tenant migrations 001–010 and 014–020; this does not mean the current app can run without the tenant migrations.
+Omit `-RequireTenantMigrations` to verify only non-tenant migrations 001–010 and 014–015. Share Inbox and video features require tenant migrations 011–013 and migrations 016–020.
 
 ## Re-running and migration immutability
 
