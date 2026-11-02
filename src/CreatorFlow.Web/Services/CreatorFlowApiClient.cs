@@ -170,6 +170,6 @@ public sealed record AiLearningSynthesisResponse(string ProposedStyleSummary, st
     string[] ConflictingEvidence, string[] NextExperiments, string[] CitedExperimentIds,
     string Uncertainty, bool RequiresHumanReview);
 
-public sealed record VideoUploadResponse(Guid Id, string FileName, long SizeBytes, string Sha256);
+public sealed record VideoUploadResponse(Guid Id, string FileName, long SizeBytes, string Sha256, bool Duplicate = false);
 public sealed record VideoAssetItem(Guid Id,string FileName,long SizeBytes,DateTimeOffset CreatedAt,string? RightsNote);
 public sealed record VideoRenderJobItem(Guid Id,Guid AssetId,string StyleKey,string Title,string Status,byte ProgressPercent,string? ErrorMessage,DateTimeOffset CreatedAt,DateTimeOffset? CompletedAt,decimal? DurationSeconds,int? Width,int? Height,string? Sha256);
