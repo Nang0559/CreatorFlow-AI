@@ -67,6 +67,22 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Establish the tenant key type for every tenant-owned entity before any relationship
+        // can cause EF conventions to create an incorrectly typed shadow FK property.
+        var tenantOwnedTypes = new[]
+        {
+            typeof(TenantInvitation),
+            typeof(ContentProject), typeof(ContentTopic), typeof(DouyinSourceChannel),
+            typeof(SharedLinkInboxItem), typeof(DouyinVideoCandidate),
+            typeof(TrendSelectionFeedback), typeof(TrendCandidateOutcomeObservation),
+            typeof(VietnamTrendSignal), typeof(VietnamTrendMetricSnapshot),
+            typeof(StyleExperiment), typeof(StyleExperimentVariant),
+            typeof(CreatorStyleProfile), typeof(CreatorStyleEvidence),
+            typeof(StyleVariantMetricObservation), typeof(StyleLearningProposal),
+            typeof(CreatorStyleProfileVersion)
+        };
+        foreach (var tenantOwnedType in tenantOwnedTypes)
+            modelBuilder.Entity(tenantOwnedType).Property<Guid>("TenantId").IsRequired();
         modelBuilder.Entity<Tenant>(entity =>
         {
             entity.ToTable("Tenants");
@@ -106,9 +122,6 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasIndex(x => new { x.TenantId, x.Status, x.ExpiresAt });
         });
 
-        // Declare Guid tenant properties before principal-side relationships create shadow FKs.
-        modelBuilder.Entity<CreatorStyleEvidence>().Property<Guid>("TenantId").IsRequired();
-        modelBuilder.Entity<StyleExperimentVariant>().Property<Guid>("TenantId").IsRequired();
 
         modelBuilder.Entity<ContentProject>(entity =>
         {
