@@ -210,8 +210,8 @@
     {
         var m = GetMetrics(variantId);
         await RunActionAsync($"/api/v1/style-experiments/{id}/variants/{variantId}/measure",
-            new { lượt xem = m.Views, likes = m.Likes, comments = m.Comments, shares = m.Shares, saves = m.Saves,
-                lượt theo dõiGained = m.FollowsGained, productClicks = m.ProductClicks, đơn hàng = m.Orders,
+            new { views = m.Views, likes = m.Likes, comments = m.Comments, shares = m.Shares, saves = m.Saves,
+                followsGained = m.FollowsGained, productClicks = m.ProductClicks, orders = m.Orders,
                 averageWatchSeconds = m.AverageWatchSeconds, videoDurationSeconds = m.VideoDurationSeconds });
     }
 
