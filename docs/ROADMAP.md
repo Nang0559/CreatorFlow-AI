@@ -11,10 +11,11 @@
 - [x] Configurable OIDC JWT bearer validation hook, active issuer+subject membership resolver and default tenant authorization gate.
 - [x] EF Core tenant query filters, TenantId stamping/immutability and SQL migration 012 for all current business tables.
 - [ ] Configure a production OIDC provider; implement MFA, invitations and membership administration.
-- [ ] Complete role-specific endpoint policies, tenant-local unique indexes/composite same-tenant relationships, SQL Server RLS and cross-tenant negative tests.
+- [x] Add workspace-scoped unique indexes and composite same-tenant FKs for the currently mapped core business relationships (migrations 018–020).
+- [ ] Complete role-specific endpoint policies, SQL Server RLS and cross-tenant negative tests.
 - [ ] Execute migration 012 on empty and populated SQL Server databases; add migration upgrade/rollback evidence.
 - [ ] Audit trail, quotas, rate limits, billing and subscription lifecycle.
-- [ ] Content project persistence and migrations.
+- [x] Content project persistence and migrations.
 - [ ] Asset registry, rights/provenance evidence, retention and deletion.
 - [ ] Private object storage adapter, signed URLs, malware/file validation and integration tests.
 
@@ -24,8 +25,8 @@
 - [ ] Trend adapters using permitted APIs/data sources.
 - [ ] Script generation, translation, scoring and human review UI.
 - [x] Deterministic, explainable style learning across measured winning and losing variants, with topic-level analysis.
-- [ ] Persisted proposal review/approval and approved-profile versioning.
-- [x] LLM-assisted style explanation service contract (standalone AI service; not yet wired to profile UI).
+- [x] Persisted proposal review/approval and approved-profile versioning (human review required; production OIDC acceptance remains open).
+- [x] LLM-assisted style explanation service contract and profile-scoped synthesis draft UI; approval remains a separate human action.
 - [ ] Persisted AI outputs, approved profile-version prompt integration and evaluation harness.
 - [ ] Trained ML outcome predictor, model registry, scheduled retraining, drift checks and champion/challenger rollout.
 - [ ] Evaluation datasets and regression tests.
@@ -38,18 +39,21 @@
 - [x] Add domain validation and API integration test coverage for feedback/outcome workflows.
 - [ ] Add SQL Server migration integration tests for empty database and schema 009 upgrade paths.
 - [x] Implement versioned candidate feature extraction with reproducible feature schema v1 (metadata-only; decision/status excluded).
-- [ ] Implement preference learning; exclude Watch from binary labels and keep outcome labels separate.
+- [ ] Complete end-to-end preference learning from tenant-scoped SQL feedback through LLM interpretation, reviewed rules and measurable next-ranking changes; keep Watch out of binary labels.
 - [ ] Implement compliant TikTok Vietnam scan adapters with explicit provider eligibility, source provenance and coverage.
 - [ ] Implement similarity and 24h/7d/30d saturation assessments.
 - [ ] Implement rights evidence registry and separate content/recommendation/account-enforcement risk assessments.
-- [ ] Implement durable background jobs, progress reporting, retries, dead-letter handling and realtime dashboard.
+- [x] Implement SQL-backed video render jobs, progress states, bounded retries and preview/download.
+- [ ] Implement discovery/provider durable orchestration, outbox, dead-letter handling and realtime dashboard.
 - [ ] Connect official publishing/analytics APIs with explicit final creator approval.
 
 ## Phase 3 — Hybrid execution and media production
 - [ ] Private worker protocol (outbound mTLS/VPN), job leases and revocation.
 - [ ] Durable queue/outbox, idempotent workers, bounded retries and dead-letter handling.
-- [ ] Deterministic FFmpeg pipeline, STT, subtitle alignment and TTS.
-- [ ] Render validation, preview and artifact versioning.
+- [x] Initial After Effects + FFmpeg pipeline creates vertical MP4 variants from a source asset; Z240 hardware acceptance is pending.
+- [ ] STT, subtitle alignment, TTS, advanced effects/B-roll and music beat analysis.
+- [x] Initial render validation, preview and MP4 download.
+- [ ] Artifact version lineage, visual QA automation and production storage lifecycle.
 
 ## Phase 4 — TikTok + Douyin publishing and analytics
 - [ ] Separate TikTok and Douyin developer apps, OAuth adapters and per-tenant encrypted connections.
