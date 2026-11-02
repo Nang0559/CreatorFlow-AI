@@ -53,7 +53,7 @@ public static class VideoRenderEndpoints
         string hash;await using(var stream=File.OpenRead(path))hash=Convert.ToHexString(await SHA256.HashDataAsync(stream,ct)).ToLowerInvariant();
         try
         {
-            await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
+            var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
             await using var cmd=c.CreateCommand();
             var contentType=ext.ToLowerInvariant() switch { ".mov"=>"video/quicktime", ".m4v"=>"video/x-m4v", _=>"video/mp4" };
             cmd.CommandText="INSERT dbo.VideoAssets(Id,TenantId,OriginalFileName,StoredFileName,StoragePath,ContentType,FileSizeBytes,Sha256,RightsNote,CreatedAt) VALUES(@id,@t,@name,@stored,@path,@contentType,@size,@hash,@rights,SYSUTCDATETIME())";
@@ -81,7 +81,7 @@ public static class VideoRenderEndpoints
     {
         if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);
         if(!tenant.TenantId.HasValue)return Results.Forbid();
-        await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
+        var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var cmd=c.CreateCommand();cmd.CommandText="SELECT TOP(100) Id,OriginalFileName,FileSizeBytes,CreatedAt,RightsNote FROM dbo.VideoAssets WHERE TenantId=@t ORDER BY CreatedAt DESC";Add(cmd,"@t",tenant.TenantId.Value);
         await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();
         while(await r.ReadAsync(ct))rows.Add(new{id=r.GetGuid(0),fileName=r.GetString(1),sizeBytes=r.GetInt64(2),createdAt=(DateTimeOffset)r.GetValue(3),rightsNote=r.IsDBNull(4)?null:r.GetString(4)});
@@ -92,7 +92,7 @@ public static class VideoRenderEndpoints
     {
         if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);
         if(!tenant.TenantId.HasValue)return Results.Forbid();
-        await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
+        var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var cmd=c.CreateCommand();cmd.CommandText="SELECT Id,OriginalFileName,FileSizeBytes,CreatedAt,RightsNote,Sha256 FROM dbo.VideoAssets WHERE Id=@id AND TenantId=@t";
         Add(cmd,"@id",id);Add(cmd,"@t",tenant.TenantId.Value);
         await using var r=await cmd.ExecuteReaderAsync(ct);
@@ -106,7 +106,7 @@ public static class VideoRenderEndpoints
         var allowedStyles=new[]{"Tự nhiên","Kể chuyện","Đánh giá sản phẩm"};
         if(req.AssetId==Guid.Empty||string.IsNullOrWhiteSpace(req.Title)||req.Title.Trim().Length>180||string.IsNullOrWhiteSpace(req.Hook)||req.Hook.Trim().Length>500||req.CallToAction?.Trim().Length>300||(!string.IsNullOrWhiteSpace(req.StyleKey)&&!allowedStyles.Contains(req.StyleKey,StringComparer.Ordinal)))
             return Results.ValidationProblem(new Dictionary<string,string[]>{{"video",new[]{"Vui lòng kiểm tra video nguồn, tiêu đề, câu mở đầu và phong cách dựng."}}});
-        await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
+        var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var find=c.CreateCommand();find.CommandText="SELECT StoragePath FROM dbo.VideoAssets WHERE Id=@id AND TenantId=@t";Add(find,"@id",req.AssetId);Add(find,"@t",tenant.TenantId.Value);
         var source=(string?)await find.ExecuteScalarAsync(ct);if(string.IsNullOrWhiteSpace(source)||!File.Exists(source))return Results.NotFound(new{error="Không tìm thấy video nguồn trong thư viện."});
         if(!IsWithinDirectory(source,Path.Combine(StorageRoot(cfg),"sources",tenant.TenantId.Value.ToString("N"))))return Results.Problem("Đường dẫn video nguồn không thuộc workspace hiện tại.",statusCode:500);
@@ -129,7 +129,7 @@ public static class VideoRenderEndpoints
            styles.Length is <2 or >3||styles.Distinct(StringComparer.Ordinal).Count()!=styles.Length||
            styles.Any(x=>!allowedStyles.Contains(x,StringComparer.Ordinal)))
             return Results.ValidationProblem(new Dictionary<string,string[]>{{"video",new[]{"Vui lòng kiểm tra video nguồn, nội dung và chọn 2 hoặc 3 phong cách khác nhau."}}});
-        await using var c=db.Database.GetDbConnection();
+        var c=db.Database.GetDbConnection();
         if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var tx=await c.BeginTransactionAsync(ct);
         await using var find=c.CreateCommand();
@@ -161,21 +161,21 @@ public static class VideoRenderEndpoints
     private static async Task<IResult> ListJobsAsync(CreatorFlowDbContext? db,ITenantContext tenant,CancellationToken ct)
     {
         if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);if(!tenant.TenantId.HasValue)return Results.Forbid();
-        await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
+        var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var cmd=c.CreateCommand();cmd.CommandText="SELECT TOP(100) Id,AssetId,StyleKey,Title,Status,ProgressPercent,ErrorMessage,CreatedAt,CompletedAt,DurationSeconds,Width,Height,Sha256 FROM dbo.VideoRenderJobs WHERE TenantId=@t ORDER BY CreatedAt DESC";Add(cmd,"@t",tenant.TenantId.Value);
         await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();while(await r.ReadAsync(ct))rows.Add(JobDto(r));return Results.Ok(rows);
     }
     private static async Task<IResult> GetJobAsync(Guid id,CreatorFlowDbContext? db,ITenantContext tenant,CancellationToken ct)
     {
         if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);if(!tenant.TenantId.HasValue)return Results.Forbid();
-        await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
+        var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var cmd=c.CreateCommand();cmd.CommandText="SELECT Id,AssetId,StyleKey,Title,Status,ProgressPercent,ErrorMessage,CreatedAt,CompletedAt,DurationSeconds,Width,Height,Sha256 FROM dbo.VideoRenderJobs WHERE Id=@id AND TenantId=@t";Add(cmd,"@id",id);Add(cmd,"@t",tenant.TenantId.Value);
         await using var r=await cmd.ExecuteReaderAsync(ct);return await r.ReadAsync(ct)?Results.Ok(JobDto(r)):Results.NotFound();
     }
     private static async Task<IResult> OutputAsync(Guid id,CreatorFlowDbContext? db,ITenantContext tenant,IConfiguration cfg,CancellationToken ct,bool download)
     {
         if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);if(!tenant.TenantId.HasValue)return Results.Forbid();
-        await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
+        var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var cmd=c.CreateCommand();cmd.CommandText="SELECT OutputPath,Status FROM dbo.VideoRenderJobs WHERE Id=@id AND TenantId=@t";Add(cmd,"@id",id);Add(cmd,"@t",tenant.TenantId.Value);
         await using var r=await cmd.ExecuteReaderAsync(ct);if(!await r.ReadAsync(ct))return Results.NotFound();
         var path=Path.GetFullPath(r.GetString(0));var status=r.GetString(1);
