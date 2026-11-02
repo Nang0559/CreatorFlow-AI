@@ -12,7 +12,7 @@ $hostName = ($SqlInstance -split '\\')[0].Trim()
 if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { throw "Refusing non-local SQL instance '$SqlInstance'." }
 Import-Module SqlServer -ErrorAction Stop
 
-$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_')
+$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_')
 if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_') }
 $schemaPath = Join-Path $PSScriptRoot 'schema'
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
@@ -37,7 +37,12 @@ $requiredTables = @(
     'VietnamTrendSignals', 'VietnamTrendMetricSnapshots', 'StyleExperiments',
     'StyleExperimentVariants', 'CreatorStyleProfiles', 'CreatorStyleEvidence',
     'StyleVariantMetricObservations', 'StyleLearningProposals', 'CreatorStyleProfileVersions',
-    'TrendSelectionFeedback', 'TrendCandidateOutcomeObservations'
+    'TrendSelectionFeedback', 'TrendCandidateOutcomeObservations',
+    'DiscoveryRuns', 'DiscoveryTopicProfiles', 'DiscoverySources', 'DiscoveryCandidates',
+    'DiscoveryMetricSnapshots', 'DiscoveryRankings', 'DiscoveryPriorityLinks',
+    'DiscoveryFeedback', 'DiscoveryModelEvaluations', 'DiscoveryFeedbackEvents',
+    'DiscoveryCandidateFeatureSnapshots', 'DiscoveryLearningInsights',
+    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions'
 )
 if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit') }
 $tableValues = ($requiredTables | ForEach-Object { "(N'$_')" }) -join ','
