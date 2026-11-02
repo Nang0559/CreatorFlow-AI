@@ -8,21 +8,24 @@ This document records the current SQL Server/EF Core model. Numbered scripts und
 |---|---|---|
 | Tenants | SaaS workspace identity with unique slug and Active/Suspended lifecycle | Unique Slug |
 | TenantMemberships | External OIDC issuer+subject membership and workspace role | Unique TenantId + issuer + subject; tenant FK; Owner/Admin/Editor/Analyst/Publisher |
-| ContentProjects | Work container for a content idea/production | Optional reference from StyleExperiments; deleting project sets link to NULL |
+| ContentProjects | Work container for a content idea/production | Optional reference from StyleExperiments; same-tenant FK, delete restricted while linked |
 | ContentTopics | Creator-defined topic and keywords | Can classify a Douyin candidate |
-| DouyinSourceChannels | Douyin creator/channel metadata and follow state | Unique DouyinSecUserId; index on follow state/last checked |
-| DouyinVideoCandidates | Discovered or manually submitted video metadata | Unique DouyinVideoId; optional channel/topic references |
-| VietnamTrendSignals | Vietnam creator/video/sound trend identity and latest metrics | Unique platform + kind + external ID |
+| DouyinSourceChannels | Douyin creator/channel metadata and follow state | Unique TenantId + DouyinSecUserId; index on follow state/last checked |
+| DouyinVideoCandidates | Discovered or manually submitted video metadata | Unique TenantId + DouyinVideoId; optional same-tenant channel/topic references |
+| VietnamTrendSignals | Vietnam creator/video/sound trend identity and latest metrics | Unique TenantId + platform + kind + external ID |
 | VietnamTrendMetricSnapshots | Immutable trend metric observations | FK to trend signal, cascade delete; unique signal + observation time |
 | StyleExperiments | Hypothesis and 2–3 variant comparison | Optional project FK, optional topic, optional winning variant |
 | StyleExperimentVariants | Creative variant and latest measured summary | FK to experiment; unique experiment + variant name |
 | StyleVariantMetricObservations | Append-only time-series snapshots for each variant | FK to variant, unique variant + ObservedAt; indexed for chronological reads |
-| CreatorStyleProfiles | Creator positioning and editable guidance | Unique ProfileKey |
+| CreatorStyleProfiles | Creator positioning and editable guidance | Unique TenantId + ProfileKey |
 | CreatorStyleEvidence | Snapshot of confirmed winner and measured results | FK to profile, experiment and winner; unique profile + experiment |
 | StyleLearningProposals | Reviewable AI/statistical learning drafts with evidence snapshot and algorithm version | FK to profile; Pending/Approved/Rejected state |
 | CreatorStyleProfileVersions | Immutable approved creator-style guidance snapshots | FK to profile and optional approved proposal; unique profile + version number and proposal |
 | TrendSelectionFeedback | Immutable creator Select/Reject/Watch decisions with candidate and feature snapshots | FK to candidate; indexed by candidate/time and decision/reason/time; SQL trigger blocks UPDATE/DELETE |
-| TrendCandidateOutcomeObservations | Downstream adaptation, publishing and measured outcome evidence | FK to feedback; indexed by feedback/time; SQL trigger blocks UPDATE/DELETE |
+| TrendCandidateOutcomeObservations | Downstream adaptation, publishing and measured outcome evidence | Same-tenant FK to feedback; indexed by feedback/time; SQL trigger blocks UPDATE/DELETE |
+| SharedLinkInboxItems | User-submitted source links and review state | Tenant-scoped URL hash; optional same-tenant channel link; no server-side URL fetch |
+| VideoAssets | User-uploaded source media metadata and rights confirmation | Tenant FK; per-tenant SHA-256 deduplication; file bytes stored outside SQL |
+| VideoRenderJobs | Durable per-style AE/FFmpeg render jobs and output metadata | Tenant FK; composite same-tenant asset FK; bounded attempts and status index |
 
 ## 2. Important columns and enumerations
 
@@ -68,8 +71,8 @@ erDiagram
 ~~~
 
 ## 4. Integrity and deletion behavior
-- Deleting a Douyin channel or topic sets the optional candidate FK to NULL.
-- Deleting a content project sets an experiment's optional project FK to NULL.
+- Deleting a Douyin channel or topic is restricted while a candidate references it; relationships cannot cross tenants.
+- Deleting a content project is restricted while an experiment references it; relationships cannot cross tenants.
 - Deleting a trend signal cascades to metric snapshots.
 - Deleting a style profile cascades to its evidence.
 - Variants cascade from their experiment.
@@ -83,17 +86,18 @@ Migration 008 adds immutable StyleVariantMetricObservations. Every successful va
 007_style_learning_topic.sql adds nullable StyleExperiments.Topic nvarchar(200) and an index on (Topic, Status, UpdatedAt DESC). Existing rows remain NULL; no historical topic is guessed from names or scripts.
 
 ## 7. Known model limitations
-- No user, tenant, account ownership or role tables isolate creator data.
-- ProfileKey is an application-level key, not a foreign key to an authenticated user.
+- Tenant/Membership/Invitation tables and TenantId filters/stamping exist, but production OIDC, SQL Server RLS and cross-tenant negative-test acceptance remain open.
+- The current Discovery SQL tables created by migrations 014–015 are not yet tenant-scoped and must not be activated for multi-tenant runtime use until ownership is added.
+- ProfileKey is an application-level key scoped within a tenant, not a foreign key to a specific authenticated user.
 - Experiment topic is one optional free-text value, not a normalized topic FK or multi-label taxonomy.
 - Trend observations lack source connector run IDs, licensing metadata and connector health.
-- No normalized media asset, product association, TikTok publication or analytics-sync entities exist yet.
+- VideoAssets and VideoRenderJobs support initial local rendering; no product association, TikTok publication or analytics-sync entities exist yet.
 
-## 7. Learning Memory (migration 009)
+## 8. Learning Memory (migration 009)
 - `StyleLearningProposals` stores the proposed summary, source experiment IDs, immutable evidence JSON snapshot, algorithm version, status, reviewer, reason and review timestamps.
 - A proposal begins Pending and can transition exactly once to Approved or Rejected. Rejection requires a reason.
 - `CreatorStyleProfileVersions` stores a complete immutable copy of display name, positioning and style summary. Approval updates current guidance and inserts the next version in the same SaveChanges transaction.
-- The current API caller supplies `reviewerId`; this is audit metadata only, not a verified identity. User/tenant authorization remains a release blocker before multi-creator use.
+- Review endpoints derive the reviewer from authenticated `sub`/NameIdentifier claims and reject the shared API-key scheme as a human reviewer. Production OIDC configuration and tenant role acceptance remain release blockers.
 
 
 ## Trend Selection feedback and outcomes (migration 010)
@@ -109,3 +113,11 @@ Migration 008 adds immutable StyleVariantMetricObservations. Every successful va
 - `TenantMemberships` maps immutable external identity issuer + subject to a tenant role and membership status. The issuer/subject pair is not an email address and must come from a validated OIDC principal.
 - Migration 011 deliberately does not backfill or add `TenantId` to existing content, trend, experiment or profile tables. This avoids inventing ownership for existing data.
 - No tenant-facing business endpoints should be enabled until OIDC validation, membership resolution, row ownership, query scoping and cross-tenant negative tests are implemented.
+
+
+## Tenant relationship hardening (migrations 018–020)
+
+- Migration 018 enforces same-tenant references between VideoRenderJobs and VideoAssets, and between SharedLinkInboxItems and DouyinSourceChannels.
+- Migration 019 enforces same-tenant references across projects, experiments, variants, profiles, feedback, candidates and trend observations.
+- Migration 020 changes channel, video candidate, creator profile and Vietnam trend external-key uniqueness to be tenant-scoped.
+- SQL Server Row-Level Security and cross-tenant negative tests remain required before public SaaS launch.
