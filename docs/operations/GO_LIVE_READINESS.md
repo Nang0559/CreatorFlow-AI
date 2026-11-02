@@ -26,7 +26,7 @@ This document prevents a green build or a healthy local URL from being mistaken 
 8. **Production identity and operations:** production OIDC, HTTPS, backup/restore, observability, retention, rate limits, incident handling and secret rotation must be configured and tested before public deployment.
 
 ## Required acceptance evidence before Go-live
-- [ ] HP Z240 SQL migrations 001–010 and 014–019 applied with verified checksums; tenant migrations 011–013 present and all required tenant/composite FKs trusted.
+- [ ] HP Z240 SQL migrations 001–010 and 014–020 applied with verified checksums; tenant migrations 011–013 present and all required tenant/composite FKs trusted and workspace-scoped unique indexes verified.
 - [ ] Full .NET and Python test suites pass on the exact release commit.
 - [ ] Docker images build on the exact release commit; containers stay healthy after reboot.
 - [ ] Web/API/AI health, readiness, API authorization and tenant isolation verified against SQL.
