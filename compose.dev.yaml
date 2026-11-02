@@ -34,7 +34,7 @@ services:
       CreatorFlowApi__BaseUrl: \${CreatorFlowApi__BaseUrl:-http://host.docker.internal:7001}
       CreatorFlowApi__ApiKey: \${CreatorFlowApi__ApiKey:?Set CreatorFlowApi__ApiKey in .env (same value as Authentication__ApiKey)}
     ports:
-      - "127.0.0.1:8080:8080"
+      - "${CREATORFLOW_WEB_BIND_IP:-127.0.0.1}:8080:8080"
     depends_on:
       ai:
         condition: service_healthy
