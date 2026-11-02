@@ -37,7 +37,9 @@ public static class VideoRenderEndpoints
         var file=form.Files.GetFile("file");
         if(file is null||file.Length==0)return Results.BadRequest(new{error="Tệp video đang trống."});
         if(file.Length>MaxBytes)return Results.BadRequest(new{error="Video vượt quá giới hạn 500 MB."});
-        var ext=Path.GetExtension(file.FileName);
+        var originalFileName=Path.GetFileName(file.FileName);
+        if(string.IsNullOrWhiteSpace(originalFileName)||originalFileName.Length>260)return Results.BadRequest(new{error="Tên tệp video không hợp lệ hoặc vượt quá 260 ký tự."});
+        var ext=Path.GetExtension(originalFileName);
         if(!new[]{".mp4",".mov",".m4v"}.Contains(ext,StringComparer.OrdinalIgnoreCase))return Results.BadRequest(new{error="Chỉ nhận video MP4, MOV hoặc M4V."});
         var root=StorageRoot(cfg);var dir=Path.Combine(root,"sources",tenant.TenantId.Value.ToString("N"));Directory.CreateDirectory(dir);
         var id=Guid.NewGuid();var stored=id.ToString("N")+ext.ToLowerInvariant();var path=Path.Combine(dir,stored);
@@ -67,7 +69,7 @@ public static class VideoRenderEndpoints
             await using var cmd=c.CreateCommand();
             var contentType=ext.ToLowerInvariant() switch { ".mov"=>"video/quicktime", ".m4v"=>"video/x-m4v", _=>"video/mp4" };
             cmd.CommandText="INSERT dbo.VideoAssets(Id,TenantId,OriginalFileName,StoredFileName,StoragePath,ContentType,FileSizeBytes,Sha256,RightsNote,CreatedAt) VALUES(@id,@t,@name,@stored,@path,@contentType,@size,@hash,@rights,SYSUTCDATETIME())";
-            Add(cmd,"@id",id);Add(cmd,"@t",tenant.TenantId.Value);Add(cmd,"@name",Path.GetFileName(file.FileName));Add(cmd,"@stored",stored);Add(cmd,"@contentType",contentType);
+            Add(cmd,"@id",id);Add(cmd,"@t",tenant.TenantId.Value);Add(cmd,"@name",originalFileName);Add(cmd,"@stored",stored);Add(cmd,"@contentType",contentType);
             Add(cmd,"@path",path);Add(cmd,"@size",file.Length);Add(cmd,"@hash",hash);Add(cmd,"@rights",TrimTo(form["rightsNote"].ToString(),1000));
             await cmd.ExecuteNonQueryAsync(ct);
         }
@@ -84,7 +86,7 @@ public static class VideoRenderEndpoints
             throw;
         }
         catch{if(File.Exists(path))File.Delete(path);throw;}
-        return Results.Created($"/api/v1/video/assets/{id}",new{id,fileName=Path.GetFileName(file.FileName),sizeBytes=file.Length,sha256=hash,duplicate=false});
+        return Results.Created($"/api/v1/video/assets/{id}",new{id,fileName=originalFileName,sizeBytes=file.Length,sha256=hash,duplicate=false});
     }
 
     private static async Task<IResult> ListAssetsAsync(CreatorFlowDbContext? db,ITenantContext tenant,CancellationToken ct)
