@@ -12,15 +12,15 @@ CreatorFlow AI turns a creator-approved idea or licensed source asset into a rev
 - **Infrastructure**: SQL Server persistence, storage, queues, and provider adapters.
 - **Workers**: durable background orchestration.
 - **AI services**: Python FastAPI service with a configurable OpenAI-compatible LLM runtime for source analysis, Vietnamese variant generation and evidence-grounded style synthesis. Trained ML and media speech pipelines are separate follow-on capabilities.
-- **Media engine**: FFmpeg-based, deterministic media processing.
+- **Media engine**: Windows After Effects + FFmpeg render worker for vertical 1080×1920 MP4 variants; actual quality/performance still requires hardware acceptance.
 - **Tests**: unit, integration, and contract tests.
 
 ## Principles
 
-1. Rights and provenance are first-class data. Only assets with a recorded permitted-use basis can enter production.
+1. Rights and provenance are first-class data. Users must confirm they have permission before upload; this confirmation is not an automated legal-rights verification.
 2. No platform scraping or publishing bypass is assumed. Integrations must use permitted sources and official APIs.
 3. AI output is a draft. Human review is required before publishing.
-4. Every long-running operation is observable, retryable, idempotent, and auditable.
+4. Video render jobs are durably stored and retried; connector orchestration, comprehensive idempotency and end-to-end observability remain release work.
 5. Secrets are supplied through environment variables or a secret manager, never committed.
 
 ## Getting started
@@ -29,4 +29,4 @@ See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md), [docs/ARCHITECTURE.md](d
 
 ## Status
 
-Foundation plus first LLM runtime milestone. The Python AI service now makes real provider calls when configured; it fails closed without credentials and returns review-required structured drafts. The runtime is reachable through authenticated .NET API proxy endpoints; Style Lab invokes source analysis and variant generation, and Style Profiles can request profile-scoped learning synthesis. Provider credentials are required for real model calls. Trained ML, durable jobs, platform connectors, media rendering and publishing remain outstanding. See [AI Runtime design](docs/design/AI_RUNTIME.md) and [as-built status](docs/design/AS_BUILT_STATUS.md).
+Foundation plus first LLM runtime milestone and an initial automated video-render pipeline. The Python AI service makes provider calls when configured and returns review-required drafts. Discovery ranking is currently heuristic; query planning is not a live data collector, and feedback aggregation is not yet an activated end-to-end learning loop. The video workflow stores source assets and render jobs in SQL, uses After Effects to render a PNG sequence, and FFmpeg to produce H.264/AAC MP4 variants with preview/download routes. Migration 018–020 strengthens same-tenant relationships and workspace-scoped uniqueness. Actual rendering, SQL migration execution, multi-tenant negative tests, and target-machine performance still require acceptance. Live trend connectors, speech/music analysis, advanced effects, product/cart attribution and official publishing are not complete. See [AI Runtime design](docs/design/AI_RUNTIME.md), [video rendering runbook](docs/operations/VIDEO_RENDERING_AE_FFMPEG.md), [go-live gates](docs/operations/GO_LIVE_READINESS.md) and [as-built status](docs/design/AS_BUILT_STATUS.md).
