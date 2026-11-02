@@ -1,6 +1,6 @@
 # CreatorFlow API
 
-All `/api/v1/*` endpoints require authentication and an active tenant context. SaaS requests use an OIDC bearer token plus `X-CreatorFlow-Tenant` workspace selector; the API independently validates the issuer+subject membership. The API-key bootstrap (`X-CreatorFlow-Api-Key`) is Development-only and is not a customer identity. Configure `ConnectionStrings__CreatorFlow` for SQL Server. `/health` and `/` are public health/metadata endpoints.
+Business `/api/v1/*` endpoints require authentication and an active tenant context. SaaS requests use an OIDC bearer token plus `X-CreatorFlow-Tenant` workspace selector; the API independently validates the issuer+subject membership. Identity onboarding/workspace-discovery routes use dedicated OIDC policies where a tenant is not selected yet. The API-key bootstrap (`X-CreatorFlow-Api-Key`) is Development-only and is not a customer identity. Configure `ConnectionStrings__CreatorFlow` for SQL Server. `/health` and `/` are public health/metadata endpoints.
 
 ## Content projects
 
