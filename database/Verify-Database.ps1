@@ -13,7 +13,7 @@ if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { 
 Import-Module SqlServer -ErrorAction Stop
 
 $prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_')
-if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', ) }
+if ($RequireTenantMigrations) { $prefixes += @('011_', '012_') }
 $schemaPath = Join-Path $PSScriptRoot 'schema'
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
     $name = $_.Name
