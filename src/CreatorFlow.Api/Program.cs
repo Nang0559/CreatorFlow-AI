@@ -15,6 +15,9 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+    options.MultipartBodyLengthLimit = 524_288_000);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 524_288_000);
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddHttpClient<CreatorFlowAiClient>();
