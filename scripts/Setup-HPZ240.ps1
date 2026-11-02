@@ -9,6 +9,7 @@ param(
     [switch]$SkipDocker,
     [switch]$SkipApiStart,
     [switch]$EnableLanAccess,
+    [switch]$ConfirmLegacyWorkspaceAssignment,
     [int]$HealthTimeoutSeconds = 90
 )
 
@@ -121,12 +122,27 @@ WHERE name=N'$Database';
         throw "Database $Database must already exist, be ONLINE and writable. This script will not create, drop, restore or retag databases."
     }
 
+    $tenantReadiness = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate -ErrorAction Stop -Query @"
+SELECT
+    CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NOT NULL
+       AND (SELECT COUNT(*) FROM dbo.SchemaMigrations WHERE MigrationId IN (N'011_tenant_core',N'012_tenant_ownership',N'013_tenant_lifecycle')) = 3
+    THEN 1 ELSE 0 END AS TenantSchemaReady;
+"@)
+    $tenantSchemaReady = $tenantReadiness.Count -eq 1 -and $tenantReadiness[0].TenantSchemaReady -eq 1
+    if (-not $tenantSchemaReady -and -not $ConfirmLegacyWorkspaceAssignment) {
+        throw 'Tenant schema 011–013 is not fully installed. Review the tenant migration ownership rules first; only then rerun with -ConfirmLegacyWorkspaceAssignment. No tenant migration has been applied by this script.'
+    }
+
     Write-Stage '3/8 - Apply checksum-protected SQL migrations (rerunnable)'
-    & '.\database\Apply-Migrations.ps1' -SqlInstance $SqlInstance -Database $Database
+    if ($ConfirmLegacyWorkspaceAssignment) {
+        & '.\database\Apply-Migrations.ps1' -SqlInstance $SqlInstance -Database $Database -IncludeTenantMigrations -ConfirmLegacyWorkspaceAssignment
+    } else {
+        & '.\database\Apply-Migrations.ps1' -SqlInstance $SqlInstance -Database $Database
+    }
     if ($LASTEXITCODE -ne 0) { throw 'SQL migration runner failed.' }
 
     Write-Stage '4/8 - Verify SQL schema and migration checksums'
-    & '.\database\Verify-Database.ps1' -SqlInstance $SqlInstance -Database $Database
+    & '.\database\Verify-Database.ps1' -SqlInstance $SqlInstance -Database $Database -RequireTenantMigrations
     if ($LASTEXITCODE -ne 0) { throw 'SQL schema verification failed.' }
 
     Write-Stage '5/8 - Build and test .NET solution'
