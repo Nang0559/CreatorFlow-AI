@@ -33,6 +33,7 @@ The script checks the branch and clean working tree, fast-forward pulls the bran
 - `-SkipApiStart`: do not start/reuse the native API.
 - `-HealthTimeoutSeconds 180`: allow more time for first startup.
 - `-EnableLanAccess`: optional; publishes Web port 8080 to the LAN and adds a Windows Firewall rule limited to Private profile + LocalSubnet. Requires elevated PowerShell and a trusted Private network. SQL (1433), API (7001) and AI (8001) are not published.
+- `-ConfirmLegacyWorkspaceAssignment`: only after reviewing migrations 011–013, explicitly authorize applying tenant ownership/lifecycle migrations to existing QC business rows. If migrations 011–013 are already installed, this is not needed.
 
 ## Expected URLs
 - On the HP: http://localhost:8080
@@ -45,6 +46,9 @@ The setup preserves the phone-only Douyin rule. It does not log in to Douyin/Tik
 
 ## Important boundary
 A successful local setup proves database migrations, builds, container startup and health endpoints. It does not prove that live Douyin/TikTok discovery providers are connected or that feedback is already persisted end-to-end; those require their own integration and acceptance tests.
+
+## Share links from iPhone
+The Trends page accepts pasted links. For one-action share-sheet handoff, create the iOS Shortcut described in `docs/operations/IOS_SHARE_TO_CREATORFLOW.md`; iOS Safari does not support PWA share-target registration. The shortcut opens the HP's LAN URL with the shared link, which the page stores in Share Inbox.
 
 ## Video editing applications
 The setup script detects CapCut Desktop and After Effects but does not install them or sign into any editor account. Install CapCut from [the official Desktop page](https://www.capcut.com/tools/desktop-video-editor). After Effects is optional and requires an Adobe license; see [Adobe After Effects](https://www.adobe.com/products/aftereffects.html). Style Lab can export a CapCut/After Effects handoff ZIP containing the script, shot list, edit plan and an editable After Effects starter composition. This is not a finished MP4 or a native CapCut project. See `docs/design/VIDEO_EDITING_HANDOFF.md`.
