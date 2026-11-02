@@ -1,20 +1,31 @@
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Components.Authorization;
 
 namespace CreatorFlow.Web.Services;
 
-/// <summary>Forwards server-held OIDC access tokens and the selected workspace to the API.</summary>
-public sealed class OidcAccessTokenHandler(IHttpContextAccessor accessor) : DelegatingHandler
+/// <summary>Forwards the server-held OIDC token and selected workspace to the API, including Blazor circuits.</summary>
+public sealed class OidcAccessTokenHandler(
+    IHttpContextAccessor accessor,
+    AuthenticationStateProvider authenticationStateProvider) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var context = accessor.HttpContext;
-        if (context?.User.Identity?.IsAuthenticated == true)
+        var principal = context?.User;
+        if (principal?.Identity?.IsAuthenticated != true)
+            principal = (await authenticationStateProvider.GetAuthenticationStateAsync()).User;
+
+        if (principal.Identity?.IsAuthenticated == true)
         {
-            var token = await context.GetTokenAsync("access_token");
+            var token = context is not null
+                ? await context.GetTokenAsync("access_token")
+                : principal.FindFirst("creatorflow_access_token")?.Value;
+            token ??= principal.FindFirst("creatorflow_access_token")?.Value;
             if (!string.IsNullOrWhiteSpace(token))
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            var tenantId = context.User.FindFirst("creatorflow_tenant")?.Value;
+
+            var tenantId = principal.FindFirst("creatorflow_tenant")?.Value;
             if (Guid.TryParse(tenantId, out var parsed) && parsed != Guid.Empty)
                 request.Headers.TryAddWithoutValidation("X-CreatorFlow-Tenant", parsed.ToString("D"));
         }

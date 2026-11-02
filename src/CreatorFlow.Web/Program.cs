@@ -9,6 +9,7 @@ using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
 builder.Services.AddTransient<CreatorFlow.Web.Services.OidcAccessTokenHandler>();
 builder.Services.AddHttpClient<CreatorFlow.Web.Services.CreatorFlowApiClient>(client =>
@@ -76,6 +77,13 @@ if (oidcEnabled)
             if (string.IsNullOrWhiteSpace(context.Principal?.FindFirst("iss")?.Value) ||
                 string.IsNullOrWhiteSpace(context.Principal?.FindFirst("sub")?.Value))
                 context.Fail("The identity provider must issue both iss and sub claims.");
+            return Task.CompletedTask;
+        };
+        options.Events.OnTicketReceived = context =>
+        {
+            var accessToken = context.Properties?.GetTokenValue("access_token");
+            if (!string.IsNullOrWhiteSpace(accessToken) && context.Principal?.Identity is ClaimsIdentity identity)
+                identity.AddClaim(new Claim("creatorflow_access_token", accessToken));
             return Task.CompletedTask;
         };
     });
