@@ -263,6 +263,16 @@ SELECT CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NOT NULL
         Write-Warning 'Native API start explicitly skipped.'
     }
 
+    Write-Stage '8b/8 - Start native video renderer when fully configured'
+    $rendererPaths = @($env:VideoRendering__AfterEffectsExe, $env:VideoRendering__AerenderExe, $env:VideoRendering__FFmpegExe)
+    $rendererReady = -not [string]::IsNullOrWhiteSpace($env:VideoRendering__StorageRoot) -and
+        $rendererPaths.Count -eq 3 -and @($rendererPaths | Where-Object { [string]::IsNullOrWhiteSpace($_) -or -not (Test-Path -LiteralPath $_ -PathType Leaf) }).Count -eq 0
+    if ($rendererReady) {
+        & '.\scripts\Start-VideoRenderWorker.ps1' -RepositoryPath $RepositoryPath -SqlInstance $SqlInstance
+    } else {
+        Write-Host 'Worker dựng video chưa khởi động: hãy cài After Effects/FFmpeg và điền VideoRendering__* trong .env, sau đó chạy scripts/Start-VideoRenderWorker.ps1.'
+    }
+
     Write-Stage 'FINAL - Local pilot verification'
     if (-not $SkipDocker) {
         Wait-Http -Url 'http://127.0.0.1:8001/health' -TimeoutSeconds 10 | Out-Null
