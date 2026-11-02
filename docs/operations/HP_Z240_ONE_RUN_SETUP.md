@@ -16,7 +16,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\Setup-HPZ240.ps1
 ```
 
-The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing SQL migrations 001–010 and 014–016 using the checksum ledger, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, starts or reuses the native API on port 7001, and reports CPU/RAM/GPU plus whether CapCut Desktop and After Effects are installed. It then probes the local Web UI at port 8080. By default, Web is accessible only from the HP itself.
+The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing SQL migrations 001–010 and 014–020 (plus 011–013 when explicitly confirmed) using the checksum ledger, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, starts or reuses the native API on port 7001, and reports CPU/RAM/GPU plus whether CapCut Desktop and After Effects are installed. It then probes the local Web UI at port 8080. By default, Web is accessible only from the HP itself.
 
 ## Safe reruns
 - Already-applied SQL migrations are skipped only if their stored SHA-256 matches the repository file.
@@ -54,7 +54,7 @@ A successful local setup proves database migrations, builds, container startup a
 The Trends page accepts pasted links. For one-action share-sheet handoff, create the iOS Shortcut described in `docs/operations/IOS_SHARE_TO_CREATORFLOW.md`; iOS Safari does not support PWA share-target registration. The shortcut opens the HP's LAN URL with the shared link, which the page stores in Share Inbox.
 
 ## Video editing applications
-The setup script detects CapCut Desktop and After Effects but does not install them or sign into any editor account. Install CapCut from [the official Desktop page](https://www.capcut.com/tools/desktop-video-editor). After Effects is optional and requires an Adobe license; see [Adobe After Effects](https://www.adobe.com/products/aftereffects.html). Style Lab can export a CapCut/After Effects handoff ZIP containing the script, shot list, edit plan and an editable After Effects starter composition. This is not a finished MP4 or a native CapCut project. See `docs/design/VIDEO_EDITING_HANDOFF.md`.
+The setup script detects CapCut Desktop and After Effects but does not install them or sign into any editor account. Install CapCut from [the official Desktop page](https://www.capcut.com/tools/desktop-video-editor). After Effects is optional and requires an Adobe license; see [Adobe After Effects](https://www.adobe.com/products/aftereffects.html). Style Lab can export a CapCut/After Effects handoff ZIP containing the script, shot list, edit plan and an editable After Effects starter composition. Separately, the Assets page can create finished MP4 files through the automated AE+FFmpeg worker. The render workflow is not a native CapCut project and does not yet provide advanced effects, B-roll, STT/TTS or beat-synced music. See `docs/operations/VIDEO_RENDERING_AE_FFMPEG.md`.
 
 ## Mobile-first interface
 The same setup pulls the responsive Web UI. On phone-sized screens it switches to a compact top bar and five-item bottom navigation: Overview, Discover, Studio, Performance, Settings. Desktop retains the sidebar and secondary management links. Touch targets, input sizing, safe-area spacing for iPhone, compact cards and reduced-motion preferences are included. The home page prioritizes three common actions: discover content, create style variants, and review performance. The interface does not claim that unimplemented integrations are connected.
@@ -62,9 +62,9 @@ The same setup pulls the responsive Web UI. On phone-sized screens it switches t
 
 ## Dựng video tự động (After Effects + FFmpeg)
 
-Bộ dựng chạy bằng tiến trình Windows riêng trên HP Z240; không chạy trong container Web/AI. API và Worker phải dùng cùng VideoRendering__StorageRoot. Sao chép các biến VideoRendering__* từ .env.example vào .env, rồi sửa đường dẫn đúng với phiên bản After Effects và FFmpeg đang cài. Không commit .env.
+Bộ dựng chạy bằng tiến trình Windows riêng trên HP Z240; không chạy trong container Web/AI. Hệ thống tạo nhóm 2–3 tác vụ trong một transaction SQL, tránh tạo dở một phần khi gửi nhóm phong cách. API và Worker phải dùng cùng VideoRendering__StorageRoot. Sao chép các biến VideoRendering__* từ .env.example vào .env, rồi sửa đường dẫn đúng với phiên bản After Effects, FFmpeg và FFprobe đang cài. Không commit .env.
 
-Sau khi migration 017 đã được áp dụng và Verify-Database.ps1 xác nhận đủ bảng, chạy kiểm tra công cụ:
+Sau khi migrations 017–020 đã được áp dụng và Verify-Database.ps1 xác nhận đủ bảng cùng khóa ngoại tenant, chạy kiểm tra công cụ:
 
 ```powershell
 . .\scripts\docker\Import-LocalPilotEnv.ps1
