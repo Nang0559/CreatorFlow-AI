@@ -35,6 +35,9 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
         await c.OpenAsync(ct);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = """
+            UPDATE dbo.VideoRenderJobs SET Status=CASE WHEN AttemptCount<3 THEN N'Queued' ELSE N'Failed' END,
+              ProgressPercent=0,ErrorMessage=N'Worker bị dừng quá thời hạn xử lý; tác vụ được đưa lại hàng đợi hoặc đánh dấu lỗi.'
+            WHERE Status IN(N'Rendering',N'Encoding') AND StartedAt<DATEADD(hour,-3,SYSUTCDATETIME());
             ;WITH q AS (SELECT TOP(1) * FROM dbo.VideoRenderJobs WITH(UPDLOCK,READPAST,ROWLOCK)
               WHERE Status=N'Queued' AND AttemptCount<3 ORDER BY CreatedAt,Id)
             UPDATE q SET Status=N'Rendering',ProgressPercent=5,StartedAt=SYSUTCDATETIME(),
@@ -72,6 +75,7 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
             if(!File.Exists(output)||new FileInfo(output).Length<50000) throw new InvalidOperationException("MP4 đầu ra không hợp lệ.");
             var sha=await HashAsync(output,ct);
             var info=await ProbeAsync(output,ct);
+            if(info.Width!=1080||info.Height!=1920)throw new InvalidOperationException("Kích thước MP4 không đúng chuẩn 1080×1920.");
             await CompleteAsync(j.Id,sha,info.Duration,info.Width,info.Height,ct);
         }
         catch(Exception ex) { logger.LogError(ex,"Dựng video thất bại {JobId}",j.Id); await FailAsync(j.Id,ex.Message); }
