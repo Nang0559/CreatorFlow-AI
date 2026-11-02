@@ -44,8 +44,23 @@ CREATE TABLE dbo.SchemaMigrations
 );
 "@
 }
-$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_', '017_', '018_', '019_', '020_')
-if ($IncludeTenantMigrations) { $prefixes += @('011_', '012_', '013_') }
+$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_')
+$tenantState = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+SELECT COUNT(*) AS TenantMigrationCount,
+       CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NULL THEN 0 ELSE 1 END AS TenantTableExists
+FROM dbo.SchemaMigrations
+WHERE MigrationId IN (N'011_tenant_identity_foundation',N'012_tenant_data_isolation',N'013_tenant_membership_lifecycle');
+"@)
+$tenantMigrationCount = [int]$tenantState[0].TenantMigrationCount
+$tenantTableExists = [int]$tenantState[0].TenantTableExists -eq 1
+if ($tenantMigrationCount -notin @(0,3)) { throw 'Tenant migrations 011–013 are partially installed. Inspect the ledger and database before continuing.' }
+if ($tenantMigrationCount -eq 0 -and $tenantTableExists) { throw 'dbo.Tenants exists without a complete tenant migration ledger. Refusing to guess schema ownership.' }
+if ($tenantMigrationCount -eq 3 -and -not $tenantTableExists) { throw 'Tenant migrations are recorded but dbo.Tenants is missing.' }
+if ($IncludeTenantMigrations -or $tenantMigrationCount -eq 3) {
+    $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_')
+} else {
+    Write-Warning 'Tenant migrations are not installed. Applying only non-tenant migrations 001–010 and 014–015; Share Inbox and video migrations 016–020 are deferred.'
+}
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
     $name = $_.Name
     @($prefixes | Where-Object { $name.StartsWith($_, [StringComparison]::Ordinal) }).Count -gt 0
