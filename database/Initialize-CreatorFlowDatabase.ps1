@@ -37,7 +37,13 @@ $verifyArgs = @{
     Database = $Database
     TrustServerCertificate = $TrustServerCertificate
 }
-if ($IncludeTenantMigrations) { $verifyArgs.RequireTenantMigrations = $true }
+Import-Module SqlServer -ErrorAction Stop
+$tenantState = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+SELECT COUNT(*) AS TenantMigrationCount
+FROM dbo.SchemaMigrations
+WHERE MigrationId IN (N'011_tenant_identity_foundation',N'012_tenant_data_isolation',N'013_tenant_membership_lifecycle');
+"@)
+if ($IncludeTenantMigrations -or [int]$tenantState[0].TenantMigrationCount -eq 3) { $verifyArgs.RequireTenantMigrations = $true }
 & $verify @verifyArgs
 
 Write-Host "CreatorFlow database initialization completed: $Database."
