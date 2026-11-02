@@ -24,7 +24,7 @@ CapCut does not provide a public, stable desktop scripting API documented for th
 Adobe documents `afterfx.exe -r <script.jsx>` and `aerender.exe` for scripted work and command-line rendering. The current starter creates the editable composition; unattended render-queue automation is a later phase after project templates, footage mapping, fonts, plugins, codecs and output validation are tested on the actual workstation.
 
 ## HP Z240 installation
-- Install CapCut Desktop from the official download page: https://www.capcut.com/download
+- Install CapCut Desktop from the official download page: https://www.capcut.com/tools/desktop-video-editor
 - After Effects is optional and requires the user's Adobe account/license: https://www.adobe.com/products/aftereffects.html
 - Do not put editor credentials, cookies or account tokens into CreatorFlow.
 - The HP setup script only detects CapCut and After Effects; it does not silently install software, sign in, or accept license terms.
