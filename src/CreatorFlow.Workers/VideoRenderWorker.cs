@@ -61,6 +61,9 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
         {
             Require(afterFx); Require(aerender); Require(ffmpeg);
             if(!File.Exists(j.Source)) throw new FileNotFoundException("Không tìm thấy video nguồn.",j.Source);
+            var sourceInfo=await ProbeAsync(j.Source,ct);
+            if(sourceInfo.Duration<1||sourceInfo.Duration>600||sourceInfo.Width<16||sourceInfo.Height<16)
+                throw new InvalidOperationException("Video nguồn không hợp lệ hoặc dài hơn giới hạn xử lý 10 phút.");
             await SetStateAsync(j.Id,"Rendering",12,null,ct);
             var payload=JsonSerializer.Serialize(new { source=j.Source,project,title=j.Title,hook=j.Hook,cta=j.Cta,style=j.StyleKey });
             await File.WriteAllTextAsync(jsx,BuildJsx(payload),new System.Text.UTF8Encoding(false),ct);
