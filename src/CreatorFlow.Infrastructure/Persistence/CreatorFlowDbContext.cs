@@ -17,6 +17,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<ContentProject> ContentProjects => Set<ContentProject>();
     public DbSet<ContentTopic> ContentTopics => Set<ContentTopic>();
     public DbSet<DouyinSourceChannel> DouyinSourceChannels => Set<DouyinSourceChannel>();
+    public DbSet<SharedLinkInboxItem> SharedLinkInboxItems => Set<SharedLinkInboxItem>();
     public DbSet<DouyinVideoCandidate> DouyinVideoCandidates => Set<DouyinVideoCandidate>();
     public DbSet<TrendSelectionFeedback> TrendSelectionFeedback => Set<TrendSelectionFeedback>();
     public DbSet<TrendCandidateOutcomeObservation> TrendCandidateOutcomeObservations => Set<TrendCandidateOutcomeObservation>();
@@ -315,6 +316,21 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasOne<ContentTopic>().WithMany().HasForeignKey(x => x.ContentTopicId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+        modelBuilder.Entity<SharedLinkInboxItem>(entity =>
+        {
+            entity.ToTable("SharedLinkInboxItems");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Platform).HasMaxLength(24).IsRequired();
+            entity.Property(x => x.SharedUrl).HasMaxLength(1200).IsRequired();
+            entity.Property(x => x.UrlHash).HasMaxLength(64).IsFixedLength().IsRequired();
+            entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
+            entity.Property(x => x.ReviewNote).HasMaxLength(500);
+            entity.HasOne<DouyinSourceChannel>().WithMany().HasForeignKey(x => x.LinkedChannelId)
+                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasIndex("TenantId", nameof(SharedLinkInboxItem.UrlHash)).IsUnique();
+            entity.HasIndex("TenantId", nameof(SharedLinkInboxItem.Status), nameof(SharedLinkInboxItem.SharedAt));
+        });
+
         // Apply one tenant filter and tenant FK to every business entity. Identity tables are
         // intentionally unfiltered because membership resolution happens before authorization.
         foreach (var entityType in modelBuilder.Model.GetEntityTypes()
