@@ -24,8 +24,7 @@ if ([string]::IsNullOrWhiteSpace($env:VideoRendering__FFmpegExe) -or -not (Test-
     $ffmpegCommand = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
     if ($ffmpegCommand) { $env:VideoRendering__FFmpegExe = $ffmpegCommand.Source }
 }
-if (([string]::IsNullOrWhiteSpace($env:VideoRendering__FFprobeExe) -or -not (Test-Path -LiteralPath $env:VideoRendering__FFprobeExe -PathType Leaf)) -and
-    (Test-Path -LiteralPath $env:VideoRendering__FFmpegExe -PathType Leaf)) {
+if (([string]::IsNullOrWhiteSpace($env:VideoRendering__FFprobeExe) -or -not (Test-Path -LiteralPath $env:VideoRendering__FFprobeExe -PathType Leaf)) -and (Test-Path -LiteralPath $env:VideoRendering__FFmpegExe -PathType Leaf)) {
     $probeCandidate = Join-Path (Split-Path $env:VideoRendering__FFmpegExe -Parent) 'ffprobe.exe'
     if (Test-Path -LiteralPath $probeCandidate -PathType Leaf) { $env:VideoRendering__FFprobeExe = $probeCandidate }
 }
