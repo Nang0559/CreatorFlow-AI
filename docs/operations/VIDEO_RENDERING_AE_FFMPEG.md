@@ -42,7 +42,7 @@ Worker xử lý tuần tự, có timeout cho từng tiến trình và giới h�
 1. Kiểm tra After Effects có license, font Arial và mở được; kiểm tra đường dẫn aerender.
 2. Chạy scripts/Test-VideoRenderer.ps1 với bốn đường dẫn công cụ.
 3. Dựng video 15–30 giây có âm thanh; kiểm tra crop, chữ tiếng Việt, tiếng, thời lượng và phát trên iPhone.
-4. Tải lên cùng file hai lần; xử lý trùng SHA-256 cần được xác minh trước khi dùng thực tế.
+4. Tải lên cùng file hai lần; API phải trả về cùng asset theo SHA-256 trong workspace, không tạo bản sao.
 5. Tạo hai tác vụ; xác minh worker không nhận trùng job.
 6. Kiểm tra tài khoản tenant khác không xem/tải được video.
 7. Đo thời gian dựng, CPU/RAM và dung lượng. Z240 nên chạy một tác vụ tại một thời điểm.
