@@ -8,6 +8,7 @@ param(
     [switch]$SkipDotNetTests,
     [switch]$SkipDocker,
     [switch]$SkipApiStart,
+    [switch]$EnableLanAccess,
     [int]$HealthTimeoutSeconds = 90
 )
 
@@ -133,6 +134,16 @@ WHERE name=N'$Database';
         Write-Stage '6/8 - Build/start AI and Web containers'
         docker info | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'Docker engine is not available. Start Docker Desktop and rerun.' }
+        if ($EnableLanAccess) {
+            $activeProfile = Get-NetConnectionProfile -ErrorAction SilentlyContinue |
+                Where-Object { $_.IPv4Connectivity -ne 'Disconnected' -or $_.IPv6Connectivity -ne 'Disconnected' }
+            if (-not $activeProfile -or @($activeProfile | Where-Object { $_.NetworkCategory -eq 'Private' }).Count -eq 0) {
+                throw 'LAN access requires the active Windows network profile to be Private. Change the trusted home/work network to Private, then rerun with -EnableLanAccess.'
+            }
+            $env:CREATORFLOW_WEB_BIND_IP = '0.0.0.0'
+        } else {
+            $env:CREATORFLOW_WEB_BIND_IP = '127.0.0.1'
+        }
         docker compose --env-file .env -f compose.dev.yaml config --quiet
         if ($LASTEXITCODE -ne 0) { throw 'Docker Compose configuration validation failed.' }
         docker compose --env-file .env -f compose.dev.yaml up --build -d
@@ -143,6 +154,18 @@ WHERE name=N'$Database';
         Wait-Http -Url 'http://127.0.0.1:8001/ready' -TimeoutSeconds $HealthTimeoutSeconds | Out-Null
         docker compose --env-file .env -f compose.dev.yaml ps
         if ($LASTEXITCODE -ne 0) { throw 'Cannot read Docker Compose status.' }
+        if ($EnableLanAccess) {
+            $rule = Get-NetFirewallRule -Name 'CreatorFlow-Web-LAN-8080' -ErrorAction SilentlyContinue
+            if (-not $rule) {
+                New-NetFirewallRule -Name 'CreatorFlow-Web-LAN-8080' -DisplayName 'CreatorFlow Web – Private LAN only' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8080 -RemoteAddress LocalSubnet -Profile Private | Out-Null
+            }
+            Write-Host 'Private LAN access enabled for Web only (TCP 8080, LocalSubnet, Private profile). API, AI and SQL ports remain unpublished.'
+            Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                Where-Object { $_.IPAddress -ne '127.0.0.1' -and $_.IPAddress -notlike '169.254.*' -and $_.AddressState -eq 'Preferred' } |
+                ForEach-Object { Write-Host "Phone URL: http://$($_.IPAddress):8080" }
+        } else {
+            Write-Host 'Web is bound to localhost only. Add -EnableLanAccess to allow phone access on a trusted Private LAN.'
+        }
     } else {
         Write-Warning 'Docker build/start and AI health checks explicitly skipped.'
     }
