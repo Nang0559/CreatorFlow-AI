@@ -16,6 +16,7 @@ class DiscoveryFeatures:
     creator_quality: float = 50.0
     data_coverage: float = 0.5
     priority_signal: bool = False
+    learned_adjustment: float = 0.0
 
 
 def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
@@ -36,7 +37,8 @@ def rank_discovery_candidate(features: DiscoveryFeatures) -> dict[str, object]:
     coverage = _clamp(features.data_coverage, 0.0, 1.0)
     priority_boost = 20.0 if features.priority_signal else 0.0
     base = 0.38 * topic + 0.27 * momentum + 0.20 * market + 0.15 * creator
-    score = round(_clamp(base + priority_boost), 4)
+    learned_adjustment = _clamp(features.learned_adjustment, -30.0, 30.0)
+    score = round(_clamp(base + priority_boost + learned_adjustment), 4)
     confidence = round(coverage * min(1.0, 0.35 + 0.65 * (0.5 + min(0.5, features.views_per_hour / 10000.0))), 4)
     return {
         "algorithm_version": ALGORITHM_VERSION,
@@ -46,10 +48,12 @@ def rank_discovery_candidate(features: DiscoveryFeatures) -> dict[str, object]:
         "market_fit": round(market, 4),
         "creator_quality": round(creator, 4),
         "priority_boost": priority_boost,
+        "learned_adjustment": round(learned_adjustment, 4),
         "confidence": confidence,
         "explanation": {
             "weights": {"topic_fit": 0.38, "momentum": 0.27, "market_fit": 0.20, "creator_quality": 0.15},
             "priority_is_optional": True,
+            "learned_adjustment_is_bounded": True,
             "priority_signal_applied": features.priority_signal,
             "data_coverage": round(coverage, 4),
             "limitations": "Heuristic baseline; not a trained or calibrated predictive model."
