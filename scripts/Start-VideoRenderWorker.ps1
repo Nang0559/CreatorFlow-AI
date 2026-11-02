@@ -42,6 +42,8 @@ $root = [IO.Path]::GetFullPath($env:VideoRendering__StorageRoot)
 New-Item -ItemType Directory -Force -Path $root,(Join-Path $root 'logs') | Out-Null
 if (-not (Get-Module -ListAvailable -Name SqlServer)) { throw 'Thiếu module SqlServer.' }
 Import-Module SqlServer
+& (Join-Path $PSScriptRoot '..\\database\\Verify-Database.ps1') -SqlInstance $SqlInstance -RequireTenantMigrations
+if ($LASTEXITCODE -ne 0) { throw 'Kiểm tra schema SQL không thành công; không khởi động worker.' }
 $tables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database CreatorFlow_QC -Query @"
 SELECT
  CASE WHEN OBJECT_ID(N'dbo.VideoAssets',N'U') IS NOT NULL THEN 1 ELSE 0 END AS AssetsReady,
