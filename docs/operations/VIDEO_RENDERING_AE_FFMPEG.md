@@ -31,7 +31,7 @@ Worker xử lý tuần tự, có timeout cho từng tiến trình và giới h�
 ## API
 - POST /api/v1/video/assets: multipart form gồm file, confirmRights=true, tùy chọn rightsNote.
 - GET /api/v1/video/assets: danh sách video nguồn trong workspace.
-- POST /api/v1/video/render-jobs: JSON gồm assetId, title, hook, callToAction, styleKey.
+- POST /api/v1/video/render-jobs: tạo một phương án; gửi nhiều lần để tạo 2 hoặc 3 phương án. JSON gồm assetId, title, hook, callToAction, styleKey.
 - GET /api/v1/video/render-jobs: lịch sử 100 tác vụ gần nhất.
 - GET /api/v1/video/render-jobs/{id}: trạng thái.
 - GET /api/v1/video/render-jobs/{id}/preview: stream MP4.
