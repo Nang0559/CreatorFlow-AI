@@ -1,0 +1,64 @@
+name: Local pilot Docker build (HP Z240)
+
+on:
+  push:
+    branches: ["feature/trend-selection-safety-intelligence"]
+    paths:
+      - "src/**"
+      - "ai/**"
+      - "docker/**"
+      - "compose.dev.yaml"
+      - ".dockerignore"
+      - ".github/workflows/local-pilot-docker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: creatorflow-local-pilot-docker
+  cancel-in-progress: false
+
+jobs:
+  docker-build:
+    # Uses the Windows self-hosted HP runner. Keep the runner online and Docker Desktop running.
+    runs-on: [self-hosted, Windows, X64, pctp-ui]
+    timeout-minutes: 60
+    env:
+      CREATORFLOW_AI_API_KEY: local-ci-placeholder-key-000000000000000000000000
+      CREATORFLOW_LLM_BASE_URL: https://api.openai.com/v1
+      CREATORFLOW_LLM_API_KEY: ""
+      CREATORFLOW_LLM_MODEL: ""
+      CreatorFlowApi__BaseUrl: http://host.docker.internal:7001
+      CreatorFlowApi__ApiKey: local-ci-placeholder-key-000000000000000000000000
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Verify local Docker engine
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          docker version
+          docker compose version
+          docker info --format "CPUs={{.NCPU}} Memory={{.MemTotal}} OperatingSystem={{.OperatingSystem}}"
+
+      - name: Validate Compose configuration without printing secrets
+        shell: pwsh
+        run: docker compose -f compose.dev.yaml config --quiet
+
+      - name: Build Web and AI images on HP Z240
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          docker compose -f compose.dev.yaml build --pull
+          docker image inspect creatorflow-ai --format '{{.Id}}' 2>$null
+          docker image ls --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+
+      - name: Publish runner build summary
+        if: always()
+        shell: pwsh
+        run: |
+          "Commit: $env:GITHUB_SHA" >> $env:GITHUB_STEP_SUMMARY
+          "Runner: $env:RUNNER_NAME" >> $env:GITHUB_STEP_SUMMARY
+          "OS: $env:RUNNER_OS / $env:RUNNER_ARCH" >> $env:GITHUB_STEP_SUMMARY
