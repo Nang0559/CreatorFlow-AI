@@ -132,6 +132,62 @@ public sealed class TrendSelectionFeedbackApiTests
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+
+    [Fact]
+    public async Task Share_inbox_accepts_and_lists_a_creator_submitted_link()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        await factory.SeedCandidateAsync();
+        using var client = factory.CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/share-inbox",
+            new { sharedUrl = "https://v.douyin.com/AbC123/" });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        using var created = await System.Text.Json.JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
+        Assert.Equal("Douyin", created.RootElement.GetProperty("platform").GetString());
+        Assert.Equal("Pending", created.RootElement.GetProperty("status").GetString());
+
+        var historyResponse = await client.GetAsync("/api/v1/share-inbox");
+        Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
+        using var history = await System.Text.Json.JsonDocument.ParseAsync(await historyResponse.Content.ReadAsStreamAsync());
+        Assert.Single(history.RootElement.EnumerateArray());
+    }
+
+    [Fact]
+    public async Task Share_inbox_duplicate_submission_is_idempotent()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        await factory.SeedCandidateAsync();
+        using var client = factory.CreateAuthenticatedClient();
+        var payload = new { sharedUrl = "https://v.douyin.com/AbC123/" };
+
+        var first = await client.PostAsJsonAsync("/api/v1/share-inbox", payload);
+        var second = await client.PostAsJsonAsync("/api/v1/share-inbox", payload);
+
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        using var firstJson = await System.Text.Json.JsonDocument.ParseAsync(await first.Content.ReadAsStreamAsync());
+        using var secondJson = await System.Text.Json.JsonDocument.ParseAsync(await second.Content.ReadAsStreamAsync());
+        Assert.Equal(firstJson.RootElement.GetProperty("id").GetGuid(), secondJson.RootElement.GetProperty("id").GetGuid());
+    }
+
+    [Fact]
+    public async Task Share_inbox_rejects_untrusted_domains_and_requires_api_key()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        await factory.SeedCandidateAsync();
+        using var authenticated = factory.CreateAuthenticatedClient();
+        using var anonymous = factory.CreateClient();
+
+        var rejected = await authenticated.PostAsJsonAsync("/api/v1/share-inbox",
+            new { sharedUrl = "https://evil.example/douyin" });
+        var unauthorized = await anonymous.GetAsync("/api/v1/share-inbox");
+
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, unauthorized.StatusCode);
+    }
+
     private sealed class CreatorFlowApiFactory : WebApplicationFactory<Program>
     {
         private readonly string _databaseName = $"creatorflow-api-tests-{Guid.NewGuid():N}";
