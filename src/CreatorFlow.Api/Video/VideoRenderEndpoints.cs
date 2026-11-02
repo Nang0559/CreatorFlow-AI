@@ -2,6 +2,7 @@ using System.Data;
 using System.Security.Cryptography;
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace CreatorFlow.Api.Video;
 
@@ -13,6 +14,7 @@ public static class VideoRenderEndpoints
         var g=app.MapGroup("/api/v1/video").RequireAuthorization();
         g.MapPost("/assets",UploadAsync).DisableAntiforgery();
         g.MapGet("/assets",ListAssetsAsync);
+        g.MapGet("/assets/{id:guid}",GetAssetAsync);
         g.MapPost("/render-jobs",CreateJobAsync);
         g.MapPost("/render-jobs/batch",CreateJobsBatchAsync);
         g.MapGet("/render-jobs",ListJobsAsync);
@@ -56,8 +58,20 @@ public static class VideoRenderEndpoints
             Add(cmd,"@path",path);Add(cmd,"@size",file.Length);Add(cmd,"@hash",hash);Add(cmd,"@rights",TrimTo(form["rightsNote"].ToString(),1000));
             await cmd.ExecuteNonQueryAsync(ct);
         }
+        catch(SqlException ex) when(ex.Number is 2601 or 2627)
+        {
+            if(File.Exists(path))File.Delete(path);
+            await using var duplicateConnection=new SqlConnection(db.Database.GetConnectionString());
+            await duplicateConnection.OpenAsync(ct);
+            await using var duplicateCommand=duplicateConnection.CreateCommand();
+            duplicateCommand.CommandText="SELECT Id,OriginalFileName,FileSizeBytes FROM dbo.VideoAssets WHERE TenantId=@t AND Sha256=@hash";
+            Add(duplicateCommand,"@t",tenant.TenantId.Value);Add(duplicateCommand,"@hash",hash);
+            await using var duplicateReader=await duplicateCommand.ExecuteReaderAsync(ct);
+            if(await duplicateReader.ReadAsync(ct))return Results.Ok(new{id=duplicateReader.GetGuid(0),fileName=duplicateReader.GetString(1),sizeBytes=duplicateReader.GetInt64(2),sha256=hash,duplicate=true});
+            throw;
+        }
         catch{if(File.Exists(path))File.Delete(path);throw;}
-        return Results.Created($"/api/v1/video/assets/{id}",new{id,fileName=Path.GetFileName(file.FileName),sizeBytes=file.Length,sha256=hash});
+        return Results.Created($"/api/v1/video/assets/{id}",new{id,fileName=Path.GetFileName(file.FileName),sizeBytes=file.Length,sha256=hash,duplicate=false});
     }
 
     private static async Task<IResult> ListAssetsAsync(CreatorFlowDbContext? db,ITenantContext tenant,CancellationToken ct)
@@ -69,6 +83,17 @@ public static class VideoRenderEndpoints
         await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();
         while(await r.ReadAsync(ct))rows.Add(new{id=r.GetGuid(0),fileName=r.GetString(1),sizeBytes=r.GetInt64(2),createdAt=(DateTimeOffset)r.GetValue(3),rightsNote=r.IsDBNull(4)?null:r.GetString(4)});
         return Results.Ok(rows);
+    }
+
+    private static async Task<IResult> GetAssetAsync(Guid id,CreatorFlowDbContext? db,ITenantContext tenant,CancellationToken ct)
+    {
+        if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);
+        if(!tenant.TenantId.HasValue)return Results.Forbid();
+        await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
+        await using var cmd=c.CreateCommand();cmd.CommandText="SELECT Id,OriginalFileName,FileSizeBytes,CreatedAt,RightsNote,Sha256 FROM dbo.VideoAssets WHERE Id=@id AND TenantId=@t";
+        Add(cmd,"@id",id);Add(cmd,"@t",tenant.TenantId.Value);
+        await using var r=await cmd.ExecuteReaderAsync(ct);
+        return await r.ReadAsync(ct)?Results.Ok(new{id=r.GetGuid(0),fileName=r.GetString(1),sizeBytes=r.GetInt64(2),createdAt=(DateTimeOffset)r.GetValue(3),rightsNote=r.IsDBNull(4)?null:r.GetString(4),sha256=r.GetString(5)}):Results.NotFound();
     }
 
     private static async Task<IResult> CreateJobAsync(CreateRenderJobRequest req,CreatorFlowDbContext? db,ITenantContext tenant,IConfiguration cfg,CancellationToken ct)
