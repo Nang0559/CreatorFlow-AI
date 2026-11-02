@@ -56,6 +56,7 @@ public sealed class SharedLinkInboxItem
     public void LinkChannel(Guid channelId)
     {
         if (channelId == Guid.Empty) throw new ArgumentException("Channel ID không hợp lệ.", nameof(channelId));
+        if (Platform != "Douyin") throw new InvalidOperationException("Chỉ liên kết chia sẻ Douyin mới có thể gắn với kênh Douyin.");
         if (Status == SharedLinkStatus.Ignored) throw new InvalidOperationException("Liên kết đã bị bỏ qua.");
         LinkedChannelId = channelId;
         Status = SharedLinkStatus.Linked;
