@@ -24,7 +24,7 @@ concurrency:
 jobs:
   sqlserver-qc:
     # No pull_request trigger: never execute untrusted fork code on a local SQL host.
-    runs-on: [self-hosted, Windows, X64, creatorflow-sql-qc]
+    runs-on: [self-hosted, Windows, X64, pctp-ui, sql-network]
     timeout-minutes: 45
     env:
       # The runner is local to the SQL Server host. The variable can override
