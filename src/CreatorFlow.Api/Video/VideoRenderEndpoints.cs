@@ -37,7 +37,7 @@ public static class VideoRenderEndpoints
         var id=Guid.NewGuid();var stored=id.ToString("N")+ext.ToLowerInvariant();var path=Path.Combine(dir,stored);
         try
         {
-            await using var input=file.OpenReadStream(MaxBytes);
+            await using var input=file.OpenReadStream();
             var header=new byte[12];var n=await input.ReadAsync(header.AsMemory(),ct);
             if(n<8||System.Text.Encoding.ASCII.GetString(header,4,4)!="ftyp")return Results.BadRequest(new{error="Tệp không có cấu trúc MP4/MOV hợp lệ."});
             input.Position=0;await using var output=new FileStream(path,FileMode.CreateNew,FileAccess.Write,FileShare.None,1024*1024,true);
