@@ -24,9 +24,11 @@ The repository currently contains:
 - Python FastAPI AI service with OpenAI-compatible LLM calls.
 - API-key service authentication for isolated Development bootstrap only.
 - OIDC Web login (Authorization Code + PKCE), protected cookie sessions, issuer+subject identity mapping, tenant selection and membership lifecycle API.
-- CI for .NET build/tests and Python tests.
+- SQL-backed video asset/render jobs with a local Windows After Effects + FFmpeg worker, authenticated preview/download and atomic 2–3-style job creation.
+- Tenant-scoped Share Inbox for creator-submitted URLs; no server-side URL fetching or automatic creator follow.
+- CI for .NET build/tests, Python tests and PowerShell script parsing.
 
-The tenant identity foundation and baseline isolation are implemented in code, but a production OIDC provider must still be configured and contract-tested; MFA policy, invitation email delivery, full per-operation RBAC, SQL Server migration validation and cross-tenant negative tests remain release gates. TikTok/Douyin OAuth and provider adapters, trend crawling, durable background queue, object/media storage, similarity/saturation engines, rights registry, calibrated publishing/account risk, and official publishing/analytics are also not production-ready.
+The tenant identity foundation and baseline isolation are implemented in code, but a production OIDC provider must still be configured and contract-tested; MFA policy, invitation email delivery, full per-operation RBAC, SQL Server migration validation and cross-tenant negative tests remain release gates. TikTok/Douyin OAuth and provider adapters, live trend collection, the complete Discovery feedback-learning loop, discovery/provider job orchestration, cloud object storage, similarity/saturation engines, rights registry, calibrated publishing/account risk, and official publishing/analytics are not production-ready. The local video render worker is a pilot capability, not the production cloud media plane.
 
 ## 3. Platform account setup
 
