@@ -84,7 +84,7 @@ BEGIN
         SpeakingStyle nvarchar(1000) NOT NULL,
         EditPacing nvarchar(1000) NOT NULL,
         AudioApproach nvarchar(1000) NOT NULL,
-        Script nvarchar(12000) NOT NULL,
+        Script nvarchar(max) NOT NULL,
         CreativeNotes nvarchar(4000) NULL,
         Status nvarchar(24) NOT NULL,
         Views bigint NOT NULL CONSTRAINT DF_StyleExperimentVariants_Views DEFAULT 0,
