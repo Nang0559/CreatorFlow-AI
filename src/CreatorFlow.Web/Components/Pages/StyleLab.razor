@@ -2,9 +2,9 @@
 @inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
 @inject IJSRuntime JS
 
-<PageTitle>Style Lab · CreatorFlow</PageTitle>
+<PageTitle>Phòng sáng tạo · CreatorFlow</PageTitle>
 <header class="page-header">
-    <div><p class="eyebrow">CREATIVE EXPERIMENTS</p><h1>Style Lab</h1>
+    <div><p class="eyebrow">THỬ NGHIỆM SÁNG TẠO</p><h1>Phòng sáng tạo</h1>
         <p class="muted">Tạo 2–3 cách thể hiện khác nhau cho cùng một ý tưởng, đo lường sau khi đăng và chọn phương án thắng.</p></div>
     <button class="primary" @onclick="LoadAsync">Làm mới</button>
 </header>
@@ -12,7 +12,7 @@
 @if (!string.IsNullOrWhiteSpace(error)) { <section class="notice"><strong>Thông báo</strong><p>@error</p></section> }
 
 <section class="panel">
-    <div class="panel-heading"><div><p class="eyebrow">NEW EXPERIMENT</p><h2>Tạo thử nghiệm phong cách</h2></div></div>
+    <div class="panel-heading"><div><p class="eyebrow">THỬ NGHIỆM MỚI</p><h2>Tạo thử nghiệm phong cách</h2></div></div>
     <div class="trend-form">
         <label>Tên thử nghiệm<input @bind="name" /></label>
         <label>Giả thuyết<input @bind="hypothesis" /></label>
@@ -39,23 +39,23 @@
 </section>
 
 <section class="panel">
-    <div class="panel-heading"><div><p class="eyebrow">EXPERIMENT HISTORY</p><h2>Các thử nghiệm</h2></div><span class="status">@experiments.Count thử nghiệm</span></div>
+    <div class="panel-heading"><div><p class="eyebrow">LỊCH SỬ THỬ NGHIỆM</p><h2>Các thử nghiệm</h2></div><span class="status">@experiments.Count thử nghiệm</span></div>
     @if (experiments.Count == 0) { <p class="muted">Chưa có thử nghiệm. Mỗi thử nghiệm cần 2 hoặc 3 phương án được viết độc lập.</p> }
     @foreach (var experiment in experiments)
     {
         <article class="experiment-item">
-            <div class="panel-heading"><div><h3>@experiment.Name</h3><p class="muted">@experiment.Hypothesis</p><p class="muted">Chủ đề: @(string.IsNullOrWhiteSpace(experiment.Topic) ? "Chưa phân loại" : experiment.Topic)</p></div><span class="status">@experiment.Status</span></div>
+            <div class="panel-heading"><div><h3>@experiment.Name</h3><p class="muted">@experiment.Hypothesis</p><p class="muted">Chủ đề: @(string.IsNullOrWhiteSpace(experiment.Topic) ? "Chưa phân loại" : experiment.Topic)</p></div><span class="status">@StatusLabel(experiment.Status)</span></div>
             @if (experiment.Status == "Draft") { <button class="secondary" disabled="@(busy || experiment.Variants.Any(x => x.Status != "Ready"))" @onclick="() => StartAsync(experiment.Id)">Bắt đầu thử nghiệm</button> }
             <div class="variant-grid">
                 @foreach (var variant in experiment.Variants)
                 {
                     <div class="variant-card">
-                        <strong>@variant.Name</strong><span class="status">@variant.Status</span>
-                        <p><b>Hook:</b> @variant.Hook</p><p><b>Cách nói:</b> @variant.SpeakingStyle</p><p><b>Nhịp dựng:</b> @variant.EditPacing</p><p><b>Âm thanh:</b> @variant.AudioApproach</p>
-                        <div class="variant-stats"><span>@variant.Views.ToString("N0") views</span><span>@(variant.EngagementRate?.ToString("0.00") ?? "—")% tương tác</span><span>@variant.FollowsGained follows</span><span>@variant.Orders orders</span></div>
-                        <button class="secondary" disabled="@busy" @onclick="() => DownloadEditingPackageAsync(experiment.Id, variant.Id)">Tải gói dựng CapCut / After Effects</button>
+                        <strong>@variant.Name</strong><span class="status">@StatusLabel(variant.Status)</span>
+                        <p><b>Câu mở đầu:</b> @variant.Hook</p><p><b>Phong cách nói:</b> @variant.SpeakingStyle</p><p><b>Nhịp dựng:</b> @variant.EditPacing</p><p><b>Âm thanh:</b> @variant.AudioApproach</p>
+                        <div class="variant-stats"><span>@variant.Views.ToString("N0") lượt xem</span><span>@(variant.EngagementRate?.ToString("0.00") ?? "—")% tương tác</span><span>@variant.FollowsGained lượt theo dõi</span><span>@variant.Orders đơn hàng</span></div>
+                        <button class="secondary" disabled="@busy" @onclick="() => DownloadEditingPackageAsync(experiment.Id, variant.Id)">Tải gói hướng dẫn dựng (tùy chọn)</button>
 
-                        @if (variant.Status == "Draft") { <button class="secondary" disabled="@busy" @onclick="() => MarkReadyAsync(experiment.Id, variant.Id)">Đánh dấu sẵn sàng</button> }
+                        @if (variant.Status == "Draft") { <button class="secondary" disabled="@busy" @onclick="() => MarkReadyAsync(experiment.Id, variant.Id)">Đánh dấu đã chuẩn bị</button> }
                         @if (variant.Status == "Ready") { <button class="secondary" disabled="@busy" @onclick="() => MarkPublishedAsync(experiment.Id, variant.Id)">Đã đăng video này</button> }
                         @if (variant.Status == "Published")
                         {
@@ -66,10 +66,10 @@
                                 <label>Shares<input type="number" min="0" @bind="metricInputs[variant.Id].Shares" /></label>
                                 <label>Saves<input type="number" min="0" @bind="metricInputs[variant.Id].Saves" /></label>
                                 <label>Follows<input type="number" min="0" @bind="metricInputs[variant.Id].FollowsGained" /></label>
-                                <label>Product clicks<input type="number" min="0" @bind="metricInputs[variant.Id].ProductClicks" /></label>
+                                <label>Lượt nhấp sản phẩm<input type="number" min="0" @bind="metricInputs[variant.Id].ProductClicks" /></label>
                                 <label>Orders<input type="number" min="0" @bind="metricInputs[variant.Id].Orders" /></label>
-                                <label>Avg watch (s)<input type="number" min="0" step="0.1" @bind="metricInputs[variant.Id].AverageWatchSeconds" /></label>
-                                <label>Duration (s)<input type="number" min="0" step="0.1" @bind="metricInputs[variant.Id].VideoDurationSeconds" /></label>
+                                <label>Thời gian xem trung bình (giây)<input type="number" min="0" step="0.1" @bind="metricInputs[variant.Id].AverageWatchSeconds" /></label>
+                                <label>Thời lượng video (giây)<input type="number" min="0" step="0.1" @bind="metricInputs[variant.Id].VideoDurationSeconds" /></label>
                             </div>
                             <button class="secondary" disabled="@busy" @onclick="() => MeasureAsync(experiment.Id, variant.Id)">Lưu số liệu</button>
                         }
@@ -79,15 +79,15 @@
             @if (experiment.Status == "Running" && experiment.Variants.All(x => x.Status == "Measured"))
             {
                 <div class="learn-row">
-                    <label>Chọn phương án thắng
+                    <label>Chọn phương án hiệu quả nhất
                         <select @bind="winnerSelections[experiment.Id]">
                             @foreach (var v in experiment.Variants) { <option value="@v.Id">@v.Name</option> }
                         </select>
                     </label>
-                    <button class="primary" disabled="@busy" @onclick="() => EvaluateAsync(experiment.Id)">Đánh giá thử nghiệm</button>
+                    <button class="primary" disabled="@busy" @onclick="() => EvaluateAsync(experiment.Id)">Đánh giá kết quả</button>
                 </div>
             }
-            @if (experiment.WinningVariantId.HasValue) { <p class="winner">Phương án thắng: @experiment.Variants.FirstOrDefault(x => x.Id == experiment.WinningVariantId)?.Name</p> }
+            @if (experiment.WinningVariantId.HasValue) { <p class="winner">Phương án hiệu quả nhất: @experiment.Variants.FirstOrDefault(x => x.Id == experiment.WinningVariantId)?.Name</p> }
         </article>
     }
 </section>
@@ -113,6 +113,18 @@
     private string error = "";
     private Dictionary<Guid, MetricsInput> metricInputs = [];
     private Dictionary<Guid, string> winnerSelections = [];
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "Draft" => "Bản nháp",
+        "Ready" => "Đã chuẩn bị",
+        "Running" => "Đang thử nghiệm",
+        "Published" => "Đã đăng",
+        "Measured" => "Đã có số liệu",
+        "Evaluated" => "Đã đánh giá",
+        "Archived" => "Đã lưu trữ",
+        _ => "Chưa xác định"
+    };
 
     private MetricsInput GetMetrics(Guid id)
     {
@@ -198,8 +210,8 @@
     {
         var m = GetMetrics(variantId);
         await RunActionAsync($"/api/v1/style-experiments/{id}/variants/{variantId}/measure",
-            new { views = m.Views, likes = m.Likes, comments = m.Comments, shares = m.Shares, saves = m.Saves,
-                followsGained = m.FollowsGained, productClicks = m.ProductClicks, orders = m.Orders,
+            new { lượt xem = m.Views, likes = m.Likes, comments = m.Comments, shares = m.Shares, saves = m.Saves,
+                lượt theo dõiGained = m.FollowsGained, productClicks = m.ProductClicks, đơn hàng = m.Orders,
                 averageWatchSeconds = m.AverageWatchSeconds, videoDurationSeconds = m.VideoDurationSeconds });
     }
 
