@@ -1,0 +1,45 @@
+# HP Z240 – one-run local setup
+
+## Preconditions
+- Windows PowerShell 7 or Windows PowerShell 5.1.
+- Repository cloned at `E:\Projects\CreatorFlow-AI`, branch `feature/trend-selection-safety-intelligence`.
+- Existing local SQL Server database `CreatorFlow_QC` is ONLINE and writable, and already tagged as CreatorFlow-AI QC.
+- Docker Desktop is running.
+- A valid local `.env` exists. Do not commit it or share its secrets.
+- PowerShell module `SqlServer` is installed.
+
+## One command
+Open PowerShell in the repository root and run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\scripts\Setup-HPZ240.ps1
+```
+
+The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing SQL migrations 001–010 and 014–015 using the checksum ledger, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, and starts or reuses the native API on port 7001. It then probes the local Web UI at port 8080.
+
+## Safe reruns
+- Already-applied SQL migrations are skipped only if their stored SHA-256 matches the repository file.
+- Existing healthy API on port 7001 is reused; an unrelated process occupying that port causes a safe stop.
+- Docker Compose uses `up --build -d`; it does not delete volumes.
+- The script never runs `git reset`, force-push, database drop/restore, or process termination.
+- If local Git changes exist, it stops before pulling. Commit or back up those changes, then rerun.
+- If a migration checksum differs, do not edit the old migration; add a new numbered migration after investigation.
+
+## Optional switches
+- `-SkipGitPull`: use the already checked-out commit.
+- `-SkipDotNetTests`: build but skip .NET tests.
+- `-SkipDocker`: skip Docker build/start and AI checks.
+- `-SkipApiStart`: do not start/reuse the native API.
+- `-HealthTimeoutSeconds 180`: allow more time for first startup.
+
+## Expected URLs
+- Web: http://localhost:8080
+- API: http://localhost:7001/health
+- AI: http://localhost:8001/health and http://localhost:8001/ready
+
+## Security
+The setup preserves the phone-only Douyin rule. It does not log in to Douyin/TikTok, scan login QR codes, create a browser/device session, access cookies, follow, like, comment, or publish. The AI discovery service may only use sources separately reviewed and enabled for permitted access.
+
+## Important boundary
+A successful local setup proves database migrations, builds, container startup and health endpoints. It does not prove that live Douyin/TikTok discovery providers are connected or that feedback is already persisted end-to-end; those require their own integration and acceptance tests.
