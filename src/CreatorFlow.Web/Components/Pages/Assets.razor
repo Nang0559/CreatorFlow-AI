@@ -1,14 +1,171 @@
 @page "/assets"
-<PageTitle>Thư viện media · CreatorFlow</PageTitle>
-<header class="page-header"><div><p class="eyebrow">MEDIA LIBRARY</p><h1>Thư viện media</h1><p class="muted">Quản lý nguồn video, hình ảnh, âm thanh và quyền sử dụng trước khi đưa vào sản xuất.</p></div></header>
+@using Microsoft.AspNetCore.Components.Forms
+@inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
+
+<PageTitle>Thư viện video · CreatorFlow</PageTitle>
+<header class="page-header">
+    <div><p class="eyebrow">THƯ VIỆN NỘI DUNG</p><h1>Video của bạn</h1>
+        <p class="muted">Tải video nguồn lên, chọn phong cách dựng và nhận MP4 hoàn chỉnh ngay trong CreatorFlow.</p></div>
+    <button class="secondary" @onclick="LoadAsync" disabled="@busy">Làm mới</button>
+</header>
+
+@if (!Api.IsConfigured)
+{
+    <section class="notice"><strong>Chưa kết nối máy chủ</strong><p>Hãy cấu hình kết nối CreatorFlow API trên máy chủ.</p></section>
+}
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <section class="notice"><strong>@message</strong></section>
+}
+
 <section class="panel">
-    <div class="panel-heading"><div><p class="eyebrow">ASSET REGISTRY</p><h2>Kho tài nguyên</h2></div><span class="status">Chưa triển khai</span></div>
-    <p>Trang đã được định tuyến và hiển thị đúng. Tuy nhiên, phiên bản hiện tại chưa có API registry, lưu trữ file hoặc quy trình upload media. Vì vậy không hiển thị danh sách giả và chưa cho phép tải file lên.</p>
-    <div class="pipeline">
-        <div><b>01</b><strong>Import</strong><small>Nhập file / URL nguồn</small></div>
-        <div><b>02</b><strong>Rights</strong><small>Ghi nhận giấy phép</small></div>
-        <div><b>03</b><strong>Metadata</strong><small>Loại, thời lượng, nguồn</small></div>
-        <div><b>04</b><strong>Review</strong><small>Kiểm tra trước sử dụng</small></div>
+    <div class="panel-heading"><div><p class="eyebrow">BƯỚC 1</p><h2>Tải video nguồn</h2></div><span class="status">Tối đa 500 MB</span></div>
+    <label class="field-label">Ghi chú quyền sử dụng (không bắt buộc)
+        <input @bind="rightsNote" placeholder="Ví dụ: Video tự quay / đã được cấp phép sử dụng" />
+    </label>
+    <div class="upload-row">
+        <InputFile OnChange="UploadAsync" accept=".mp4,.mov,.m4v,video/mp4,video/quicktime" disabled="@(!Api.IsConfigured || busy)" />
+        <span class="muted">Định dạng MP4, MOV, M4V</span>
     </div>
+    @if (busy) { <p class="muted">Đang xử lý, vui lòng giữ trang này mở…</p> }
 </section>
-<section class="notice"><strong>Điều kiện để mở chức năng upload</strong><p>Cần hoàn thiện asset database schema, API upload có giới hạn kích thước/loại file, lưu trữ an toàn và metadata quyền sử dụng. Không nên lưu file media trực tiếp vào SQL Server.</p></section>
+
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">BƯỚC 2</p><h2>Tạo video hoàn chỉnh</h2></div></div>
+    @if (assets.Count == 0) { <p class="muted">Chưa có video nguồn. Hãy tải video lên trước.</p> }
+    else
+    {
+        <div class="render-form">
+            <label>Video nguồn
+                <select @bind="selectedAsset">
+                    @foreach (var asset in assets)
+                    {
+                        <option value="@asset.Id">@asset.FileName · @FormatSize(asset.SizeBytes)</option>
+                    }
+                </select>
+            </label>
+            <label>Tiêu đề hiển thị<input @bind="title" maxlength="180" /></label>
+            <label>Câu mở đầu<input @bind="hook" maxlength="500" /></label>
+            <label>Lời kêu gọi hành động<input @bind="cta" maxlength="300" /></label>
+            <label>Phong cách dựng
+                <select @bind="styleKey">
+                    <option value="Tự nhiên">Tự nhiên</option>
+                    <option value="Kể chuyện">Kể chuyện</option>
+                    <option value="Đánh giá sản phẩm">Đánh giá sản phẩm</option>
+                </select>
+            </label>
+        </div>
+        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(selectedAsset) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(hook))" @onclick="CreateJobAsync">Bắt đầu dựng video</button>
+    }
+</section>
+
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">BƯỚC 3</p><h2>Video đã xử lý</h2></div><span class="status">@jobs.Count video</span></div>
+    @if (jobs.Count == 0) { <p class="muted">Các video đã dựng sẽ xuất hiện tại đây.</p> }
+    @foreach (var job in jobs)
+    {
+        <article class="render-job">
+            <div class="panel-heading">
+                <div><h3>@job.Title</h3><p class="muted">@job.StyleKey · @job.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p></div>
+                <span class="status">@VietnameseStatus(job.Status)</span>
+            </div>
+            <div class="progress-track"><div class="progress-value" style="width:@(job.ProgressPercent)%"></div></div>
+            <p class="muted">@job.ProgressPercent% hoàn thành</p>
+            @if (job.Status == "Completed")
+            {
+                <video class="video-preview" controls playsinline preload="metadata" src="@($"/media/video/{job.Id}")"></video>
+                <div class="render-meta"><span>@(job.Width ?? 0) × @(job.Height ?? 0)</span><span>@(job.DurationSeconds?.ToString("0.0") ?? "—") giây</span></div>
+                <a class="primary download-link" href="@($"/media/video/{job.Id}?download=1")">Tải video MP4</a>
+            }
+            else if (job.Status == "Failed")
+            {
+                <p class="error-text">Không thể dựng video. Hãy kiểm tra After Effects, FFmpeg và video nguồn trên máy dựng.</p>
+            }
+        </article>
+    }
+</section>
+
+<style>
+.field-label,.render-form label{display:flex;flex-direction:column;gap:.45rem;font-weight:600}
+.field-label input,.render-form input,.render-form select{width:100%;padding:.75rem;border:1px solid var(--border,#ddd);border-radius:10px;background:var(--surface,#fff);color:inherit}
+.upload-row{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-top:1rem}
+.render-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:1rem 0}
+.render-job{padding:1rem 0;border-top:1px solid var(--border,#ddd)}
+.progress-track{height:8px;border-radius:99px;background:var(--surface-alt,#eee);overflow:hidden}
+.progress-value{height:100%;background:#8b5cf6;transition:width .25s}
+.video-preview{display:block;width:min(100%,420px);max-height:720px;margin:1rem auto;border-radius:14px;background:#111}
+.render-meta{display:flex;gap:1rem;color:var(--muted);margin:.5rem 0 1rem}
+.download-link{display:inline-block;text-decoration:none;padding:.7rem 1rem;border-radius:10px}
+.error-text{color:#b42318}
+@media(max-width:600px){.video-preview{width:100%}}
+</style>
+
+@code {
+    private List<CreatorFlow.Web.Services.VideoAssetItem> assets = [];
+    private List<CreatorFlow.Web.Services.VideoRenderJobItem> jobs = [];
+    private string selectedAsset = "";
+    private string rightsNote = "";
+    private string title = "Video mới";
+    private string hook = "Điều bạn cần biết trước khi lựa chọn";
+    private string cta = "Xem thêm thông tin ở giỏ hàng";
+    private string styleKey = "Tự nhiên";
+    private string message = "";
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (!Api.IsConfigured) return;
+        try
+        {
+            assets = await Api.GetAsync<List<CreatorFlow.Web.Services.VideoAssetItem>>("/api/v1/video/assets") ?? [];
+            jobs = await Api.GetAsync<List<CreatorFlow.Web.Services.VideoRenderJobItem>>("/api/v1/video/render-jobs") ?? [];
+            if (string.IsNullOrWhiteSpace(selectedAsset) && assets.Count > 0) selectedAsset = assets[0].Id.ToString();
+            message = "";
+        }
+        catch { message = "Không thể tải thư viện video. Hãy kiểm tra kết nối và quyền truy cập."; }
+    }
+
+    private async Task UploadAsync(InputFileChangeEventArgs args)
+    {
+        try
+        {
+            busy = true; message = "";
+            await using var stream = args.File.OpenReadStream(524_288_000);
+            var result = await Api.UploadVideoAsync(stream,args.File.Name,rightsNote);
+            if (result is null) throw new InvalidOperationException();
+            message = "Đã thêm video nguồn vào thư viện.";
+            await LoadAsync();
+            selectedAsset = result.Id.ToString();
+        }
+        catch { message = "Không thể tải video lên. Hãy kiểm tra định dạng MP4/MOV/M4V và giới hạn 500 MB."; }
+        finally { busy = false; }
+    }
+
+    private async Task CreateJobAsync()
+    {
+        if (!Guid.TryParse(selectedAsset,out var assetId)) return;
+        try
+        {
+            busy = true; message = "";
+            await Api.PostAsync<object,object>("/api/v1/video/render-jobs",new { assetId,title,hook,callToAction=cta,styleKey });
+            message = "Đã đưa video vào hàng đợi dựng.";
+            await LoadAsync();
+        }
+        catch { message = "Không thể tạo tác vụ dựng. Hãy kiểm tra video nguồn và kết nối máy chủ."; }
+        finally { busy = false; }
+    }
+
+    private static string VietnameseStatus(string status) => status switch
+    {
+        "Queued" => "Chờ dựng",
+        "Rendering" => "Đang dựng",
+        "Encoding" => "Đang xuất MP4",
+        "Completed" => "Đã hoàn tất",
+        "Failed" => "Cần xử lý lỗi",
+        "Cancelled" => "Đã hủy",
+        _ => "Chưa xác định"
+    };
+    private static string FormatSize(long bytes) => bytes >= 1_000_000_000 ? $"{bytes/1_000_000_000d:0.0} GB" : $"{bytes/1_000_000d:0.0} MB";
+}
