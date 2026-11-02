@@ -38,7 +38,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Production OIDC provider configuration and contract tests; MFA enforcement is delegated to the provider.
 - Invitation and membership administration APIs exist; invitation delivery is manual until SMTP/provider integration.
 - Analyst writes are blocked centrally and Publisher writes are blocked outside future publishing routes; full endpoint-specific role policies remain incomplete.
-- SQL Server Row-Level Security and composite same-tenant foreign keys for all business relationships are not yet configured. Migration 018 adds same-tenant foreign keys for video assets/render jobs and shared inbox/channel links; remaining relationships still require review.
+- SQL Server Row-Level Security is not yet configured. Composite same-tenant foreign keys are added for the currently mapped business relationships by migrations 018–019; migration 020 changes channel/video/trend/profile uniqueness to workspace scope. Remaining unmapped Discovery SQL tables still need explicit tenant ownership before those tables can be used by a multi-tenant runtime.
 - SQL migration 012 has not yet been executed against SQL Server; its legacy-workspace backfill assumes all existing business rows belong to one workspace.
 - Background workers that access tenant-owned business data must scope each operation by TenantId; the video worker processes durable jobs globally but each job/output is tenant-keyed.
 
