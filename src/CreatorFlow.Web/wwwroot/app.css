@@ -105,3 +105,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
   .quick-card strong{font-size:13px}
   .quick-card small{font-size:11px}
 }
+
+/* Share inbox */
+.share-inbox-panel textarea{width:100%;min-height:76px;padding:12px;border:1px solid #ded7e8;border-radius:11px;background:#fff;color:#302a40;resize:vertical}
+.share-actions{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+.share-item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 0;border-top:1px solid #eee9f3}
+.share-item>div{min-width:0}
+.share-url{max-width:100%;overflow-wrap:anywhere;font-size:12px;color:#6e647c;margin:7px 0}
+@media(max-width:760px){.share-actions{display:grid;grid-template-columns:1fr}.share-actions button{min-height:46px}.share-item{align-items:flex-start;flex-direction:column;gap:6px}}
