@@ -19,6 +19,8 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 | Creator style profile | Profile API, UI, domain and SQL | Implemented |
 | Winner evidence import | Learn endpoint, evidence snapshot and unique profile/experiment index | Implemented with duplicate protection |
 | Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; not ML |
+| Video source library and rights confirmation | Tenant-scoped asset upload, SHA-256 provenance, size/format checks, SQL metadata | Implemented foundation; codec/duration validation occurs in render worker |
+| Automated video render | Durable SQL jobs, After Effects JSX project generation, AE image-sequence render, FFmpeg H.264/AAC MP4, preview/download proxy | Implemented pipeline; hardware/visual acceptance on HP Z240 still required |
 | LLM runtime | Provider adapter, structured contracts, authenticated FastAPI endpoints, tests, .NET proxy, Style Lab generation UI and profile-scoped learning synthesis UI | Implemented first LLM workflow; provider credentials required; proposal persistence/versioning pending |
 | Human edit before guidance save | Draft-to-editor workflow | Manual review; no persisted approval/version |
 
@@ -29,16 +31,16 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Media download/ingest and rights/license registry.
 - Source video scene, transcript, voice, sound and story analysis pipeline.
 - Automatic source-video transcription, visual/audio analysis and media ingestion pipeline.
-- FFmpeg render, subtitle alignment and TTS pipeline.
+- Automatic subtitle transcription/alignment, TTS, advanced B-roll, music/beat analysis and professional effect/template library.
 - Product catalog, product matching, cart attachment and order attribution.
 - TikTok OAuth, official publishing, scheduling and post reconciliation.
-- Durable jobs, outbox/inbox, retries and connector observability.
+- Durable discovery/provider connector jobs, outbox/inbox, retries and connector observability. Video render jobs are durable but do not constitute connector orchestration.
 - Production OIDC provider configuration and contract tests; MFA enforcement is delegated to the provider.
 - Invitation and membership administration APIs exist; invitation delivery is manual until SMTP/provider integration.
 - Analyst writes are blocked centrally and Publisher writes are blocked outside future publishing routes; full endpoint-specific role policies remain incomplete.
-- SQL Server Row-Level Security and composite same-tenant foreign keys are not yet configured.
+- SQL Server Row-Level Security and composite same-tenant foreign keys for all business relationships are not yet configured. Migration 018 adds same-tenant foreign keys for video assets/render jobs and shared inbox/channel links; remaining relationships still require review.
 - SQL migration 012 has not yet been executed against SQL Server; its legacy-workspace backfill assumes all existing business rows belong to one workspace.
-- Background workers must establish an explicit tenant context before accessing business data.
+- Background workers that access tenant-owned business data must scope each operation by TenantId; the video worker processes durable jobs globally but each job/output is tenant-keyed.
 
 - Profile-scoped deterministic style learning analysis; current deterministic analysis reads the global evaluated experiment pool. LLM synthesis is scoped to imported profile evidence.
 - Trained ML prediction, durable model registry/retraining and KPI/retention-aware optimization.
