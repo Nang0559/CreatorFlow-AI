@@ -96,11 +96,11 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
       function caption(value,y,size,color){
         if(!value)return;
         var layer=comp.layers.addText(value),doc=layer.property("Source Text").value;
-        doc.font="Arial";doc.fontSize=Math.max(38,size-Math.max(0,value.length-28)*0.7);doc.boxText=true;doc.boxTextSize=[w*0.88,h*0.18];doc.fillColor=color;
+        var fontSize=Math.max(38,size-Math.max(0,value.length-24)*0.6);doc.font="Arial";doc.fontSize=fontSize;doc.fillColor=color;
         doc.applyStroke=true;doc.strokeColor=[0.12,0.08,0.2];doc.strokeWidth=3;
         doc.justification=ParagraphJustification.CENTER_JUSTIFY;
         layer.property("Source Text").setValue(doc);
-        layer.property("Position").setValueAtTime(0,[w/2,y+48]);
+        var fit=Math.min(100,(w*0.86)/(Math.max(1,value.length)*fontSize*0.58)*100);\n        layer.property("Scale").setValue([fit,100]);\n        layer.property("Position").setValueAtTime(0,[w/2,y+48]);
         layer.property("Position").setValueAtTime(0.42,[w/2,y]);
         layer.property("Opacity").setValueAtTime(0,0);
         layer.property("Opacity").setValueAtTime(0.42,100);
