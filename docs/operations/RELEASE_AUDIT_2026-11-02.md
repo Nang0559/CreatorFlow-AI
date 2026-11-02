@@ -23,7 +23,7 @@
 - Updated database verification to check the trusted composite FKs and workspace-scoped indexes.
 - Aligned EF Core relationship metadata with the same-tenant composite foreign keys and SQL constraint names, rather than leaving the model on single-column relationships.
 - Preserved the EF-owned connection lifetime in video API endpoints; only commands/readers are disposed per operation.
-- Corrected the SQL Server QC workflow runner labels to match the Z240 runner labels `pctp-ui` and `sql-network`; actual runner pickup and SQL execution remain to be evidenced.
+- Corrected the SQL Server QC workflow to use the default `self-hosted`, `Windows`, `X64` labels verified on the `tikt-ui` runner; actual SQL job pickup and SQL execution remain to be evidenced.
 - Corrected the migration runner so non-tenant baseline setup does not attempt migrations 016–020 before tenant migrations 011–013 exist. Existing complete tenant schemas are detected and the later migrations are included automatically.
 
 ### Discovery ranking and documentation
