@@ -33,7 +33,7 @@ public static class VideoRenderEndpoints
         if(!new[]{".mp4",".mov",".m4v"}.Contains(ext,StringComparer.OrdinalIgnoreCase))return Results.BadRequest(new{error="Chỉ nhận video MP4, MOV hoặc M4V."});
         var root=StorageRoot(cfg);var dir=Path.Combine(root,"sources");Directory.CreateDirectory(dir);
         var id=Guid.NewGuid();var stored=id.ToString("N")+ext.ToLowerInvariant();var path=Path.Combine(dir,stored);
-        await using(var input=file.OpenReadStream(MaxBytes))
+        await using(var input=file.OpenReadStream())
         {
             var header=new byte[12];var n=await input.ReadAsync(header.AsMemory(),ct);
             if(n<8||System.Text.Encoding.ASCII.GetString(header,4,4)!="ftyp")return Results.BadRequest(new{error="Tệp không có cấu trúc MP4/MOV hợp lệ."});
@@ -61,7 +61,7 @@ public static class VideoRenderEndpoints
         await using var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
         await using var cmd=c.CreateCommand();cmd.CommandText="SELECT TOP(100) Id,OriginalFileName,FileSizeBytes,CreatedAt,RightsNote FROM dbo.VideoAssets WHERE TenantId=@t ORDER BY CreatedAt DESC";Add(cmd,"@t",tenant.TenantId.Value);
         await using var r=await cmd.ExecuteReaderAsync(ct);var rows=new List<object>();
-        while(await r.ReadAsync(ct))rows.Add(new{id=r.GetGuid(0),fileName=r.GetString(1),sizeBytes=r.GetInt64(2),createdAt=r.GetDateTimeOffset(3),rightsNote=r.IsDBNull(4)?null:r.GetString(4)});
+        while(await r.ReadAsync(ct))rows.Add(new{id=r.GetGuid(0),fileName=r.GetString(1),sizeBytes=r.GetInt64(2),createdAt=(DateTimeOffset)r.GetValue(3),rightsNote=r.IsDBNull(4)?null:r.GetString(4)});
         return Results.Ok(rows);
     }
 
@@ -108,7 +108,7 @@ public static class VideoRenderEndpoints
         if(status!="Completed"||!File.Exists(path))return Results.Conflict(new{error="Video chưa dựng xong."});
         return Results.File(path,"video/mp4",download?$"{id:N}.mp4":null,enableRangeProcessing:true);
     }
-    private static object JobDto(IDataRecord r)=>new{id=r.GetGuid(0),assetId=r.GetGuid(1),styleKey=r.GetString(2),title=r.GetString(3),status=r.GetString(4),progressPercent=r.GetByte(5),errorMessage=r.IsDBNull(6)?null:r.GetString(6),createdAt=r.GetDateTimeOffset(7),completedAt=r.IsDBNull(8)?null:r.GetDateTimeOffset(8),durationSeconds=r.IsDBNull(9)?null:r.GetDecimal(9),width=r.IsDBNull(10)?null:r.GetInt32(10),height=r.IsDBNull(11)?null:r.GetInt32(11),sha256=r.IsDBNull(12)?null:r.GetString(12)};
+    private static object JobDto(IDataRecord r)=>new{id=r.GetGuid(0),assetId=r.GetGuid(1),styleKey=r.GetString(2),title=r.GetString(3),status=r.GetString(4),progressPercent=r.GetByte(5),errorMessage=r.IsDBNull(6)?null:r.GetString(6),createdAt=(DateTimeOffset)r.GetValue(7),completedAt=r.IsDBNull(8)?null:(DateTimeOffset)r.GetValue(8),durationSeconds=r.IsDBNull(9)?(decimal?)null:r.GetDecimal(9),width=r.IsDBNull(10)?(int?)null:r.GetInt32(10),height=r.IsDBNull(11)?(int?)null:r.GetInt32(11),sha256=r.IsDBNull(12)?null:r.GetString(12)};
     private static string StorageRoot(IConfiguration c)=>Path.GetFullPath(c["VideoRendering:StorageRoot"]??Path.Combine(AppContext.BaseDirectory,"data","video"));
     private static string? TrimTo(string? s,int n)=>string.IsNullOrWhiteSpace(s)?null:s.Trim()[..Math.Min(s.Trim().Length,n)];
     private static void Add(IDbCommand c,string key,object? value){var p=c.CreateParameter();p.ParameterName=key;p.Value=value??DBNull.Value;c.Parameters.Add(p);}
