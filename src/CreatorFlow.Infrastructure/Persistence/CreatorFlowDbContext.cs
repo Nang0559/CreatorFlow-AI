@@ -325,6 +325,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.UrlHash).HasMaxLength(64).IsFixedLength().IsRequired();
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.Property(x => x.ReviewNote).HasMaxLength(500);
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasOne<DouyinSourceChannel>().WithMany().HasForeignKey(x => x.LinkedChannelId)
                 .OnDelete(DeleteBehavior.NoAction);
             entity.HasIndex("TenantId", nameof(SharedLinkInboxItem.UrlHash)).IsUnique();
