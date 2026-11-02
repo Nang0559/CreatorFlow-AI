@@ -58,7 +58,7 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
         var ffmpegSequence=Path.Combine(work,"frame_%05d.png"); var output=Path.GetFullPath(j.Output);
         try
         {
-            var sourceRoot=Path.GetFullPath(Path.Combine(root,"sources"))+Path.DirectorySeparatorChar;
+            var sourceRoot=Path.GetFullPath(Path.Combine(root,"sources",j.TenantId.ToString("N")))+Path.DirectorySeparatorChar;
             var tenantOutputRoot=Path.GetFullPath(Path.Combine(root,"renders",j.TenantId.ToString("N")))+Path.DirectorySeparatorChar;
             var sourcePath=Path.GetFullPath(j.Source);
             if(!sourcePath.StartsWith(sourceRoot,StringComparison.OrdinalIgnoreCase)||!output.StartsWith(tenantOutputRoot,StringComparison.OrdinalIgnoreCase))
