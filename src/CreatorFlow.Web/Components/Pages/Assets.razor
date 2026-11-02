@@ -1,5 +1,6 @@
 @page "/assets"
 @using Microsoft.AspNetCore.Components.Forms
+@implements IAsyncDisposable
 @inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
 
 <PageTitle>Thư viện video · CreatorFlow</PageTitle>
@@ -113,8 +114,31 @@
     private string styleKey = "Tự nhiên";
     private string message = "";
     private bool busy;
+    private readonly CancellationTokenSource refreshCts = new();
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _ = RefreshLoopAsync();
+    }
+
+    private async Task RefreshLoopAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(refreshCts.Token))
+                await InvokeAsync(LoadAsync);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        refreshCts.Cancel();
+        refreshCts.Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     private async Task LoadAsync()
     {
