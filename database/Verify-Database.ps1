@@ -12,7 +12,7 @@ $hostName = ($SqlInstance -split '\\')[0].Trim()
 if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { throw "Refusing non-local SQL instance '$SqlInstance'." }
 Import-Module SqlServer -ErrorAction Stop
 
-$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_', '017_')
+$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_', '017_', '018_')
 if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_') }
 $schemaPath = Join-Path $PSScriptRoot 'schema'
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
@@ -90,6 +90,17 @@ WHERE COL_LENGTH(N'dbo.' + t.TableName, N'TenantId') IS NULL
          AND i.name=N'IX_' + t.TableName + N'_TenantId');
 "@)
     if ($tenantCheck.Count -gt 0) { throw "Tenant isolation is incomplete (TenantId/FK/index missing or FK untrusted): $(($tenantCheck | ForEach-Object { $_.TableName }) -join ', ')" }
+    $relationshipCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+SELECT fk.name
+FROM sys.foreign_keys fk
+WHERE fk.name IN (N'FK_VideoRenderJobs_Tenant_Asset', N'FK_SharedLinkInboxItems_Tenant_Channel')
+  AND (fk.is_disabled=1 OR fk.is_not_trusted=1);
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name=N'FK_VideoRenderJobs_Tenant_Asset' AND is_disabled=0 AND is_not_trusted=0)
+    SELECT N'FK_VideoRenderJobs_Tenant_Asset' AS name;
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name=N'FK_SharedLinkInboxItems_Tenant_Channel' AND is_disabled=0 AND is_not_trusted=0)
+    SELECT N'FK_SharedLinkInboxItems_Tenant_Channel' AS name;
+"@)
+    if ($relationshipCheck.Count -gt 0) { throw 'Same-tenant foreign keys are missing, disabled, or untrusted.' }
     $tenant = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query "SELECT COUNT(*) AS TenantCount FROM dbo.Tenants WHERE Id='00000000-0000-4000-8000-000000000001' AND Slug=N'legacy-workspace';")
     if ($tenant[0].TenantCount -ne 1) { throw 'The explicit legacy-workspace tenant is missing.' }
 }
