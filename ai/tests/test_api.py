@@ -129,3 +129,44 @@ def test_analyze_rejects_empty_text(monkeypatch) -> None:
     monkeypatch.setenv("CREATORFLOW_LLM_MODEL", "test-model")
     response = client.post("/v1/analyze", headers={"X-CreatorFlow-AI-Key": "test-service-key-0123456789abcdef"}, json={"text": ""})
     assert response.status_code == 422
+
+
+def test_discovery_rank_works_without_shared_link_and_priority_is_bounded(monkeypatch) -> None:
+    headers = auth(monkeypatch)
+    base = {"topicFit": 90, "viewsPerHour": 1200, "engagementRate": 0.08,
+            "marketFit": 85, "creatorQuality": 75, "dataCoverage": 0.8}
+    ordinary = client.post("/v1/discovery/rank", headers=headers, json=base)
+    prioritized = client.post("/v1/discovery/rank", headers=headers, json={**base, "prioritySignal": True})
+    assert ordinary.status_code == prioritized.status_code == 200
+    assert ordinary.json()["priorityBoost"] == 0
+    assert prioritized.json()["priorityBoost"] == 20
+    assert prioritized.json()["score"] >= ordinary.json()["score"]
+    assert ordinary.json()["explanation"]["limitations"].startswith("Heuristic baseline")
+
+
+def test_discovery_rank_rejects_out_of_range_features(monkeypatch) -> None:
+    headers = auth(monkeypatch)
+    response = client.post("/v1/discovery/rank", headers=headers, json={"topicFit": 120})
+    assert response.status_code == 422
+
+
+def test_discovery_query_plan_is_optional_link_independent_and_bounded(monkeypatch) -> None:
+    headers = auth(monkeypatch)
+    fake = FakeLLM({
+        "topic": "đồ gia dụng",
+        "queries": ["đồ gia dụng thông minh", "mẹo nhà bếp tiết kiệm thời gian"],
+        "related_topics": ["tổ chức nhà cửa"],
+        "intent_signals": ["giải quyết vấn đề thường ngày"],
+        "exclusions": ["nội dung quảng cáo không có bằng chứng"],
+    })
+    app.dependency_overrides[get_llm_client] = lambda: fake
+    try:
+        response = client.post("/v1/discovery/query-plan", headers=headers, json={
+            "topic": "đồ gia dụng", "targetMarket": "Vietnam", "maxQueries": 2
+        })
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert len(response.json()["queries"]) == 2
+    assert response.json()["requiresHumanReview"] is True
+    assert "shared_url" not in fake.calls[0]["user_payload"]
