@@ -34,6 +34,32 @@ public sealed class CreatorFlowApiClient(
         return (content, fileName.Trim('"'), response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream");
     }
 
+    public async Task<VideoUploadResponse?> UploadVideoAsync(Stream stream, string fileName, string? rightsNote, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var form = new MultipartFormDataContent();
+        using var file = new StreamContent(stream);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+        form.Add(file, "file", Path.GetFileName(fileName));
+        if (!string.IsNullOrWhiteSpace(rightsNote)) form.Add(new StringContent(rightsNote), "rightsNote");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/video/assets") { Content = form };
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<VideoUploadResponse>(cancellationToken: ct);
+    }
+
+    public async Task<HttpResponseMessage> GetRawResponseAsync(string path, string? range = null, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        var request = new HttpRequestMessage(HttpMethod.Get, path);
+        if (!string.IsNullOrWhiteSpace(range))
+            request.Headers.TryAddWithoutValidation("Range", range);
+        await AddIdentityHeadersAsync(request);
+        try { return await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct); }
+        finally { request.Dispose(); }
+    }
+
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
     {
         EnsureConfigured();
@@ -142,3 +168,7 @@ public sealed record AiGenerateVariantsResponse(string Topic, string Language, A
 public sealed record AiLearningSynthesisResponse(string ProposedStyleSummary, string[] RecurringStrengths,
     string[] ConflictingEvidence, string[] NextExperiments, string[] CitedExperimentIds,
     string Uncertainty, bool RequiresHumanReview);
+
+public sealed record VideoUploadResponse(Guid Id, string FileName, long SizeBytes, string Sha256);
+public sealed record VideoAssetItem(Guid Id,string FileName,long SizeBytes,DateTimeOffset CreatedAt,string? RightsNote);
+public sealed record VideoRenderJobItem(Guid Id,Guid AssetId,string StyleKey,string Title,string Status,byte ProgressPercent,string? ErrorMessage,DateTimeOffset CreatedAt,DateTimeOffset? CompletedAt,decimal? DurationSeconds,int? Width,int? Height,string? Sha256);
