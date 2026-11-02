@@ -3,7 +3,7 @@
 
 <PageTitle>Phong cách riêng · CreatorFlow</PageTitle>
 <header class="page-header">
-    <div><p class="eyebrow">CREATOR IDENTITY</p><h1>Hồ sơ phong cách riêng</h1>
+    <div><p class="eyebrow">ĐỊNH HƯỚNG NGƯỜI SÁNG TẠO</p><h1>Hồ sơ phong cách riêng</h1>
         <p class="muted">Tích lũy bằng chứng từ nhiều thử nghiệm. Một video thắng chưa đủ để biến thành quy tắc cố định.</p></div>
     <button class="primary" @onclick="LoadAsync">Làm mới</button>
 </header>
@@ -11,17 +11,17 @@
 @if (!string.IsNullOrWhiteSpace(error)) { <section class="notice"><strong>Thông báo</strong><p>@error</p></section> }
 
 <section class="panel">
-    <div class="panel-heading"><div><p class="eyebrow">PROFILE</p><h2>Tạo hồ sơ người sáng tạo</h2></div></div>
+    <div class="panel-heading"><div><p class="eyebrow">HỒ SƠ</p><h2>Tạo hồ sơ người sáng tạo</h2></div></div>
     <div class="trend-form">
-        <label>Profile key<input @bind="profileKey" placeholder="creator-main" /></label>
+        <label>Mã hồ sơ<input @bind="profileKey" placeholder="creator-main" /></label>
         <label>Tên hồ sơ<input @bind="displayName" placeholder="Tên kênh / thương hiệu" /></label>
-        <label>Định vị nội dung<input @bind="positioning" placeholder="Ví dụ: review gia dụng thực tế cho gia đình Việt" /></label>
+        <label>Định vị nội dung<input @bind="positioning" placeholder="Ví dụ: đánh giá đồ gia dụng thực tế cho gia đình Việt" /></label>
     </div>
     <button class="primary" disabled="@(!Api.IsConfigured || busy)" @onclick="CreateAsync">Tạo hồ sơ</button>
 </section>
 
 <section class="panel">
-    <div class="panel-heading"><div><p class="eyebrow">LEARNING EVIDENCE</p><h2>Hồ sơ và bằng chứng phong cách</h2></div><span class="status">@profiles.Count hồ sơ</span></div>
+    <div class="panel-heading"><div><p class="eyebrow">BẰNG CHỨNG HỌC TẬP</p><h2>Hồ sơ và bằng chứng phong cách</h2></div><span class="status">@profiles.Count hồ sơ</span></div>
     <label class="profile-select">Chọn hồ sơ
         <select value="@selectedProfileId" @onchange="SelectProfileAsync">
             <option value="">-- Chọn hồ sơ --</option>
@@ -32,14 +32,14 @@
     {
         <div class="profile-summary">
             <h3>@selectedProfile.DisplayName</h3><p>@selectedProfile.Positioning</p>
-            <label>Style summary<textarea @bind="styleSummary" rows="3" placeholder="Các đặc điểm lặp lại đã được xác nhận qua nhiều thử nghiệm"></textarea></label>
+            <label>Tóm tắt phong cách<textarea @bind="styleSummary" rows="3" placeholder="Các đặc điểm lặp lại đã được xác nhận qua nhiều thử nghiệm"></textarea></label>
             <button class="secondary" disabled="@busy" @onclick="SaveGuidanceAsync">Lưu định hướng</button>
         </div>
         <section class="evidence-card">
             <div class="panel-heading">
-                <div><h3>AI Style Learning</h3><p class="muted">Phân tích các phương án thắng và thua qua nhiều thử nghiệm, tách riêng theo chủ đề.</p></div>
+                <div><h3>AI học phong cách</h3><p class="muted">Phân tích các phương án thắng và thua qua nhiều thử nghiệm, tách riêng theo chủ đề.</p></div>
                 <button class="primary" disabled="@busy" @onclick="AnalyzeStyleAsync">Phân tích dữ liệu</button>
-                <button class="secondary" disabled="@(busy || selectedProfile.Evidence.Length < 2)" @onclick="SynthesizeWithAiAsync">LLM tự tổng hợp phong cách</button>
+                <button class="secondary" disabled="@(busy || selectedProfile.Evidence.Length < 2)" @onclick="SynthesizeWithAiAsync">AI tổng hợp phong cách tự động</button>
             </div>
             @if (learningAnalysis is not null)
             {
@@ -74,7 +74,7 @@
                         }
                     }
                 }
-                <button class="secondary" disabled="@busy" @onclick="UseSuggestedSummary">Đưa đề xuất vào bản nháp Style Summary</button>
+                <button class="secondary" disabled="@busy" @onclick="UseSuggestedSummary">Đưa đề xuất vào bản nháp tóm tắt phong cách</button>
                 <p class="muted">Đây chỉ là bản nháp. Hồ sơ chưa thay đổi cho đến khi bạn kiểm tra và bấm “Lưu định hướng”.</p>
                 <details><summary>Phương pháp và giới hạn</summary><p class="muted">@learningAnalysis.Methodology</p></details>
             }
