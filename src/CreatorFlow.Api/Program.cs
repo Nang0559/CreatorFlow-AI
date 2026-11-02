@@ -532,7 +532,7 @@ styleLab.MapGet("/{id:guid}/variants/{variantId:guid}/editing-package", async (G
         mediaPolicy = "Use original footage or media you are authorized to use. This package contains no copied source video, licensed music or third-party effects."
     };
     var planJson = JsonSerializer.Serialize(plan, new JsonSerializerOptions { WriteIndented = true });
-    var safeName = string.Concat(variant.Name.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '_'));
+    var safeName = new string(variant.Name.Select(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '_').ToArray());
     var readme = $"""
 CREATORFLOW – VIDEO EDIT HANDOFF
 Experiment: {experiment.Name}
