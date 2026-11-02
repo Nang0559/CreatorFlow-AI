@@ -1,6 +1,6 @@
 # CreatorFlow API
 
-All `/api/v1/*` endpoints require the `X-CreatorFlow-Api-Key` header. Configure `Authentication__ApiKey` with at least 32 characters and `ConnectionStrings__CreatorFlow` for SQL Server. `/health` and `/` are public health/metadata endpoints.
+All `/api/v1/*` endpoints require authentication and an active tenant context. SaaS requests use an OIDC bearer token plus `X-CreatorFlow-Tenant` workspace selector; the API independently validates the issuer+subject membership. The API-key bootstrap (`X-CreatorFlow-Api-Key`) is Development-only and is not a customer identity. Configure `ConnectionStrings__CreatorFlow` for SQL Server. `/health` and `/` are public health/metadata endpoints.
 
 ## Content projects
 
@@ -152,3 +152,21 @@ Apply SQL scripts `database/schema/001_initial.sql` through `009_style_learning_
 - `GET /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes` returns append-only downstream outcome observations.
 
 Feedback and outcome routes require the API key. Both validate that the feedback belongs to the candidate in the route. SQL triggers reject UPDATE and DELETE for both history tables. `Watch` remains an uncertain/deferred decision and must not be converted to a negative preference label. `FeatureSnapshotJson` is still `{}` until the versioned feature extractor is implemented. The current API key is a bootstrap service credential, not an individual creator identity.
+
+
+## Share Inbox
+
+- `POST /api/v1/share-inbox` with `{ "sharedUrl": "https://v.douyin.com/..." }`.
+- `GET /api/v1/share-inbox` lists links in the current workspace.
+- Links are HTTPS-validated, host-allowlisted, deduplicated per tenant and stored as user-submitted metadata. The server does not resolve short links, fetch pages, scrape content or automatically follow a channel. A shared link is an optional priority signal, not a prerequisite for topic-based discovery.
+
+## Video source assets and render jobs
+
+- `POST /api/v1/video/assets`: multipart `file`, `confirmRights=true`, optional `rightsNote`. Accepts MP4/MOV/M4V up to 500 MB. User confirmation is not an automated legal-rights check.
+- `GET /api/v1/video/assets` and `GET /api/v1/video/assets/{id}`: current-workspace assets only.
+- `POST /api/v1/video/render-jobs`: create one render job with `assetId`, `title`, `hook`, optional `callToAction`, optional `styleKey`.
+- `POST /api/v1/video/render-jobs/batch`: atomically create 2–3 distinct styles with `assetId`, `title`, `hook`, optional `callToAction`, `styleKeys`. The group is committed as one SQL transaction.
+- `GET /api/v1/video/render-jobs` and `GET /api/v1/video/render-jobs/{id}`: status and render metadata.
+- `GET /api/v1/video/render-jobs/{id}/preview` and `GET /api/v1/video/render-jobs/{id}/download`: authenticated MP4 streaming/download with HTTP Range support.
+
+The Windows worker uses After Effects/aerender to produce a 1080×1920 PNG sequence and FFmpeg/FFprobe to validate and encode H.264/AAC MP4. It is a local pilot renderer; advanced effects, B-roll, speech transcription, TTS, music analysis and publishing are not part of this endpoint contract. See [video rendering runbook](operations/VIDEO_RENDERING_AE_FFMPEG.md).
