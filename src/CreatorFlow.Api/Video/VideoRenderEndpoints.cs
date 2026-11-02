@@ -50,7 +50,17 @@ public static class VideoRenderEndpoints
             await input.CopyToAsync(output,ct);await output.FlushAsync(ct);
         }
         catch { if(File.Exists(path))File.Delete(path); throw; }
-        string hash;await using(var stream=File.OpenRead(path))hash=Convert.ToHexString(await SHA256.HashDataAsync(stream,ct)).ToLowerInvariant();
+        string hash;
+        try
+        {
+            await using var stream=File.OpenRead(path);
+            hash=Convert.ToHexString(await SHA256.HashDataAsync(stream,ct)).ToLowerInvariant();
+        }
+        catch
+        {
+            if(File.Exists(path))File.Delete(path);
+            throw;
+        }
         try
         {
             var c=db.Database.GetDbConnection();if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
