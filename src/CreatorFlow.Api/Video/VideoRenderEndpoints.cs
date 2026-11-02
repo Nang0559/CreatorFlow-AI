@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Data.SqlClient;
+using Microsoft.AspNetCore.Mvc;
 
 namespace CreatorFlow.Api.Video;
 
@@ -12,7 +13,9 @@ public static class VideoRenderEndpoints
     public static IEndpointRouteBuilder MapVideoRenderEndpoints(this IEndpointRouteBuilder app)
     {
         var g=app.MapGroup("/api/v1/video").RequireAuthorization();
-        g.MapPost("/assets",UploadAsync).DisableAntiforgery();
+        g.MapPost("/assets",UploadAsync).DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(MaxBytes+2_097_152))
+            .WithMetadata(new RequestFormLimitsAttribute { MultipartBodyLengthLimit=MaxBytes+2_097_152 });
         g.MapGet("/assets",ListAssetsAsync);
         g.MapGet("/assets/{id:guid}",GetAssetAsync);
         g.MapPost("/render-jobs",CreateJobAsync);
