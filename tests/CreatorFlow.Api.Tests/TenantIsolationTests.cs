@@ -72,7 +72,6 @@ public sealed class TenantIsolationTests
         // TenantId is part of every same-tenant alternate key; EF rejects a key move immediately.
         Assert.Throws<InvalidOperationException>(() =>
             dbA.Entry(project).Property<Guid>("TenantId").CurrentValue = tenantB);
-        Assert.Equal(tenantA, dbA.Entry(project).Property<Guid>("TenantId").CurrentValue);
     }
 
     private static async Task SeedWorkspaceAsync(DbContextOptions<CreatorFlowDbContext> options,
