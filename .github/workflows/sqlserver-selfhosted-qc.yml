@@ -1,4 +1,5 @@
 name: SQL Server self-hosted QC
+
 on:
   push:
     branches: [main, "feature/**"]
@@ -12,24 +13,63 @@ on:
       - "*.props"
       - "*.targets"
   workflow_dispatch:
+
 permissions:
   contents: read
+
 concurrency:
   group: creatorflow-sqlserver-qc
   cancel-in-progress: false
+
 jobs:
   sqlserver-qc:
-    # No pull_request trigger: do not execute untrusted fork code on a local SQL host.
+    # No pull_request trigger: never execute untrusted fork code on a local SQL host.
     runs-on: [self-hosted, Windows, X64, creatorflow-sql-qc]
     timeout-minutes: 45
     env:
-      CREATORFLOW_QC_SQL_INSTANCE: ${{ vars.CREATORFLOW_QC_SQL_INSTANCE }}
+      # The runner is local to the SQL Server host. The variable can override
+      # localhost for a named local instance, but must not point to a remote host.
+      CREATORFLOW_QC_SQL_INSTANCE: ${{ vars.CREATORFLOW_QC_SQL_INSTANCE || 'localhost' }}
       CREATORFLOW_QC_DATABASE: CreatorFlow_QC
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
+
+      # Diagnostic only: this runs under the actual Windows service identity.
+      # SQL login failures are reported here; the fail-closed database guard
+      # below remains authoritative and is not bypassed.
+      - name: Diagnose runner Windows and SQL identity
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host '===== RUNNER WINDOWS IDENTITY ====='
+          whoami
+
+          Write-Host '===== RUNNER SQL IDENTITY ====='
+          try {
+            Import-Module SqlServer -ErrorAction Stop
+            $identity = Invoke-Sqlcmd `
+              -ServerInstance $env:CREATORFLOW_QC_SQL_INSTANCE `
+              -Database master `
+              -TrustServerCertificate `
+              -Query "SELECT SUSER_SNAME() AS SqlLogin, ORIGINAL_LOGIN() AS OriginalLogin, IS_SRVROLEMEMBER(N'sysadmin') AS IsSysadmin;" `
+              -ErrorAction Stop
+            $identity | Format-List
+          }
+          catch {
+            Write-Warning ("Runner SQL identity probe failed: " + $_.Exception.Message)
+            Write-Warning 'The mandatory preflight/database guard will determine whether QC can continue.'
+          }
+
       - name: Preflight, database guard, SQL smoke and tests
         shell: pwsh
         run: ./tools/sql-qc/Invoke-SqlServerQc.ps1
