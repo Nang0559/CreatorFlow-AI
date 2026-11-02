@@ -16,13 +16,13 @@ permissions:
   contents: read
 
 concurrency:
-  group: creatorflow-local-pilot-docker
+  group: creatorflow-local-pilot-docker-default-labels
   cancel-in-progress: false
 
 jobs:
   docker-build:
     # Uses the Windows self-hosted HP runner. Keep the runner online and Docker Desktop running.
-    runs-on: [self-hosted, Windows, X64, pctp-ui]
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 60
     env:
       CREATORFLOW_AI_API_KEY: local-ci-placeholder-key-000000000000000000000000
