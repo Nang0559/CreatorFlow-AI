@@ -125,7 +125,7 @@ WHERE name=N'$Database';
     $tenantReadiness = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate -ErrorAction Stop -Query @"
 SELECT
     CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NOT NULL
-       AND (SELECT COUNT(*) FROM dbo.SchemaMigrations WHERE MigrationId IN (N'011_tenant_core',N'012_tenant_ownership',N'013_tenant_lifecycle')) = 3
+       AND (SELECT COUNT(*) FROM dbo.SchemaMigrations WHERE MigrationId IN (N'011_tenant_identity_foundation',N'012_tenant_data_isolation',N'013_tenant_membership_lifecycle')) = 3
     THEN 1 ELSE 0 END AS TenantSchemaReady;
 "@)
     $tenantSchemaReady = $tenantReadiness.Count -eq 1 -and $tenantReadiness[0].TenantSchemaReady -eq 1
