@@ -34,13 +34,14 @@ public sealed class CreatorFlowApiClient(
         return (content, fileName.Trim('"'), response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream");
     }
 
-    public async Task<VideoUploadResponse?> UploadVideoAsync(Stream stream, string fileName, string? rightsNote, CancellationToken ct = default)
+    public async Task<VideoUploadResponse?> UploadVideoAsync(Stream stream, string fileName, string? rightsNote, bool confirmRights, CancellationToken ct = default)
     {
         EnsureConfigured();
         using var form = new MultipartFormDataContent();
         using var file = new StreamContent(stream);
         file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
         form.Add(file, "file", Path.GetFileName(fileName));
+        form.Add(new StringContent(confirmRights ? "true" : "false"), "confirmRights");
         if (!string.IsNullOrWhiteSpace(rightsNote)) form.Add(new StringContent(rightsNote), "rightsNote");
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/video/assets") { Content = form };
         await AddIdentityHeadersAsync(request);
