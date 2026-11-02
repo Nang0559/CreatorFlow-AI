@@ -5,28 +5,28 @@ CreatorFlow uses Douyin (China) for discovery and TikTok Vietnam for distributio
 
 Intended loop: discover → select → analyze → localize → produce → review → publish → measure → learn.
 
-The repository now includes an actual provider-backed LLM runtime for text analysis, 2–3-variant Vietnamese creative generation and evidence-grounded style synthesis. The SQL-backed data foundation, metadata-driven discovery intake, Vietnam trend observations, Style Lab, creator style profiles and deterministic statistical learning preview also exist. Trained ML, persistence/invocation of LLM results from the creator workflow, external platform automation and media production remain integration work.
+The repository includes a provider-backed LLM runtime for text analysis, 2–3-variant Vietnamese creative generation and evidence-grounded style synthesis. SQL-backed project/trend/Style Lab foundations, tenant identity/isolation foundations, creator-shared link inbox, and a local After Effects + FFmpeg render pipeline also exist. Discovery query planning/ranking is not a live data collector; feedback learning is not yet an activated SQL-to-ranking loop. Trained ML, external platform connectors, speech/music understanding and publishing remain integration work.
 
 ## 2. Logical components
 
 | Component | Responsibility | As-built status |
 |---|---|---|
 | Creator Web workspace | Creator-facing topic, trend, experiment and profile workflows | Blazor pages exist for trends, Style Lab and style profiles |
-| API | Authenticated /api/v1 application contract | Minimal API endpoints; API-key bootstrap authentication |
+| API | Authenticated /api/v1 application contract | OIDC bearer + active tenant membership in SaaS mode; fixed Development-only API-key bootstrap for local pilot |
 | Domain | Lifecycle invariants and deterministic style analysis | Implemented for projects, discovery, experiments, profiles and evidence |
 | Infrastructure | SQL Server persistence through EF Core | DbContext mappings and SQL scripts exist |
 | AI service | LLM-backed source analysis, Vietnamese variant generation and evidence-grounded style synthesis | Python FastAPI service calls a configured OpenAI-compatible chat-completions provider; outputs are schema-validated drafts |
 | Discovery connectors | Douyin account/feed/video ingestion | Not implemented; endpoints accept metadata |
 | Vietnam trend connectors | TikTok Vietnam creator/video/sound ingestion | Not implemented; observations are manual or connector-supplied |
-| Media engine | Download/ingest, transcode, subtitle, voice and render | Not implemented |
+| Media engine | Source asset intake, AE project/PNG render, FFmpeg MP4 encode, preview/download | Initial local Windows pipeline implemented; advanced effects, STT/TTS, music analysis and hardware acceptance remain open |
 | Publishing and analytics | TikTok publishing, product attachment and metric sync | Not implemented |
-| Background processing | Scheduled polling, queues, retries and reconciliation | Not implemented |
+| Background processing | Durable video render jobs, retries and render status | SQL-backed video queue/worker implemented; discovery/provider orchestration, outbox and dead-letter handling remain open |
 
 ## 3. Runtime and trust boundaries
 - Blazor Web calls the API server-side. The API key must not be exposed to browser storage or shipped to the client.
-- /api/v1/* is protected by X-CreatorFlow-Api-Key. This is service-level access, not per-user identity or tenant isolation.
+- API requests use validated OIDC bearer identity and active tenant membership in SaaS mode. The shared API key is a fixed Development-only bootstrap path, not a customer identity.
 - SQL Server uses ConnectionStrings__CreatorFlow. Missing database configuration must fail with service-unavailable behavior rather than fabricated data.
-- Media files, when implemented, must live outside the web root and pass MIME, size, duration and file-signature validation.
+- Video source/output files live outside the web root, are keyed by opaque IDs and checked for size/container signature; FFprobe validates source duration and video stream before rendering. Production malware scanning, rights registry and object-storage lifecycle remain open.
 - Provider/model output is a draft. Creator approval is required for scripts and final publication.
 - Only assets with documented rights/permission may enter production. No unauthorized scraping, watermark removal or platform-policy evasion.
 
@@ -50,7 +50,7 @@ A style experiment may link to a content project and has exactly two or three in
 ### 4.4 Style profile and learning preview
 A style profile stores positioning, editable Style Summary and evidence imported from confirmed experiment winners. A unique profile/experiment pair prevents duplicate evidence imports.
 
-The Style Learning endpoint analyzes evaluated experiment variants and returns repeated factors and topic breakdowns. It is read-only; it does not persist an approval record or automatically alter profile guidance. The current endpoint verifies that the requested profile exists, but analyzes the evaluated experiment pool rather than a profile-filtered evidence set. This is a known limitation.
+The deterministic Style Learning endpoint analyzes evaluated experiment variants and returns repeated factors and topic breakdowns; it remains global rather than profile-scoped. A separate Learning Memory workflow persists evidence snapshots, proposals and immutable profile versions after human review. The endpoint's global experiment-pool limitation remains a multi-tenant blocker.
 
 ## 6. Data and workflow principles
 1. Preserve source provenance: URLs, platform identifiers and discovery method.
@@ -63,13 +63,6 @@ The Style Learning endpoint analyzes evaluated experiment variants and returns r
 8. Deduplicate platform identities and evidence imports; future jobs/publishing need durable idempotency keys.
 
 ## 7. Deployment and schema
-Apply numbered SQL scripts in order to a dedicated CreatorFlow database:
-- 001_initial.sql
-- 002_content_projects.sql
-- 003_douyin_discovery.sql
-- 004_video_topic_provenance.sql
-- 005_vietnam_trends_and_style_lab.sql
-- 006_creator_style_profiles.sql
-- 007_style_learning_topic.sql
+Apply numbered migrations through `database/Apply-Migrations.ps1`; current manifest includes 001–010 and 014–020, with 011–013 enabled only after explicit legacy-workspace ownership review. Migrations 017–020 cover video jobs, same-tenant relationships and workspace-scoped uniqueness.
 
 Do not apply these scripts to an unrelated production database. See ../GETTING_STARTED.md for runtime configuration.
