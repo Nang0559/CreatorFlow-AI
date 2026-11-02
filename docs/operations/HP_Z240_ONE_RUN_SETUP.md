@@ -16,7 +16,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\Setup-HPZ240.ps1
 ```
 
-The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing SQL migrations 001–010 and 014–016 using the checksum ledger, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, and starts or reuses the native API on port 7001. It then probes the local Web UI at port 8080. By default, Web is accessible only from the HP itself.
+The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing SQL migrations 001–010 and 014–016 using the checksum ledger, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, starts or reuses the native API on port 7001, and reports CPU/RAM/GPU plus whether CapCut Desktop and After Effects are installed. It then probes the local Web UI at port 8080. By default, Web is accessible only from the HP itself.
 
 ## Safe reruns
 - Already-applied SQL migrations are skipped only if their stored SHA-256 matches the repository file.
@@ -46,5 +46,5 @@ The setup preserves the phone-only Douyin rule. It does not log in to Douyin/Tik
 ## Important boundary
 A successful local setup proves database migrations, builds, container startup and health endpoints. It does not prove that live Douyin/TikTok discovery providers are connected or that feedback is already persisted end-to-end; those require their own integration and acceptance tests.
 
-## Mobile-first interface
+## Video editing applications\nThe setup script detects CapCut Desktop and After Effects but does not install them or sign into any editor account. Install CapCut from [the official Desktop page](https://www.capcut.com/tools/desktop-video-editor). After Effects is optional and requires an Adobe license; see [Adobe After Effects](https://www.adobe.com/products/aftereffects.html). Style Lab can export a CapCut/After Effects handoff ZIP containing the script, shot list, edit plan and an editable After Effects starter composition. This is not a finished MP4 or a native CapCut project. See `docs/design/VIDEO_EDITING_HANDOFF.md`.\n\n## Mobile-first interface
 The same setup pulls the responsive Web UI. On phone-sized screens it switches to a compact top bar and five-item bottom navigation: Overview, Discover, Studio, Performance, Settings. Desktop retains the sidebar and secondary management links. Touch targets, input sizing, safe-area spacing for iPhone, compact cards and reduced-motion preferences are included. The home page prioritizes three common actions: discover content, create style variants, and review performance. The interface does not claim that unimplemented integrations are connected.
