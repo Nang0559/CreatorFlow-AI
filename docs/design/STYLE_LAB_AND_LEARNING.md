@@ -86,7 +86,7 @@ GET /api/v1/style-profiles/{profileId}/learning-analysis verifies that the profi
 The endpoint returns eligibility counts, signals, topic breakdown, a proposed summary and methodology. Learning Memory now persists a submitted draft with a profile-scoped evidence snapshot and algorithm version. Pending proposals can be approved or rejected; approval updates current guidance and creates an immutable profile version. The API accepts the generated summary as a draft payload, so the AI synthesis response must still be submitted to the proposal endpoint by its caller.
 
 ## 6. Creator review
-The Style Profiles UI requests analysis, can place the proposed summary into the editable Style Summary draft, and leaves the creator to review and save guidance. This is a manual edit step, not a formal approval workflow: no persisted Pending/Approved/Rejected proposal or immutable profile version history exists yet.
+The Style Profiles UI requests analysis, can place the proposed summary into the editable Style Summary draft, and leaves the creator to review and save guidance. The UI draft remains creator-editable. Separately, Learning Memory exposes persisted Pending/Approved/Rejected proposals and immutable profile-version history; the creator must explicitly submit a synthesis draft to that workflow and approve it.
 
 ## 7. LLM-assisted synthesis — implemented service boundary
 
