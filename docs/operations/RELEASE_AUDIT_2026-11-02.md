@@ -20,7 +20,7 @@
 - Added migration 019 for same-tenant foreign keys across mapped project, experiment, style, feedback and trend relationships.
 - Added migration 020 for tenant-scoped uniqueness of source channels, video candidates, creator profiles and Vietnam trend signals.
 - Aligned EF Core delete behavior and unique indexes with those SQL constraints.
-- Updated database verification to check the trusted composite FKs and workspace-scoped indexes.
+- Strengthened database verification to compare composite FK table/column order, trusted/disabled state, delete action, and exact unique-index key order/filter definition.
 - Aligned EF Core relationship metadata with the same-tenant composite foreign keys and SQL constraint names, rather than leaving the model on single-column relationships.
 - Preserved the EF-owned connection lifetime in video API endpoints; only commands/readers are disposed per operation.
 - Corrected the SQL Server QC workflow to use the default `self-hosted`, `Windows`, `X64` labels verified on the `tikt-ui` runner; actual SQL job pickup and SQL execution remain to be evidenced.
