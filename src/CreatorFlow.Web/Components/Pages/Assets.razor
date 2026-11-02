@@ -182,9 +182,8 @@
             if (useStory) styles.Add("Kể chuyện");
             if (useReview) styles.Add("Đánh giá sản phẩm");
             if (styles.Count is < 2 or > 3) { message = "Hãy chọn 2 hoặc 3 phong cách."; return; }
-            foreach (var style in styles)
-                await Api.PostAsync<object,object>("/api/v1/video/render-jobs",new { assetId,title,hook,callToAction=cta,styleKey=style });
-            message = $"Đã đưa {styles.Count} phương án vào hàng đợi dựng.";
+            await Api.PostAsync<object,object>("/api/v1/video/render-jobs/batch",new { assetId,title,hook,callToAction=cta,styleKeys=styles });
+            message = $"Đã đưa đồng thời {styles.Count} phương án vào hàng đợi dựng.";
             await LoadAsync();
         }
         catch { message = "Không thể tạo tác vụ dựng. Hãy kiểm tra video nguồn và kết nối máy chủ."; }
