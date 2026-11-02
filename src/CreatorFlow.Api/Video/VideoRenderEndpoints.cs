@@ -26,7 +26,7 @@ public static class VideoRenderEndpoints
         if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);
         if(!tenant.TenantId.HasValue)return Results.Forbid();
         if(!req.HasFormContentType)return Results.BadRequest(new{error="Vui lòng chọn tệp video."});
-        var form=await req.ReadFormAsync(ct);var file=form.Files.GetFile("file");
+        var form=await req.ReadFormAsync(ct);\n        if(!bool.TryParse(form["confirmRights"],out var rightsConfirmed)||!rightsConfirmed)return Results.BadRequest(new{error="Bạn cần xác nhận quyền sử dụng video trước khi tải lên."});\n        var file=form.Files.GetFile("file");
         if(file is null||file.Length==0)return Results.BadRequest(new{error="Tệp video đang trống."});
         if(file.Length>MaxBytes)return Results.BadRequest(new{error="Video vượt quá giới hạn 500 MB."});
         var ext=Path.GetExtension(file.FileName);
