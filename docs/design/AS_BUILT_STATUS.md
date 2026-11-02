@@ -6,7 +6,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 | Capability | Evidence in repository | Status |
 |---|---|---|
-| SaaS tenant identity and row-isolation foundation | Tenant/Membership/Invitation entities; API JWT validation; Web OIDC Authorization Code + PKCE; issuer+subject membership; one-time Owner bootstrap; invitation acceptance and membership administration; EF tenant filters; migrations 011–013 | Baseline implemented in code; real provider configuration, email delivery, full role matrix, SQL execution and cross-tenant security tests remain pending |
+| SaaS tenant identity and row-isolation foundation | Tenant/Membership/Invitation entities; API JWT validation; Web OIDC Authorization Code + PKCE; issuer+subject membership; one-time Owner bootstrap; invitation acceptance and membership administration; EF tenant filters; migrations 011–013 and composite tenant/unique-key migrations 018–020 | Baseline implemented in code; real provider configuration, email delivery, full role matrix, SQL execution and cross-tenant security tests remain pending |
 | Content project foundation | Domain, API, EF mapping and SQL | Implemented foundation |
 | Topic management | Topic domain/API/UI and SQL | Metadata workflow |
 | Douyin source channel records | Channel domain/API/UI and SQL | Metadata workflow; no live Douyin follow |
@@ -21,14 +21,14 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 | Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; not ML |
 | Video source library and rights confirmation | Tenant-scoped asset upload, SHA-256 provenance, size/format checks, SQL metadata | Implemented foundation; codec/duration validation occurs in render worker |
 | Automated video render | Durable SQL jobs, After Effects JSX project generation, AE image-sequence render, FFmpeg H.264/AAC MP4, preview/download proxy | Implemented pipeline; hardware/visual acceptance on HP Z240 still required |
-| LLM runtime | Provider adapter, structured contracts, authenticated FastAPI endpoints, tests, .NET proxy, Style Lab generation UI and profile-scoped learning synthesis UI | Implemented first LLM workflow; provider credentials required; proposal persistence/versioning pending |
-| Human edit before guidance save | Draft-to-editor workflow | Manual review; no persisted approval/version |
+| LLM runtime | Provider adapter, structured contracts, authenticated FastAPI endpoints, tests, .NET proxy, Style Lab generation UI and profile-scoped learning synthesis UI | Implemented first LLM workflow; provider credentials required; synthesis output is a draft and must be submitted to Learning Memory for review |
+| Human review and Learning Memory | Persisted proposal create/list/approve/reject, reviewer from authenticated identity, immutable profile versions | Implemented foundation; production OIDC and profile-scoped analysis remain release gates |
 
 ## Not implemented / do not represent as complete
 - Douyin login, automatic channel follow, feed polling and new-video monitor.
 - TikTok Vietnam trend/channel/video/sound/music connector.
 - Automatic TikTok metrics synchronization after publication.
-- Media download/ingest and rights/license registry.
+- Server-side media download/ingest from external platforms and a full rights/license evidence registry. User-uploaded source assets with an explicit rights confirmation are implemented.
 - Source video scene, transcript, voice, sound and story analysis pipeline.
 - Automatic source-video transcription, visual/audio analysis and media ingestion pipeline.
 - Automatic subtitle transcription/alignment, TTS, advanced B-roll, music/beat analysis and professional effect/template library.
