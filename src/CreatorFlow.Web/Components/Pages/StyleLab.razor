@@ -1,5 +1,6 @@
 @page "/style-lab"
 @inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
+@inject IJSRuntime JS
 
 <PageTitle>Style Lab · CreatorFlow</PageTitle>
 <header class="page-header">
@@ -52,6 +53,8 @@
                         <strong>@variant.Name</strong><span class="status">@variant.Status</span>
                         <p><b>Hook:</b> @variant.Hook</p><p><b>Cách nói:</b> @variant.SpeakingStyle</p><p><b>Nhịp dựng:</b> @variant.EditPacing</p><p><b>Âm thanh:</b> @variant.AudioApproach</p>
                         <div class="variant-stats"><span>@variant.Views.ToString("N0") views</span><span>@(variant.EngagementRate?.ToString("0.00") ?? "—")% tương tác</span><span>@variant.FollowsGained follows</span><span>@variant.Orders orders</span></div>
+                        <button class="secondary" disabled="@busy" @onclick="() => DownloadEditingPackageAsync(experiment.Id, variant.Id)">Tải gói dựng CapCut / After Effects</button>
+
                         @if (variant.Status == "Draft") { <button class="secondary" disabled="@busy" @onclick="() => MarkReadyAsync(experiment.Id, variant.Id)">Đánh dấu sẵn sàng</button> }
                         @if (variant.Status == "Ready") { <button class="secondary" disabled="@busy" @onclick="() => MarkPublishedAsync(experiment.Id, variant.Id)">Đã đăng video này</button> }
                         @if (variant.Status == "Published")
@@ -172,6 +175,18 @@
             if (string.IsNullOrWhiteSpace(hypothesis)) hypothesis = "So sánh các góc sáng tạo khác nhau trên cùng một chủ đề.";
         }
         catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task DownloadEditingPackageAsync(Guid experimentId, Guid variantId)
+    {
+        try
+        {
+            busy = true; error = "";
+            var file = await Api.GetDownloadAsync($"/api/v1/style-experiments/{experimentId}/variants/{variantId}/editing-package");
+            await JS.InvokeVoidAsync("creatorFlowDownload", file.FileName, file.ContentType, Convert.ToBase64String(file.Content));
+        }
+        catch (Exception ex) { error = $"Không thể tạo gói dựng: {ex.Message}"; }
         finally { busy = false; }
     }
 
