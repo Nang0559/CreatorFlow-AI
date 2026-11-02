@@ -44,6 +44,8 @@ jobs:
         run: |
           $files = @(
             'scripts/Setup-HPZ240.ps1',
+            'scripts/Start-VideoRenderWorker.ps1',
+            'scripts/Test-VideoRenderer.ps1',
             'database/Apply-Migrations.ps1',
             'database/Verify-Database.ps1',
             'scripts/docker/Import-LocalPilotEnv.ps1'
