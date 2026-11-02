@@ -1,4 +1,5 @@
 using CreatorFlow.Domain.Discovery;
+using Xunit;
 
 namespace CreatorFlow.Domain.Tests;
 
