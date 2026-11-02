@@ -157,6 +157,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         modelBuilder.Entity<VietnamTrendMetricSnapshot>(entity =>
         {
             entity.ToTable("VietnamTrendMetricSnapshots");
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasKey(x => x.Id);
             entity.HasOne<VietnamTrendSignal>().WithMany()
                 .HasForeignKey("TenantId", nameof(VietnamTrendMetricSnapshot.TrendSignalId)).HasPrincipalKey("TenantId", "Id")
@@ -182,6 +183,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         modelBuilder.Entity<CreatorStyleEvidence>(entity =>
         {
             entity.ToTable("CreatorStyleEvidence");
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasKey(x => x.Id);
             entity.Property(x => x.ExperimentName).HasMaxLength(160).IsRequired();
             entity.Property(x => x.VariantName).HasMaxLength(120).IsRequired();
@@ -203,6 +205,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         modelBuilder.Entity<StyleLearningProposal>(entity =>
         {
             entity.ToTable("StyleLearningProposals");
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasKey(x => x.Id);
             entity.Property(x => x.ProposedSummary).HasMaxLength(4000).IsRequired();
             entity.Property(x => x.EvidenceExperimentIdsJson).IsRequired();
@@ -220,6 +223,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         modelBuilder.Entity<CreatorStyleProfileVersion>(entity =>
         {
             entity.ToTable("CreatorStyleProfileVersions");
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasKey(x => x.Id);
             entity.Property(x => x.DisplayName).HasMaxLength(160).IsRequired();
             entity.Property(x => x.Positioning).HasMaxLength(1000).IsRequired();
@@ -238,6 +242,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         modelBuilder.Entity<StyleExperiment>(entity =>
         {
             entity.ToTable("StyleExperiments");
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(160).IsRequired();
             entity.Property(x => x.Hypothesis).HasMaxLength(2000).IsRequired();
@@ -259,6 +264,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         modelBuilder.Entity<StyleExperimentVariant>(entity =>
         {
             entity.ToTable("StyleExperimentVariants");
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Name).HasMaxLength(120).IsRequired();
             entity.Property(x => x.Hook).HasMaxLength(1000).IsRequired();
@@ -277,6 +283,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         modelBuilder.Entity<StyleVariantMetricObservation>(entity =>
         {
             entity.ToTable("StyleVariantMetricObservations");
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasKey(x => x.Id);
             entity.Property(x => x.AverageWatchSeconds).HasPrecision(12, 3);
             entity.Property(x => x.VideoDurationSeconds).HasPrecision(12, 3);
@@ -291,6 +298,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         modelBuilder.Entity<TrendSelectionFeedback>(entity =>
         {
             entity.ToTable("TrendSelectionFeedback");
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasKey(x => x.Id);
             entity.Property(x => x.Decision).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.Property(x => x.ReasonCode).HasMaxLength(60).IsRequired();
@@ -307,6 +315,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         modelBuilder.Entity<TrendCandidateOutcomeObservation>(entity =>
         {
             entity.ToTable("TrendCandidateOutcomeObservations");
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasKey(x => x.Id);
             entity.Property(x => x.OutcomeKind).HasConversion<string>().HasMaxLength(32).IsRequired();
             entity.Property(x => x.OutcomeValue).HasMaxLength(1000);
