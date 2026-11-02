@@ -42,23 +42,29 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
               WHERE Status=N'Queued' AND AttemptCount<3 ORDER BY CreatedAt,Id)
             UPDATE q SET Status=N'Rendering',ProgressPercent=5,StartedAt=SYSUTCDATETIME(),
               AttemptCount=AttemptCount+1,ErrorMessage=NULL
-            OUTPUT inserted.Id,inserted.SourcePath,inserted.OutputPath,inserted.Title,
+            OUTPUT inserted.Id,inserted.TenantId,inserted.SourcePath,inserted.OutputPath,inserted.Title,
               inserted.Hook,inserted.CallToAction,inserted.StyleKey;
             """;
         await using var r = await cmd.ExecuteReaderAsync(ct);
         if (!await r.ReadAsync(ct)) return null;
-        return new(r.GetGuid(0),r.GetString(1),r.GetString(2),r.GetString(3),r.GetString(4),r.IsDBNull(5)?null:r.GetString(5),r.GetString(6));
+        return new(r.GetGuid(0),r.GetGuid(1),r.GetString(2),r.GetString(3),r.GetString(4),r.GetString(5),r.IsDBNull(6)?null:r.GetString(6),r.GetString(7));
     }
 
     private async Task RenderAsync(Job j,CancellationToken ct)
     {
-        var work=Path.Combine(root,"work",j.Id.ToString("N")); Directory.CreateDirectory(work);
+        var work=Path.Combine(root,"work",j.Id.ToString("N"));
         var project=Path.Combine(work,"creatorflow.aep"); var jsx=Path.Combine(work,"build.jsx");
         var aeSequence=Path.Combine(work,"frame_[#####].png");
         var ffmpegSequence=Path.Combine(work,"frame_%05d.png"); var output=Path.GetFullPath(j.Output);
-        Directory.CreateDirectory(Path.GetDirectoryName(output)!);
         try
         {
+            var sourceRoot=Path.GetFullPath(Path.Combine(root,"sources"))+Path.DirectorySeparatorChar;
+            var tenantOutputRoot=Path.GetFullPath(Path.Combine(root,"renders",j.TenantId.ToString("N")))+Path.DirectorySeparatorChar;
+            var sourcePath=Path.GetFullPath(j.Source);
+            if(!sourcePath.StartsWith(sourceRoot,StringComparison.OrdinalIgnoreCase)||!output.StartsWith(tenantOutputRoot,StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Đường dẫn video không thuộc vùng lưu trữ của workspace.");
+            Directory.CreateDirectory(work);
+            Directory.CreateDirectory(Path.GetDirectoryName(output)!);
             Require(afterFx); Require(aerender); Require(ffmpeg);
             if(!File.Exists(j.Source)) throw new FileNotFoundException("Không tìm thấy video nguồn.",j.Source);
             var sourceInfo=await ProbeAsync(j.Source,ct);
@@ -177,5 +183,5 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
     }
     private static async Task<string> HashAsync(string path,CancellationToken ct){await using var s=File.OpenRead(path);return Convert.ToHexString(await SHA256.HashDataAsync(s,ct)).ToLowerInvariant();}
     private static void Require(string path){if(string.IsNullOrWhiteSpace(path)||!File.Exists(path))throw new FileNotFoundException("Chưa cấu hình công cụ dựng video.",path);}
-    private sealed record Job(Guid Id,string Source,string Output,string Title,string Hook,string? Cta,string StyleKey);
+    private sealed record Job(Guid Id,Guid TenantId,string Source,string Output,string Title,string Hook,string? Cta,string StyleKey);
 }
