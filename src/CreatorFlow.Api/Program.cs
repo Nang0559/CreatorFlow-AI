@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text;
 using System.IO.Compression;
 using CreatorFlow.Api.Security;
+using CreatorFlow.Api.Video;
 using CreatorFlow.Application.Content;
 using CreatorFlow.Domain.Discovery;
 using CreatorFlow.Domain.Content;
@@ -82,6 +83,7 @@ app.UseMiddleware<TenantRoleGuardMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" })).AllowAnonymous();
+app.MapVideoRenderEndpoints();
 
 app.MapGet("/api/v1/content-projects", async (int? skip, int? take, HttpContext context, CancellationToken cancellationToken) =>
 {
