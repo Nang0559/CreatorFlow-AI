@@ -16,7 +16,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\Setup-HPZ240.ps1
 ```
 
-The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing SQL migrations 001–010 and 014–015 using the checksum ledger, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, and starts or reuses the native API on port 7001. It then probes the local Web UI at port 8080.
+The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing SQL migrations 001–010 and 014–015 using the checksum ledger, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, and starts or reuses the native API on port 7001. It then probes the local Web UI at port 8080. The example enables optional phone access on the trusted private LAN.
 
 ## Safe reruns
 - Already-applied SQL migrations are skipped only if their stored SHA-256 matches the repository file.
@@ -31,7 +31,7 @@ The script checks the branch and clean working tree, fast-forward pulls the bran
 - `-SkipDotNetTests`: build but skip .NET tests.
 - `-SkipDocker`: skip Docker build/start and AI checks.
 - `-SkipApiStart`: do not start/reuse the native API.
-- `-HealthTimeoutSeconds 180`: allow more time for first startup.
+- `-HealthTimeoutSeconds 180`: allow more time for first startup.\n- `-EnableLanAccess`: optional; publishes Web port 8080 to the LAN and adds a Windows Firewall rule limited to Private profile + LocalSubnet. Only use on a trusted home/work network. SQL (1433), API (7001) and AI (8001) are not published.
 
 ## Expected URLs
 - Web: http://localhost:8080
