@@ -96,7 +96,7 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
       function caption(value,y,size,color){
         if(!value)return;
         var layer=comp.layers.addText(value),doc=layer.property("Source Text").value;
-        var fontSize=Math.max(38,size-Math.max(0,value.length-24)*0.6);doc.font="Arial";doc.fontSize=fontSize;doc.fillColor=color;
+        var fontSize=Math.max(38,size-Math.max(0,value.length-24)*0.6);doc.font="ArialMT";doc.fontSize=fontSize;doc.fillColor=color;
         doc.applyStroke=true;doc.strokeColor=[0.12,0.08,0.2];doc.strokeWidth=3;
         doc.justification=ParagraphJustification.CENTER_JUSTIFY;
         layer.property("Source Text").setValue(doc);
