@@ -55,7 +55,7 @@ jobs:
               (Join-Path $PWD $file), [ref]$tokens, [ref]$errors
             ) | Out-Null
             if ($errors.Count -gt 0) {
-              $errors | ForEach-Object { Write-Error "$file:$($_.Extent.StartLineNumber): $($_.Message)" }
+              $errors | ForEach-Object { Write-Error "${file}:$($_.Extent.StartLineNumber): $($_.Message)" }
               throw "PowerShell parse failed: $file"
             }
             Write-Host "PASS $file"
