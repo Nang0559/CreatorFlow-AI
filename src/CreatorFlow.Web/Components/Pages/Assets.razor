@@ -163,7 +163,7 @@
             await using var stream = args.File.OpenReadStream(524_288_000);
             var result = await Api.UploadVideoAsync(stream,args.File.Name,rightsNote,confirmRights);
             if (result is null) throw new InvalidOperationException();
-            message = "Đã thêm video nguồn vào thư viện.";
+            message = result.Duplicate ? "Video này đã có trong thư viện, không tạo bản sao." : "Đã thêm video nguồn vào thư viện.";
             await LoadAsync();
             selectedAsset = result.Id.ToString();
         }
