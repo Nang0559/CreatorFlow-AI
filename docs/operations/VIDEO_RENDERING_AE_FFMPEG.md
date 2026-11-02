@@ -21,7 +21,7 @@ Ví dụ đường dẫn (điều chỉnh theo phiên bản Adobe đã cài):
 Không đưa connection string, API key hoặc thông tin giấy phép vào Git. Worker cần quyền đọc/ghi thư mục video và quyền SQL tối thiểu trên hai bảng VideoAssets, VideoRenderJobs. Chạy worker dưới tài khoản Windows có quyền truy cập SQL; không mở cổng mạng cho worker.
 
 ## Database
-Migration 017 tạo bảng tài sản/video job. Migration 018 bổ sung khóa ngoại ghép TenantId để SQL Server không cho job tham chiếu video nguồn của workspace khác và inbox không thể liên kết kênh của workspace khác. Migration 019 bổ sung khóa ngoại cùng tenant cho các quan hệ dự án, thử nghiệm phong cách, phản hồi và dữ liệu xu hướng. Cả hai migration được đưa vào database/Apply-Migrations.ps1. Chạy sau khi xác nhận đúng database CreatorFlow_QC:
+Migration 017 tạo bảng tài sản/video job. Migration 018 bổ sung khóa ngoại ghép TenantId để SQL Server không cho job tham chiếu video nguồn của workspace khác và inbox không thể liên kết kênh của workspace khác. Migration 019 bổ sung khóa ngoại cùng tenant cho các quan hệ dự án, thử nghiệm phong cách, phản hồi và dữ liệu xu hướng. Migration 020 cho phép cùng một kênh/video/hồ sơ tồn tại độc lập trong nhiều workspace. Cả hai migration được đưa vào database/Apply-Migrations.ps1. Chạy sau khi xác nhận đúng database CreatorFlow_QC:
 pwsh -File database/Apply-Migrations.ps1 -SqlInstance localhost -Database CreatorFlow_QC
 
 ## Chạy worker
