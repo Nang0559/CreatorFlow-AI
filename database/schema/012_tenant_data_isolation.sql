@@ -50,17 +50,17 @@ BEGIN
        rolls back the trigger state and the backfill together.
     */
     IF @TableName = N'TrendSelectionFeedback'
-       AND EXISTS (SELECT 1 FROM dbo.TrendSelectionFeedback WHERE TenantId IS NULL)
     BEGIN
         DISABLE TRIGGER dbo.TR_TrendSelectionFeedback_Immutable ON dbo.TrendSelectionFeedback;
-        UPDATE dbo.TrendSelectionFeedback SET TenantId = @LegacyTenantId WHERE TenantId IS NULL;
+        SET @Sql = N'UPDATE dbo.TrendSelectionFeedback SET TenantId = @TenantId WHERE TenantId IS NULL;';
+        EXEC sys.sp_executesql @Sql, N'@TenantId uniqueidentifier', @TenantId = @LegacyTenantId;
         ENABLE TRIGGER dbo.TR_TrendSelectionFeedback_Immutable ON dbo.TrendSelectionFeedback;
     END
     ELSE IF @TableName = N'TrendCandidateOutcomeObservations'
-       AND EXISTS (SELECT 1 FROM dbo.TrendCandidateOutcomeObservations WHERE TenantId IS NULL)
     BEGIN
         DISABLE TRIGGER dbo.TR_TrendCandidateOutcomeObservations_Immutable ON dbo.TrendCandidateOutcomeObservations;
-        UPDATE dbo.TrendCandidateOutcomeObservations SET TenantId = @LegacyTenantId WHERE TenantId IS NULL;
+        SET @Sql = N'UPDATE dbo.TrendCandidateOutcomeObservations SET TenantId = @TenantId WHERE TenantId IS NULL;';
+        EXEC sys.sp_executesql @Sql, N'@TenantId uniqueidentifier', @TenantId = @LegacyTenantId;
         ENABLE TRIGGER dbo.TR_TrendCandidateOutcomeObservations_Immutable ON dbo.TrendCandidateOutcomeObservations;
     END
     ELSE
