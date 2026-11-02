@@ -34,7 +34,7 @@ Set these values in .env (never commit this file):
 
     Server=localhost;Database=CreatorFlow_QC;Integrated Security=True;Encrypt=True;TrustServerCertificate=True;
 
-- CREATORFLOW_LLM_API_KEY and CREATORFLOW_LLM_MODEL: set these to the credentials and model supported by your chosen OpenAI-compatible provider. Keep the provider key private.
+- CREATORFLOW_LLM_API_KEY and CREATORFLOW_LLM_MODEL: set these to the credentials and model supported by your chosen OpenAI-compatible provider. Keep the provider key private. If a secret contains a dollar sign, wrap the .env value in single quotes.
 
 Use a password manager or a local secret generator to create keys. Do not paste secrets into chat, source files, screenshots or Git commits.
 
@@ -42,7 +42,7 @@ Use a password manager or a local secret generator to create keys. Do not paste 
 
 In PowerShell, from the repository root:
 
-    docker compose --env-file .env -f compose.dev.yaml config
+    docker compose --env-file .env -f compose.dev.yaml config --quiet
     docker compose --env-file .env -f compose.dev.yaml up --build -d
     docker compose --env-file .env -f compose.dev.yaml ps
     Invoke-RestMethod http://localhost:8001/health
