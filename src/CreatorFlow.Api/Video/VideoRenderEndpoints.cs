@@ -39,7 +39,7 @@ public static class VideoRenderEndpoints
         if(file.Length>MaxBytes)return Results.BadRequest(new{error="Video vượt quá giới hạn 500 MB."});
         var ext=Path.GetExtension(file.FileName);
         if(!new[]{".mp4",".mov",".m4v"}.Contains(ext,StringComparer.OrdinalIgnoreCase))return Results.BadRequest(new{error="Chỉ nhận video MP4, MOV hoặc M4V."});
-        var root=StorageRoot(cfg);var dir=Path.Combine(root,"sources");Directory.CreateDirectory(dir);
+        var root=StorageRoot(cfg);var dir=Path.Combine(root,"sources",tenant.TenantId.Value.ToString("N"));Directory.CreateDirectory(dir);
         var id=Guid.NewGuid();var stored=id.ToString("N")+ext.ToLowerInvariant();var path=Path.Combine(dir,stored);
         try
         {
