@@ -12,8 +12,8 @@ $hostName = ($SqlInstance -split '\\')[0].Trim()
 if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { throw "Refusing non-local SQL instance '$SqlInstance'." }
 Import-Module SqlServer -ErrorAction Stop
 
-$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_', '017_', '018_', '019_', '020_')
-if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_') }
+$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_')
+if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_') }
 $schemaPath = Join-Path $PSScriptRoot 'schema'
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
     $name = $_.Name
@@ -42,9 +42,9 @@ $requiredTables = @(
     'DiscoveryMetricSnapshots', 'DiscoveryRankings', 'DiscoveryPriorityLinks',
     'DiscoveryFeedback', 'DiscoveryModelEvaluations', 'DiscoveryFeedbackEvents',
     'DiscoveryCandidateFeatureSnapshots', 'DiscoveryLearningInsights',
-    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs'
+    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions'
 )
-if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit') }
+if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs') }
 $tableValues = ($requiredTables | ForEach-Object { "(N'$_')" }) -join ','
 $missingTables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
 DECLARE @Required TABLE (TableName sysname NOT NULL);
