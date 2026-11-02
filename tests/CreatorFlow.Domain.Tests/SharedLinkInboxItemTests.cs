@@ -22,6 +22,8 @@ public sealed class SharedLinkInboxItemTests
     [InlineData("http://www.douyin.com/video/1")]
     [InlineData("https://evil-douyin.com/video/1")]
     [InlineData("https://example.com/video/1")]
+    [InlineData("https://v.douyin.com:8443/AbC")]
+    [InlineData("https://user:secret@v.douyin.com/AbC")]
     [InlineData("javascript:alert(1)")]
     public void Create_RejectsUnsupportedOrInsecureLinks(string url)
     {
