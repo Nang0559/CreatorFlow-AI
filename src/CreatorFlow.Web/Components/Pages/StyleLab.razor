@@ -6,7 +6,7 @@
 <header class="page-header">
     <div><p class="eyebrow">THỬ NGHIỆM SÁNG TẠO</p><h1>Phòng sáng tạo</h1>
         <p class="muted">Tạo 2–3 cách thể hiện khác nhau cho cùng một ý tưởng, đo lường sau khi đăng và chọn phương án thắng.</p></div>
-    <button class="primary" @onclick="LoadAsync">Làm mới</button>
+    <div class="header-actions"><a class="secondary" href="/assets">Dựng video MP4</a><button class="primary" @onclick="LoadAsync">Làm mới</button></div>
 </header>
 @if (!Api.IsConfigured) { <section class="notice"><strong>Chưa kết nối API</strong><p>Cần cấu hình CreatorFlowApi ở server Web.</p></section> }
 @if (!string.IsNullOrWhiteSpace(error)) { <section class="notice"><strong>Thông báo</strong><p>@error</p></section> }
@@ -26,7 +26,7 @@
             <h3>Phương án @(index + 1)</h3>
             <div class="trend-form">
                 <label>Tên<input @bind="variants[index].Name" /></label>
-                <label>Hook / mở đầu<input @bind="variants[index].Hook" /></label>
+                <label>Câu mở đầu<input @bind="variants[index].Hook" /></label>
                 <label>Phong cách nói<input @bind="variants[index].SpeakingStyle" /></label>
                 <label>Nhịp dựng<input @bind="variants[index].EditPacing" /></label>
                 <label>Cách dùng âm thanh<input @bind="variants[index].AudioApproach" /></label>
@@ -35,7 +35,7 @@
         </div>
     }
     <button class="primary" disabled="@(!Api.IsConfigured || busy)" @onclick="CreateAsync">Tạo thử nghiệm</button>
-    @if (aiGenerated) { <p class="muted">Các phương án được tạo bằng LLM. Kiểm tra nội dung, tính chính xác của thông tin và quyền sử dụng trước khi lưu.</p> }
+    @if (aiGenerated) { <p class="muted">Các phương án được AI tạo. Kiểm tra nội dung, tính chính xác của thông tin và quyền sử dụng trước khi lưu.</p> }
 </section>
 
 <section class="panel">
@@ -53,21 +53,21 @@
                         <strong>@variant.Name</strong><span class="status">@StatusLabel(variant.Status)</span>
                         <p><b>Câu mở đầu:</b> @variant.Hook</p><p><b>Phong cách nói:</b> @variant.SpeakingStyle</p><p><b>Nhịp dựng:</b> @variant.EditPacing</p><p><b>Âm thanh:</b> @variant.AudioApproach</p>
                         <div class="variant-stats"><span>@variant.Views.ToString("N0") lượt xem</span><span>@(variant.EngagementRate?.ToString("0.00") ?? "—")% tương tác</span><span>@variant.FollowsGained lượt theo dõi</span><span>@variant.Orders đơn hàng</span></div>
-                        <button class="secondary" disabled="@busy" @onclick="() => DownloadEditingPackageAsync(experiment.Id, variant.Id)">Tải gói hướng dẫn dựng (tùy chọn)</button>
+                        <button class="secondary" disabled="@busy" @onclick="() => DownloadEditingPackageAsync(experiment.Id, variant.Id)"></button>
 
                         @if (variant.Status == "Draft") { <button class="secondary" disabled="@busy" @onclick="() => MarkReadyAsync(experiment.Id, variant.Id)">Đánh dấu đã chuẩn bị</button> }
                         @if (variant.Status == "Ready") { <button class="secondary" disabled="@busy" @onclick="() => MarkPublishedAsync(experiment.Id, variant.Id)">Đã đăng video này</button> }
                         @if (variant.Status == "Published")
                         {
                             <div class="metrics-editor">
-                                <label>Views<input type="number" min="0" @bind="metricInputs[variant.Id].Views" /></label>
-                                <label>Likes<input type="number" min="0" @bind="metricInputs[variant.Id].Likes" /></label>
-                                <label>Comments<input type="number" min="0" @bind="metricInputs[variant.Id].Comments" /></label>
-                                <label>Shares<input type="number" min="0" @bind="metricInputs[variant.Id].Shares" /></label>
-                                <label>Saves<input type="number" min="0" @bind="metricInputs[variant.Id].Saves" /></label>
-                                <label>Follows<input type="number" min="0" @bind="metricInputs[variant.Id].FollowsGained" /></label>
+                                <label>Lượt xem<input type="number" min="0" @bind="metricInputs[variant.Id].Views" /></label>
+                                <label>Lượt thích<input type="number" min="0" @bind="metricInputs[variant.Id].Likes" /></label>
+                                <label>Bình luận<input type="number" min="0" @bind="metricInputs[variant.Id].Comments" /></label>
+                                <label>Chia sẻ<input type="number" min="0" @bind="metricInputs[variant.Id].Shares" /></label>
+                                <label>Lượt lưu<input type="number" min="0" @bind="metricInputs[variant.Id].Saves" /></label>
+                                <label>Lượt theo dõi<input type="number" min="0" @bind="metricInputs[variant.Id].FollowsGained" /></label>
                                 <label>Lượt nhấp sản phẩm<input type="number" min="0" @bind="metricInputs[variant.Id].ProductClicks" /></label>
-                                <label>Orders<input type="number" min="0" @bind="metricInputs[variant.Id].Orders" /></label>
+                                <label>Đơn hàng<input type="number" min="0" @bind="metricInputs[variant.Id].Orders" /></label>
                                 <label>Thời gian xem trung bình (giây)<input type="number" min="0" step="0.1" @bind="metricInputs[variant.Id].AverageWatchSeconds" /></label>
                                 <label>Thời lượng video (giây)<input type="number" min="0" step="0.1" @bind="metricInputs[variant.Id].VideoDurationSeconds" /></label>
                             </div>
@@ -95,8 +95,8 @@
 @code {
     private List<CreatorFlow.Web.Services.StyleExperimentItem> experiments = [];
     private List<VariantInput> variants = [new() { Name = "Tự nhiên", Hook = "Bạn có từng gặp tình huống này?", SpeakingStyle = "Gần gũi, trò chuyện", EditPacing = "Nhịp vừa, cắt theo ý", AudioApproach = "Nhạc nền nhẹ" },
-        new() { Name = "Storytelling", Hook = "Tôi đã bất ngờ khi thử...", SpeakingStyle = "Kể chuyện có cao trào", EditPacing = "Mở chậm, tăng nhịp ở điểm chính", AudioApproach = "Âm thanh tạo cảm xúc" },
-        new() { Name = "Review trực diện", Hook = "3 điều cần biết trước khi mua...", SpeakingStyle = "Rõ ràng, súc tích", EditPacing = "Cắt nhanh, minh họa tính năng", AudioApproach = "Voice nổi bật, nhạc nền nhỏ" }];
+        new() { Name = "Kể chuyện", Hook = "Tôi đã bất ngờ khi thử...", SpeakingStyle = "Kể chuyện có cao trào", EditPacing = "Mở chậm, tăng nhịp ở điểm chính", AudioApproach = "Âm thanh tạo cảm xúc" },
+        new() { Name = "Đánh giá trực diện", Hook = "3 điều cần biết trước khi mua...", SpeakingStyle = "Rõ ràng, súc tích", EditPacing = "Cắt nhanh, minh họa tính năng", AudioApproach = "Giọng đọc nổi bật, nhạc nền nhỏ" }];
     private string name = "Thử nghiệm phong cách mới";
     private string hypothesis = "Hook kể chuyện giúp tăng thời gian xem và lượt theo dõi.";
     private string topic = "";
