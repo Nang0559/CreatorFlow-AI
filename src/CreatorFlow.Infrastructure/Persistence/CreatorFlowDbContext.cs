@@ -131,6 +131,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.DouyinSecUserId).HasMaxLength(160).IsRequired();
             entity.Property(x => x.DisplayName).HasMaxLength(160).IsRequired();
             entity.Property(x => x.ProfileUrl).HasMaxLength(1000).IsRequired();
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasIndex("TenantId", nameof(DouyinSourceChannel.DouyinSecUserId)).IsUnique();
             entity.HasIndex(x => new { x.IsFollowed, x.LastCheckedAt });
         });
@@ -148,6 +149,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.Topic).HasMaxLength(200);
             entity.Property(x => x.SoundName).HasMaxLength(300);
             entity.Property(x => x.SoundArtist).HasMaxLength(200);
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasIndex("TenantId", nameof(VietnamTrendSignal.Platform), nameof(VietnamTrendSignal.Kind), nameof(VietnamTrendSignal.ExternalId)).IsUnique();
             entity.HasIndex(x => new { x.Kind, x.ObservedAt });
         });
@@ -169,6 +171,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.DisplayName).HasMaxLength(160).IsRequired();
             entity.Property(x => x.Positioning).HasMaxLength(1000).IsRequired();
             entity.Property(x => x.StyleSummary).HasMaxLength(4000).IsRequired();
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasIndex("TenantId", nameof(CreatorStyleProfile.ProfileKey)).IsUnique();
             entity.HasMany(x => x.Evidence).WithOne().HasForeignKey(x => x.CreatorStyleProfileId)
                 .OnDelete(DeleteBehavior.Cascade);
@@ -309,6 +312,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.Title).HasMaxLength(500).IsRequired();
             entity.Property(x => x.DiscoveryMethod).HasConversion<string>().HasMaxLength(32).IsRequired();
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+            entity.Property<Guid>("TenantId").IsRequired();
             entity.HasIndex("TenantId", nameof(DouyinVideoCandidate.DouyinVideoId)).IsUnique();
             entity.HasIndex(x => new { x.Status, x.DiscoveredAt });
             entity.HasOne<DouyinSourceChannel>().WithMany().HasForeignKey(x => x.SourceChannelId)
