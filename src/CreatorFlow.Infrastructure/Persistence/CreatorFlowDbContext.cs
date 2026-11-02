@@ -175,7 +175,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property<Guid>("TenantId").IsRequired();
             entity.HasIndex("TenantId", nameof(CreatorStyleProfile.ProfileKey)).IsUnique();
             entity.HasMany(x => x.Evidence).WithOne()
-                .HasForeignKey("TenantId", nameof(CreatorStyleEvidence.CreatorStyleProfileId)).HasPrincipalKey("TenantId", "Id")
+                .HasForeignKey("TenantId", "CreatorStyleProfileId").HasPrincipalKey("TenantId", "Id")
                 .OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK_CreatorStyleEvidence_Tenant_Profile");
         });
 
@@ -193,10 +193,10 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.VideoDurationSeconds).HasPrecision(12, 3);
             entity.HasIndex(x => new { x.CreatorStyleProfileId, x.StyleExperimentId }).IsUnique();
             entity.HasOne<StyleExperiment>().WithMany()
-                .HasForeignKey("TenantId", nameof(CreatorStyleEvidence.StyleExperimentId)).HasPrincipalKey("TenantId", "Id")
+                .HasForeignKey("TenantId", "StyleExperimentId").HasPrincipalKey("TenantId", "Id")
                 .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_CreatorStyleEvidence_Tenant_Experiment");
             entity.HasOne<StyleExperimentVariant>().WithMany()
-                .HasForeignKey("TenantId", nameof(CreatorStyleEvidence.WinningVariantId)).HasPrincipalKey("TenantId", "Id")
+                .HasForeignKey("TenantId", "WinningVariantId").HasPrincipalKey("TenantId", "Id")
                 .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_CreatorStyleEvidence_Tenant_WinningVariant");
         });
 
@@ -298,7 +298,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.CandidateSnapshotJson).IsRequired();
             entity.Property(x => x.FeatureSnapshotJson).IsRequired();
             entity.HasOne<DouyinVideoCandidate>().WithMany()
-                .HasForeignKey("TenantId", nameof(TrendSelectionFeedback.DouyinVideoCandidateId)).HasPrincipalKey("TenantId", "Id")
+                .HasForeignKey("TenantId", "DouyinVideoCandidateId").HasPrincipalKey("TenantId", "Id")
                 .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_TrendSelectionFeedback_Tenant_Candidate");
             entity.HasIndex(x => new { x.DouyinVideoCandidateId, x.ReviewedAt });
             entity.HasIndex(x => new { x.Decision, x.ReasonCode, x.ReviewedAt });
