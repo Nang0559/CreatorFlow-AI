@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ($IncludeTenantMigrations -and -not $ConfirmLegacyWorkspaceAssignment) {
-    throw 'Tenant migration 012 assigns existing rows to legacy-workspace. Pass -ConfirmLegacyWorkspaceAssignment only after reviewing that ownership assumption.'
+    throw 'Tenant migrations 012/013 assign existing rows to legacy-workspace and extend tenant lifecycle. Pass -ConfirmLegacyWorkspaceAssignment only after reviewing that ownership assumption.'
 }
 $hostName = ($SqlInstance -split '\\')[0].Trim()
 if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { throw "Refusing non-local SQL instance '$SqlInstance'." }
@@ -45,7 +45,7 @@ CREATE TABLE dbo.SchemaMigrations
 "@
 }
 $prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_')
-if ($IncludeTenantMigrations) { $prefixes += @('011_', '012_') }
+if ($IncludeTenantMigrations) { $prefixes += @('011_', '012_', '013_') }
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
     $name = $_.Name
     @($prefixes | Where-Object { $name.StartsWith($_, [StringComparison]::Ordinal) }).Count -gt 0
