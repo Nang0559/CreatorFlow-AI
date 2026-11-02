@@ -31,10 +31,12 @@ The script checks the branch and clean working tree, fast-forward pulls the bran
 - `-SkipDotNetTests`: build but skip .NET tests.
 - `-SkipDocker`: skip Docker build/start and AI checks.
 - `-SkipApiStart`: do not start/reuse the native API.
-- `-HealthTimeoutSeconds 180`: allow more time for first startup.\n- `-EnableLanAccess`: optional; publishes Web port 8080 to the LAN and adds a Windows Firewall rule limited to Private profile + LocalSubnet. Only use on a trusted home/work network. SQL (1433), API (7001) and AI (8001) are not published.
+- `-HealthTimeoutSeconds 180`: allow more time for first startup.
+- `-EnableLanAccess`: optional; publishes Web port 8080 to the LAN and adds a Windows Firewall rule limited to Private profile + LocalSubnet. Requires elevated PowerShell and a trusted Private network. SQL (1433), API (7001) and AI (8001) are not published.
 
 ## Expected URLs
-- Web: http://localhost:8080
+- On the HP: http://localhost:8080
+- On a phone on the same trusted Wi-Fi/LAN, when `-EnableLanAccess` is used: open the `Phone URL` printed by the script (for example `http://192.168.x.x:8080`).
 - API: http://localhost:7001/health
 - AI: http://localhost:8001/health and http://localhost:8001/ready
 
