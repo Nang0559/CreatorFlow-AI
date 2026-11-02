@@ -33,3 +33,30 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -e ./ai pytest httpx
       - run: pytest ai/tests -q
+
+  powershell:
+    name: PowerShell script validation
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse local setup and SQL scripts
+        shell: pwsh
+        run: |
+          $files = @(
+            'scripts/Setup-HPZ240.ps1',
+            'database/Apply-Migrations.ps1',
+            'database/Verify-Database.ps1',
+            'scripts/docker/Import-LocalPilotEnv.ps1'
+          )
+          foreach ($file in $files) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Join-Path $PWD $file), [ref]$tokens, [ref]$errors
+            ) | Out-Null
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error "$file:$($_.Extent.StartLineNumber): $($_.Message)" }
+              throw "PowerShell parse failed: $file"
+            }
+            Write-Host "PASS $file"
+          }
