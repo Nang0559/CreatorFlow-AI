@@ -243,6 +243,16 @@ shareInbox.MapPost("/", async (CreateSharedLinkRequest request, CreatorFlowDbCon
     {
         return Results.ValidationProblem(new Dictionary<string, string[]> { ["sharedUrl"] = [ex.Message] });
     }
+    catch (DbUpdateException)
+    {
+        db.ChangeTracker.Clear();
+        var existing = await db.SharedLinkInboxItems.AsNoTracking()
+            .SingleOrDefaultAsync(x => x.UrlHash == SharedLinkInboxItem.Create(request.SharedUrl, DateTimeOffset.UtcNow).UrlHash, ct);
+        if (existing is not null)
+            return Results.Ok(new SharedLinkInboxResponse(existing.Id, existing.Platform, existing.SharedUrl,
+                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId));
+        throw;
+    }
 });
 shareInbox.MapPost("/{id:guid}/review", async (Guid id, ReviewSharedLinkRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
