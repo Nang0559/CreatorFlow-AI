@@ -13,6 +13,7 @@
 - Added tenant-specific source and output directories and path checks in the API and worker.
 - Added atomic SQL batch creation for two or three distinct render styles; the UI now submits the variants as one transaction.
 - Added upload request/form limits aligned with the 500 MiB file contract, temporary-file cleanup on failed writes, correct content types by extension, same-tenant SHA-256 duplicate handling and an asset detail endpoint.
+- Extended upload cleanup to hashing failures and validated the stored filename against the SQL column limit.
 - Added API tests for invalid batch size and unsupported render styles.
 
 ### Tenant and SQL integrity
