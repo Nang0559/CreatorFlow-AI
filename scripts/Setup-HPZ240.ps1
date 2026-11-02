@@ -52,6 +52,19 @@ try {
     Require-Command dotnet
     Require-Command docker
 
+    if ($EnableLanAccess) {
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+        $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+        if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+            throw 'The -EnableLanAccess option requires an elevated PowerShell window so it can add a narrowly scoped Windows Firewall rule.'
+        }
+        $privateProfile = @(Get-NetConnectionProfile -ErrorAction SilentlyContinue |
+            Where-Object { $_.NetworkCategory -eq 'Private' -and ($_.IPv4Connectivity -ne 'Disconnected' -or $_.IPv6Connectivity -ne 'Disconnected') })
+        if ($privateProfile.Count -eq 0) {
+            throw 'The active network must be marked Private before enabling phone access. Do not enable LAN access on a Public or untrusted network.'
+        }
+    }
+
     $branchNow = (git branch --show-current).Trim()
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read current Git branch.' }
     if ($branchNow -cne $Branch) { throw "Wrong branch '$branchNow'. Expected '$Branch'. Switch branch and rerun." }
