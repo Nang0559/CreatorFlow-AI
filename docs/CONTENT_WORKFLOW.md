@@ -35,7 +35,7 @@ A candidate can also be Rejected. Only selected candidates can enter the adaptat
 
 ## Integration boundary
 
-The current domain and SQL schema provide the discovery and selection foundation only. They do not yet log in to Douyin, scrape feeds, follow accounts, download media, publish to TikTok, or attach products to a shopping cart. Those capabilities require separately implemented and tested connectors, with platform access, account eligibility, and applicable content-use requirements verified before activation. Do not treat a browser-visible page or a public URL as proof that an automated API is available.
+The current domain and SQL schema provide discovery/selection metadata foundations. A creator can optionally share a URL into the tenant-scoped Share Inbox; this raises priority but is not a prerequisite for topic-driven discovery. The Share Inbox stores the submitted URL only and does not resolve/fetch it. No live Douyin/TikTok provider currently collects candidates automatically. CreatorFlow does not log in to Douyin, scrape feeds, follow accounts on-platform, publish to TikTok, or attach products to a shopping cart. Those capabilities require separately implemented and tested connectors, with platform access, account eligibility, and applicable content-use requirements verified before activation. Do not treat a browser-visible page or a public URL as proof that an automated API is available.
 
 Jobs should preserve successful artifacts on failure. Idempotency keys should prevent duplicate candidate ingestion, generated artifacts and external posts.
 
@@ -56,7 +56,7 @@ A style experiment is attached optionally to a content project and requires exac
 
 An experiment can start only after every variant is ready. It can be evaluated only after every variant has been published and measured; the creator explicitly records the winning variant. Engagement rate is exposed as a derived descriptive metric, not an automatic winner score. Reach, retention, follows and commerce outcomes should be considered against the experiment's stated hypothesis and comparable measurement windows.
 
-The goal is cumulative learning: preserve winning and losing experiments, extract reusable style traits into a creator style profile in a later workflow, and test whether those traits keep working across topics and products. Do not copy source dialogue or reproduce a source video shot-for-shot; translate the underlying creative mechanism into a distinct Vietnamese execution.
+The goal is cumulative learning: preserve winning and losing experiments, import confirmed winners into a creator style profile, submit evidence-grounded synthesis proposals for human review, and test whether approved traits keep working across topics and products. Do not copy source dialogue or reproduce a source video shot-for-shot; translate the underlying creative mechanism into a distinct Vietnamese execution.
 
 
 ## Creator style profile and cumulative learning
@@ -72,7 +72,7 @@ Learning is explicit:
 
 One successful video is evidence, not a permanent style rule. Preserve counterexamples and losing variants in their original experiments. Compare outcomes over similar measurement windows and consider retention, follows and commerce outcomes alongside engagement. The style summary is editable and should not be overwritten by an unreviewed AI inference.
 
-The current `ProfileKey` is an application-level owner key only. The bootstrap API-key scheme is not a multi-user identity system; tenant ownership enforcement is a prerequisite for a shared multi-creator deployment.
+The current `ProfileKey` is unique within a tenant but is not a foreign key to a specific authenticated user. Tenant membership and data filters exist as foundations; production OIDC configuration, complete endpoint role policies and cross-tenant negative tests remain release gates.
 
 
 ## As-built design references and current learning behavior
@@ -81,4 +81,9 @@ The implemented Style Lab and creator-style learning behavior is specified in [S
 
 Current Style Learning is a deterministic analysis of evaluated 2–3-variant experiments. It requires every variant to be measured and meet the minimum-view threshold, compares exact repeated hook/speaking/edit/audio values, and only surfaces factors with at least two decisive supporting experiments, at least two wins and positive lift over the mean 1/N baseline. Factors present in both winner and loser variants of the same experiment are treated as ambiguous for that experiment. The analysis is descriptive, not causal, and is not an ML/LLM-generated conclusion.
 
-Important scope limitation: the learning-analysis route verifies the profile exists but currently analyzes the evaluated experiment pool, not only experiments imported into that profile. It must not be treated as profile isolation or multi-account-safe behavior. The UI lets the creator copy the proposed summary into an editable draft and save it manually; no persisted proposal approval state or profile version history exists yet.
+Important scope limitation: the learning-analysis route verifies the profile exists but currently analyzes the evaluated experiment pool, not only experiments imported into that profile. It must not be treated as profile isolation or multi-account-safe behavior. Learning Memory separately persists submitted proposals, reviewer identity, approval/rejection state and immutable profile versions. The deterministic learning-analysis endpoint still reads the global evaluated experiment pool rather than only evidence imported into the requested profile; this is a multi-tenant release blocker.
+
+
+## Initial automated video rendering
+
+The Assets page accepts user-provided MP4/MOV/M4V source media (up to 500 MB) after an explicit rights confirmation. The confirmation is not legal verification. A creator can choose two or three different render styles; the API commits the whole group of SQL jobs atomically. A local Windows worker uses After Effects/aerender for a vertical 1080×1920 composition and PNG sequence, then FFmpeg/FFprobe to produce and validate H.264/AAC MP4 outputs. CreatorFlow provides progress, preview and download. This initial renderer adds title/hook/CTA treatments; advanced effects, B-roll, STT, TTS, beat-synced music and platform publishing remain future work. Hardware acceptance on the HP Z240 is still required.
