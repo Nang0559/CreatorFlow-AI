@@ -12,7 +12,7 @@ $hostName = ($SqlInstance -split '\\')[0].Trim()
 if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { throw "Refusing non-local SQL instance '$SqlInstance'." }
 Import-Module SqlServer -ErrorAction Stop
 
-$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_')
+$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_', '017_')
 if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_') }
 $schemaPath = Join-Path $PSScriptRoot 'schema'
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
@@ -42,7 +42,7 @@ $requiredTables = @(
     'DiscoveryMetricSnapshots', 'DiscoveryRankings', 'DiscoveryPriorityLinks',
     'DiscoveryFeedback', 'DiscoveryModelEvaluations', 'DiscoveryFeedbackEvents',
     'DiscoveryCandidateFeatureSnapshots', 'DiscoveryLearningInsights',
-    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions', 'SharedLinkInboxItems'
+    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs'
 )
 if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit') }
 $tableValues = ($requiredTables | ForEach-Object { "(N'$_')" }) -join ','
@@ -70,7 +70,7 @@ if ($RequireTenantMigrations) {
         'StyleExperimentVariants', 'CreatorStyleProfiles', 'CreatorStyleEvidence',
         'StyleVariantMetricObservations', 'StyleLearningProposals',
         'TrendSelectionFeedback', 'TrendCandidateOutcomeObservations',
-        'CreatorStyleProfileVersions', 'SharedLinkInboxItems'
+        'CreatorStyleProfileVersions', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs'
     )
     $tenantValues = ($tenantTables | ForEach-Object { "(N'$_')" }) -join ','
     $tenantCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
