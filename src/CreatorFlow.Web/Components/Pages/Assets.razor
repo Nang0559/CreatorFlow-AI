@@ -49,15 +49,14 @@
             <label>Tiêu đề hiển thị<input @bind="title" maxlength="180" /></label>
             <label>Câu mở đầu<input @bind="hook" maxlength="500" /></label>
             <label>Lời kêu gọi hành động<input @bind="cta" maxlength="300" /></label>
-            <label>Phong cách dựng
-                <select @bind="styleKey">
-                    <option value="Tự nhiên">Tự nhiên</option>
-                    <option value="Kể chuyện">Kể chuyện</option>
-                    <option value="Đánh giá sản phẩm">Đánh giá sản phẩm</option>
-                </select>
-            </label>
+            <div class="style-options">
+                <strong>Chọn 2 hoặc 3 phong cách để so sánh</strong>
+                <label><InputCheckbox @bind-Value="useNatural" /> Tự nhiên</label>
+                <label><InputCheckbox @bind-Value="useStory" /> Kể chuyện</label>
+                <label><InputCheckbox @bind-Value="useReview" /> Đánh giá sản phẩm</label>
+            </div>
         </div>
-        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(selectedAsset) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(hook))" @onclick="CreateJobAsync">Bắt đầu dựng video</button>
+        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(selectedAsset) || string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(hook) || SelectedStyleCount < 2)" @onclick="CreateJobAsync">Dựng các phương án MP4</button>
     }
 </section>
 
@@ -91,7 +90,7 @@
 .field-label,.render-form label{display:flex;flex-direction:column;gap:.45rem;font-weight:600}
 .field-label input,.render-form input,.render-form select{width:100%;padding:.75rem;border:1px solid var(--border,#ddd);border-radius:10px;background:var(--surface,#fff);color:inherit}
 .rights-confirm{display:flex;gap:.6rem;align-items:flex-start;margin-top:1rem;font-weight:500}.upload-row{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-top:1rem}
-.render-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:1rem 0}
+.style-options{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin:1rem 0}.style-options label{display:flex;gap:.4rem;align-items:center}.render-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:1rem 0}
 .render-job{padding:1rem 0;border-top:1px solid var(--border,#ddd)}
 .progress-track{height:8px;border-radius:99px;background:var(--surface-alt,#eee);overflow:hidden}
 .progress-value{height:100%;background:#8b5cf6;transition:width .25s}
@@ -111,7 +110,10 @@
     private string title = "Video mới";
     private string hook = "Điều bạn cần biết trước khi lựa chọn";
     private string cta = "Xem thêm thông tin ở giỏ hàng";
-    private string styleKey = "Tự nhiên";
+    private bool useNatural = true;
+    private bool useStory = true;
+    private bool useReview;
+    private int SelectedStyleCount => (useNatural ? 1 : 0) + (useStory ? 1 : 0) + (useReview ? 1 : 0);
     private string message = "";
     private bool busy;
     private readonly CancellationTokenSource refreshCts = new();
@@ -175,8 +177,14 @@
         try
         {
             busy = true; message = "";
-            await Api.PostAsync<object,object>("/api/v1/video/render-jobs",new { assetId,title,hook,callToAction=cta,styleKey });
-            message = "Đã đưa video vào hàng đợi dựng.";
+            var styles = new List<string>();
+            if (useNatural) styles.Add("Tự nhiên");
+            if (useStory) styles.Add("Kể chuyện");
+            if (useReview) styles.Add("Đánh giá sản phẩm");
+            if (styles.Count is < 2 or > 3) { message = "Hãy chọn 2 hoặc 3 phong cách."; return; }
+            foreach (var style in styles)
+                await Api.PostAsync<object,object>("/api/v1/video/render-jobs",new { assetId,title,hook,callToAction=cta,styleKey=style });
+            message = $"Đã đưa {styles.Count} phương án vào hàng đợi dựng.";
             await LoadAsync();
         }
         catch { message = "Không thể tạo tác vụ dựng. Hãy kiểm tra video nguồn và kết nối máy chủ."; }
