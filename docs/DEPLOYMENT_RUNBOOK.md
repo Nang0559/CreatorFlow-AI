@@ -44,7 +44,7 @@ Before launch provision:
 - SQL Server with private networking, encryption and automated backups.
 - Private object storage with lifecycle and versioning policy.
 - Secret manager/KMS for application secrets and token encryption keys.
-- Durable queue only when the worker/outbox implementation is deployed.
+- Durable queue/outbox for discovery/provider orchestration; the local video render worker already uses SQL-backed jobs but is not a substitute for the production outbox/queue plane.
 - Central logs, metrics, tracing and alerting.
 - Email delivery for account verification, password reset and security alerts.
 - Identity provider supporting OIDC, MFA and account lifecycle.
@@ -88,7 +88,7 @@ Do not create these variables and assume connectors work: the TikTok/Douyin adap
 7. Keep rollback scripts or forward-fix plan for every schema change; do not assume destructive down-migrations are safe.
 8. Record migration version, commit SHA, operator and timestamp.
 
-Migration 010 still requires SQL Server execution tests against an empty database and a schema-009 upgrade database. Migration 011 also needs clean/upgrade execution tests before production. Do not onboard tenants: existing business tables and API queries are not tenant-scoped.
+Migration 010 still requires SQL Server execution tests against an empty database and a schema-009 upgrade database. Migration 011 also needs clean/upgrade execution tests before production. Do not onboard external tenants until all required tenant migrations, production OIDC, full role policies, SQL RLS and cross-tenant negative tests pass. Discovery SQL tables created in migrations 014–015 are not yet tenant-scoped.
 
 ## 7. Deploy sequence
 
@@ -98,7 +98,7 @@ Migration 010 still requires SQL Server execution tests against an empty databas
 4. Apply database migrations and verify schema.
 5. Deploy API and Web containers/artifacts; verify health and readiness endpoints.
 6. Deploy private AI service; verify service-to-service authentication and provider health.
-7. Deploy workers only after durable queue/outbox, idempotency and dead-letter controls exist.
+7. For local pilot only, start the SQL-backed AE+FFmpeg render worker using `docs/operations/VIDEO_RENDERING_AE_FFMPEG.md`. Deploy cloud discovery/provider workers only after durable outbox/queue, idempotency and dead-letter controls exist.
 8. Enable tenant identity and authorization before onboarding external customers.
 9. Register TikTok and Douyin applications separately; complete platform reviews and request only required scopes.
 10. Connect one authorized test account per provider in staging; test token refresh/revocation and provider error handling.
