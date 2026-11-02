@@ -41,7 +41,7 @@ Run PowerShell as a SQL administrator, from the repository root:
 .\database\Initialize-CreatorFlowDatabase.ps1 -SqlInstance localhost -IncludeTenantMigrations -ConfirmLegacyWorkspaceAssignment
 ```
 
-This creates and tags only `CreatorFlow_QC`, applies migrations 001–012, records migration names and SHA-256 checksums, then verifies required tables and tenant constraints. It does not drop or restore a database. If `CreatorFlow_QC` already exists, it must already carry both exact QC tags; an unknown database is never silently adopted.
+This creates and tags only `CreatorFlow_QC`, applies migrations 001–020 (including tenant migrations 011–013), records migration names and SHA-256 checksums, then verifies required tables and tenant constraints. It does not drop or restore a database. If `CreatorFlow_QC` already exists, it must already carry both exact QC tags; an unknown database is never silently adopted.
 
 Migration 012 assigns existing rows in its listed single-workspace tables to `legacy-workspace`. Review this ownership assumption before using tenant migrations on any database containing multi-customer data.
 
@@ -112,7 +112,7 @@ Scripts included:
 
 - `Test-SqlQcPreflight.ps1`: checks Windows x64, PowerShell, Git, .NET SDK, sqlcmd, SqlServer module, local instance and fixed DB name.
 - `Protect-QcDatabase.ps1`: fails closed unless exact database name, ONLINE state, read-write state, both QC tags and non-sysadmin SQL principal are verified.
-- `database/Verify-Database.ps1`: checks all 13 migration checksums, required schema tables, tenant columns, trusted foreign keys and tenant indexes.
+- `database/Verify-Database.ps1`: checks all 20 migration checksums, required schema tables, tenant columns, trusted composite foreign keys and workspace-scoped unique indexes.
 - `Invoke-SqlServerQc.ps1`: runs preflight + guard + schema verification, SQL connectivity/version smoke query, then `dotnet test CreatorFlow.sln -c Release`.
 
 ## 8. Automatic workflow
@@ -121,7 +121,7 @@ Scripts included:
 
 The workflow serializes jobs because the initial setup uses one shared QC database. Do not run concurrent tests or reset operations against it.
 
-**Evidence boundary:** the workflow verifies the runner can connect to the tagged local QC database and that all 12 recorded migrations match the repository schema files, then runs the .NET test suite. It does not yet claim full SQL-backed business integration coverage unless dedicated SQL scenario tests are added and executed.
+**Evidence boundary:** the workflow verifies the runner can connect to the tagged local QC database and that all 20 recorded migrations match the repository schema files, then runs the .NET test suite. It does not yet claim full SQL-backed business integration coverage unless dedicated SQL scenario tests are added and executed.
 
 ## 9. Database protection and recovery policy
 
