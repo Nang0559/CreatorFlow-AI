@@ -62,8 +62,8 @@ Python tests inject a fake LLM adapter only at the test boundary. .NET domain te
 - Trained ML model, feature pipeline, artifact registry, persisted model, retraining, drift detection or champion/challenger rollout.
 - Durable LLM proposal entities, approval/rejection workflow, prompt registry/version persistence and immutable approved profile versions.
 - Comparable-window orchestration and source provenance for external metric sync.
-- Video/audio understanding, STT, TTS, media rendering and automatic platform publishing.
-- Multi-tenant user identity and profile ownership authorization.
+- Video/audio understanding, STT, TTS, advanced effects/B-roll, music analysis and automatic platform publishing. A separate local After Effects + FFmpeg render worker now creates initial vertical MP4 variants; it is not an AI media-understanding pipeline and still requires HP Z240 acceptance.
+- Production OIDC configuration, complete role-specific authorization and cross-tenant negative-test acceptance; tenant identity/isolation foundations are implemented separately.
 
 ## 8. ML acceptance gates
 
