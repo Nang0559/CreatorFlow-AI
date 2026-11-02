@@ -30,7 +30,7 @@ if (([string]::IsNullOrWhiteSpace($env:VideoRendering__FFprobeExe) -or -not (Tes
 }
 
 $required = @('VideoRendering__StorageRoot','VideoRendering__AfterEffectsExe',
-    'VideoRendering__AerenderExe','VideoRendering__FFmpegExe')
+    'VideoRendering__AerenderExe','VideoRendering__FFmpegExe','VideoRendering__FFprobeExe')
 foreach ($name in $required) {
     $value = [Environment]::GetEnvironmentVariable($name,'Process')
     if ([string]::IsNullOrWhiteSpace($value)) { throw "Thiếu cấu hình trong .env: $name" }
@@ -46,10 +46,10 @@ $tables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database CreatorFlow_QC 
 SELECT
  CASE WHEN OBJECT_ID(N'dbo.VideoAssets',N'U') IS NOT NULL THEN 1 ELSE 0 END AS AssetsReady,
  CASE WHEN OBJECT_ID(N'dbo.VideoRenderJobs',N'U') IS NOT NULL THEN 1 ELSE 0 END AS JobsReady,
- CASE WHEN EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'017_video_render_pipeline') THEN 1 ELSE 0 END AS MigrationReady;
+ CASE WHEN EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'017_video_render_pipeline') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'018_tenant_relationship_integrity') THEN 1 ELSE 0 END AS MigrationReady;
 "@ -TrustServerCertificate -ErrorAction Stop)
 if ($tables.Count -ne 1 -or $tables[0].AssetsReady -ne 1 -or $tables[0].JobsReady -ne 1 -or $tables[0].MigrationReady -ne 1) {
-    throw 'Chưa có migration 017. Chạy Apply-Migrations.ps1 và Verify-Database.ps1 trước.'
+    throw 'Chưa có migration 017–018 hoặc chưa đủ bảng video. Chạy Apply-Migrations.ps1 và Verify-Database.ps1 trước.'
 }
 $stdout = Join-Path $root 'logs\worker-out.log'
 $stderr = Join-Path $root 'logs\worker-error.log'
