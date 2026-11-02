@@ -21,7 +21,7 @@ BEGIN
   CONSTRAINT CK_SharedLinkInboxItems_Status CHECK(Status IN(N'Pending',N'Reviewed',N'Linked',N'Ignored')),
   CONSTRAINT UQ_SharedLinkInboxItems_Tenant_Hash UNIQUE(TenantId,UrlHash)
  );
- CREATE INDEX IX_SharedLinkInboxItems_Tenant_Status_Time ON dbo.SharedLinkInboxItems(TenantId,Status,SharedAt DESC);
+ CREATE INDEX IX_SharedLinkInboxItems_TenantId ON dbo.SharedLinkInboxItems(TenantId);\n CREATE INDEX IX_SharedLinkInboxItems_Tenant_Status_Time ON dbo.SharedLinkInboxItems(TenantId,Status,SharedAt DESC);
 END;
 
 COMMIT TRANSACTION;
