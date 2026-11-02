@@ -74,7 +74,8 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
             await SetStateAsync(j.Id,"Encoding",80,null,ct);
             await RunAsync(ffmpeg,["-y","-hide_banner","-loglevel","error","-framerate","30","-i",ffmpegSequence,
               "-i",j.Source,"-map","0:v:0","-map","1:a?","-c:v","libx264","-preset","medium","-crf","20",
-              "-pix_fmt","yuv420p","-c:a","aac","-b:a","192k","-shortest","-movflags","+faststart",output],
+              "-pix_fmt","yuv420p","-c:a","aac","-b:a","192k","-t",sourceInfo.Duration.ToString("0.###",System.Globalization.CultureInfo.InvariantCulture),
+              "-movflags","+faststart",output],
               work,TimeSpan.FromMinutes(45),ct);
             if(!File.Exists(output)||new FileInfo(output).Length<50000) throw new InvalidOperationException("MP4 đầu ra không hợp lệ.");
             var sha=await HashAsync(output,ct);
