@@ -44,7 +44,7 @@ CREATE TABLE dbo.SchemaMigrations
 );
 "@
 }
-$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_', '017_', '018_')
+$prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_', '016_', '017_', '018_', '019_')
 if ($IncludeTenantMigrations) { $prefixes += @('011_', '012_', '013_') }
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
     $name = $_.Name
