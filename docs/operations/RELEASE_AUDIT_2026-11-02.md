@@ -48,13 +48,12 @@
 
 ## Acceptance still required
 
-1. Run .NET restore/build/test and Python test suites on the exact branch head.
-2. Parse and execute the changed PowerShell scripts on Windows PowerShell 7.
-3. Apply migrations 014–020 on the tagged local QC database after confirming tenant migrations 011–013 are complete; verify all checksums and trusted constraints.
-4. Test a fresh non-tenant baseline separately to confirm migrations 016–020 are correctly deferred.
-5. On HP Z240, upload a licensed 15–30 second MP4/MOV, submit two or three styles, render all variants, and verify dimensions, H.264/AAC where source audio exists, duration, playback, audio sync, retry and duplicate-upload behavior.
-6. Run cross-tenant negative tests for assets, render jobs, inbox links, channels, projects, experiments, profiles, feedback and all mapped relationships.
-7. Keep external Go-live blocked until official/eligible trend providers, Discovery tenant ownership, feedback learning, rights evidence, identity configuration, backup/restore, monitoring and operational controls are accepted.
+1. CI on commit `c0ebd3b` passed: .NET build, all 96 .NET tests (79 Domain + 17 API), Python tests and PowerShell parse validation. Rerun on any later code commit.
+2. SQL Server self-hosted QC has not started on the Z240 runner yet; apply migrations 014–020 on the tagged local QC database only after confirming tenant migrations 011–013 are complete, then verify checksums and exact trusted constraints/index definitions.
+3. Test a fresh non-tenant baseline separately to confirm migrations 016–020 are correctly deferred.
+4. On HP Z240, upload a licensed 15–30 second MP4/MOV, submit two or three styles, render all variants, and verify dimensions, H.264/AAC where source audio exists, duration, playback, audio sync, retry and duplicate-upload behavior.
+5. Run cross-tenant negative tests for assets, render jobs, inbox links, channels, projects, experiments, profiles, feedback and all mapped relationships.
+6. Keep external Go-live blocked until official/eligible trend providers, Discovery tenant ownership, feedback learning, rights evidence, identity configuration, backup/restore, monitoring and operational controls are accepted.
 
 ## Database application safety
 
@@ -69,4 +68,4 @@ If 011–013 are already fully installed, the initializer detects that state and
 
 ## Evidence status
 
-This audit changed repository code, SQL and documentation, but did not execute the user's Windows SQL Server, After Effects installation or HP Z240 hardware. No claim is made that the new C# code compiles, the migrations execute successfully, or an MP4 has rendered until those checks return evidence.
+This audit changed repository code, SQL and documentation. CI commit `c0ebd3b` confirms the .NET solution builds and all 96 .NET tests pass, along with Python tests and PowerShell parse validation. A Docker build passed on the Z240 runner at an earlier commit. The SQL Server QC workflow is still pending on the self-hosted runner; migrations have not been applied by CI. The user's SQL Server migration execution and real After Effects/FFmpeg render on HP Z240 remain unverified, so no Go-live approval is implied.
