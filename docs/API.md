@@ -71,9 +71,9 @@ A profile is keyed by a stable creator/account key and keeps creator positioning
 - `PUT /api/v1/style-profiles/{id}/guidance` updates `displayName`, `positioning` and `styleSummary`.
 - `POST /api/v1/style-profiles/{id}/learn/{experimentId}` imports the confirmed winning variant from an evaluated experiment.
 
-Learning is deliberately explicit and idempotent per profile/experiment: only an evaluated experiment with a measured winning variant can be added, and the same experiment cannot be added twice to one profile. Each evidence row snapshots the winning hook, speaking style, edit pacing, audio approach and measured performance. The profile's written style summary remains creator-editable; evidence is not automatically promoted into permanent rules after one win. A later AI synthesis step should identify recurring traits across multiple experiments and propose changes for creator approval.
+Learning is deliberately explicit and idempotent per profile/experiment: only an evaluated experiment with a measured winning variant can be added, and the same experiment cannot be added twice to one profile. Each evidence row snapshots the winning hook, speaking style, edit pacing, audio approach and measured performance. The profile's written style summary remains creator-editable; evidence is not automatically promoted into permanent rules after one win. An LLM synthesis draft can be submitted to Learning Memory for explicit human approval and immutable versioning.
 
-`ProfileKey` is an application-level owner key, not an authentication identity. The current API-key authentication is a bootstrap service credential; multi-user authorization and ownership isolation must be implemented before exposing multiple creators' profiles in a shared deployment.
+`ProfileKey` is an application-level key scoped within a tenant, not a foreign key to an authenticated user. OIDC issuer+subject membership and tenant filters are implemented as foundations; production provider configuration, full role policy and cross-tenant negative tests remain release gates.
 
 
 ## AI Style Learning
@@ -91,7 +91,7 @@ The endpoint is advisory only. It does not mutate `CreatorStyleProfiles.StyleSum
 
 New Style Lab create requests may include an optional `topic` (maximum 200 characters). The Style Profiles UI can request the read-only learning preview and place its suggested summary into the editable Style Summary draft; the creator must review and save it.
 
-The current learning-analysis endpoint checks that the supplied profile ID exists but analyzes the global evaluated experiment pool. It does not yet scope analysis to evidence imported into that profile or enforce tenant ownership. Do not use this route as a multi-creator data isolation boundary. The analysis is deterministic and descriptive, not an LLM verdict; see [design/STYLE_LAB_AND_LEARNING.md](design/STYLE_LAB_AND_LEARNING.md).
+The current learning-analysis endpoint checks that the supplied profile ID exists but analyzes the global evaluated experiment pool rather than only evidence imported into that profile. Do not use this route as a profile-specific learning boundary until that scoping is fixed and tested. The analysis is deterministic and descriptive, not an LLM verdict; see [design/STYLE_LAB_AND_LEARNING.md](design/STYLE_LAB_AND_LEARNING.md).
 
 
 ## Python AI runtime (LLM-backed)
@@ -110,7 +110,7 @@ No mock or deterministic fallback is used in runtime. Missing provider credentia
 - `POST /v1/style-lab/generate-variants`: generate exactly 2 or 3 distinct Vietnamese creative variants with hook, speaking style, edit pacing, audio approach, script, shot plan and CTA.
 - `POST /v1/learning/synthesize`: synthesize repeated strengths, conflicting evidence and next experiments from supplied structured evidence. The service rejects experiment citations not present in the request.
 
-All outputs are drafts with `requires_human_review=true`. These endpoints are real LLM calls only when a provider is configured. They do not yet persist prompts, learning proposals, profile versions, ML model artifacts or generated scripts in SQL, and they are not yet invoked by the Blazor/API Style Lab workflow. See [design/AI_RUNTIME.md](design/AI_RUNTIME.md).
+All outputs are drafts with `requires_human_review=true`. These endpoints are real LLM calls only when a provider is configured. The Python service itself does not persist prompts, proposals or profile versions; the Blazor Style Lab invokes the .NET proxy, generated variants can be saved as experiments, and synthesis drafts can be submitted to Learning Memory. Trained ML artifacts are not implemented. See [design/AI_RUNTIME.md](design/AI_RUNTIME.md).
 
 
 ### .NET API proxy to the AI service
@@ -118,7 +118,7 @@ All outputs are drafts with `requires_human_review=true`. These endpoints are re
 The authenticated .NET API exposes server-side proxy routes:
 - `POST /api/v1/ai/analyze` with `{ "text": "...", "language": "vi", "topic": "...", "creatorPositioning": "..." }`.
 - `POST /api/v1/ai/style-lab/generate-variants` with `sourceAnalysis`, `topic`, `creatorPositioning`, optional `styleSummary` / `productContext`, `variantCount` (2 or 3) and `targetDurationSeconds`.
-- `POST /api/v1/style-profiles/{id}/ai-learning-synthesis` loads only evaluated experiments explicitly imported into that profile, sends winner/loser factors and winner metrics to the LLM, and returns a draft synthesis. At least two imported evaluated experiments and a non-empty profile positioning are required. The result is not persisted; the creator may put it into the editable Style Summary and save manually.
+- `POST /api/v1/style-profiles/{id}/ai-learning-synthesis` loads only evaluated experiments explicitly imported into that profile, sends winner/loser factors and winner metrics to the LLM, and returns a draft synthesis. At least two imported evaluated experiments and a non-empty profile positioning are required. The result is a draft; the creator may submit it to Learning Memory, which persists a proposal for explicit approval/rejection and creates an immutable profile version only after approval.
 
 Configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` in the API host. The proxy validates HTTPS (or localhost HTTP), requires a 32-character service key, and forwards provider responses/status without exposing the AI service key to the browser. Missing configuration and unavailable service return 503; timeout returns 504. The Python service separately requires its own provider credentials. The creator-facing Blazor controls are not yet wired to these proxy routes.
 
@@ -130,16 +130,16 @@ Configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` in the API host
 - `POST /api/v1/style-profiles/{id}/learning-proposals/{proposalId}/reject` rejects a pending proposal; a reason is required.
 - `GET /api/v1/style-profiles/{id}/versions` returns immutable profile versions in descending version order.
 
-Review identity is currently supplied by the API caller because the bootstrap API-key authentication has no individual user identity/role model. Do not treat `reviewerId` as verified identity or expose this workflow to multiple creators until user/tenant authorization is implemented. Only Approved proposals create versions; AI generation itself does not activate a profile.
+Review identity is derived from authenticated `sub`/NameIdentifier claims; caller-supplied reviewer IDs are ignored, and the shared API-key scheme is rejected as a human reviewer. Production OIDC configuration and role-policy acceptance remain required. Only Approved proposals create versions; AI generation itself does not activate a profile.
 
-Apply SQL scripts `database/schema/001_initial.sql` through `009_style_learning_memory.sql` in numeric order. Scripts 008 and 009 are required for metric history and Learning Memory respectively.
+Apply the repository migration manifest through `database/Apply-Migrations.ps1`; migrations 008 and 009 are required for metric history and Learning Memory. Migrations 011–013 require explicit legacy-workspace ownership confirmation; migrations 018–020 add same-tenant relationship and workspace-scoped uniqueness safeguards.
 
 
 ## Trend Selection Intelligence
 - POST /api/v1/douyin/videos/{id}/feedback with { "decision": "Select", "reasonCode": "Hook", "reasonNote": "" }.
 - GET /api/v1/douyin/videos/{id}/feedback returns immutable history.
 - Decisions are Select, Reject and Watch; Watch is not a negative training label.
-- Candidate metadata is snapshotted by the API. FeatureSnapshotJson remains {} until a real extractor is connected.
+- Candidate metadata and versioned metadata-only feature snapshot schema v1 are persisted; this is not a trained preference model.
 - Migration: database/schema/010_trend_selection_feedback.sql.
 - TikTok scanning and calibrated account-risk prediction are not implemented by this migration.
 
@@ -151,7 +151,7 @@ Apply SQL scripts `database/schema/001_initial.sql` through `009_style_learning_
 - `POST /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes` with `outcomeKind` (`Adapted`, `Published`, `MarketPerformance`, `CreatorAssessment`), optional `outcomeValue`, object-valued `metricsSnapshotJson` and `source`.
 - `GET /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes` returns append-only downstream outcome observations.
 
-Feedback and outcome routes require the API key. Both validate that the feedback belongs to the candidate in the route. SQL triggers reject UPDATE and DELETE for both history tables. `Watch` remains an uncertain/deferred decision and must not be converted to a negative preference label. `FeatureSnapshotJson` is still `{}` until the versioned feature extractor is implemented. The current API key is a bootstrap service credential, not an individual creator identity.
+Feedback and outcome routes require authenticated tenant context and validate that the feedback belongs to the candidate in the route. SQL triggers reject UPDATE and DELETE for both history tables. `Watch` remains an uncertain/deferred decision and must not be converted to a negative preference label. Feature snapshots use versioned metadata-only schema v1. The Development-only API key is a bootstrap service credential, not an individual creator identity.
 
 
 ## Share Inbox
