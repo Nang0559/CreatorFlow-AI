@@ -16,7 +16,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\Setup-HPZ240.ps1
 ```
 
-The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing SQL migrations 001–010 and 014–020 (plus 011–013 when explicitly confirmed) using the checksum ledger, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, starts or reuses the native API on port 7001, and reports CPU/RAM/GPU plus whether CapCut Desktop and After Effects are installed. It then probes the local Web UI at port 8080. By default, Web is accessible only from the HP itself.
+The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing non-tenant SQL migrations 001–010 and 014–015, then tenant migrations 011–013 only after explicit confirmation and tenant-dependent migrations 016–020 when the tenant schema is verified, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, starts or reuses the native API on port 7001, and reports CPU/RAM/GPU plus whether CapCut Desktop and After Effects are installed. It then probes the local Web UI at port 8080. By default, Web is accessible only from the HP itself.
 
 ## Safe reruns
 - Already-applied SQL migrations are skipped only if their stored SHA-256 matches the repository file.
