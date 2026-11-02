@@ -181,7 +181,7 @@ SELECT CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NOT NULL
             Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
     }
     if ($aeRender) { Write-Host "After Effects renderer: FOUND ($aeRender)" } else { Write-Host 'After Effects: not detected (optional; requires an Adobe license).' }
-    if ($aeRender -and -not (Test-Path -LiteralPath $env:VideoRendering__AerenderExe -PathType Leaf)) {
+    if ($aeRender -and ([string]::IsNullOrWhiteSpace($env:VideoRendering__AerenderExe) -or -not (Test-Path -LiteralPath $env:VideoRendering__AerenderExe -PathType Leaf))) {
         $env:VideoRendering__AerenderExe = $aeRender
     }
     if ($aeRender) {
