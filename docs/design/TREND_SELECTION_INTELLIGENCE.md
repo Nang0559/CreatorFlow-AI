@@ -43,3 +43,17 @@ POST and GET /api/v1/douyin/videos/{id}/feedback, plus POST and GET /api/v1/douy
 
 ## Release gates
 Migration tests on empty and schema-009 databases; decision validation and empty-note round-trip; append-only history; preference labels exclude Watch; connector compliance and coverage; rights review; calibrated risk model; human approval and official publishing API.
+
+
+## Autonomous discovery implementation (migration 014 + AI runtime)
+- Discovery does not require a user-shared URL. Topic profiles drive scheduled discovery plans against enabled, permitted public/official providers.
+- A shared URL is an optional priority signal. The baseline ranker caps the boost at 20/100; it cannot replace topic fit, momentum, Vietnam-market fit or creator-quality evidence.
+- SQL migration 014 persists discovery runs, topic profiles, provider provenance/access mode, candidates, metric snapshots with coverage, versioned rankings, optional priority links, feedback and model-evaluation records.
+- AI endpoints:
+  - `POST /v1/discovery/rank`: deterministic, low-latency heuristic baseline. Algorithm version is `heuristic-discovery-v1`; it is not represented as a trained ML model.
+  - `POST /v1/discovery/query-plan`: LLM proposes bounded search queries, adjacent topics, intent signals and exclusions. It does not collect data or assert that a trend exists.
+- Rank inputs are bounded and confidence is reduced when source coverage is incomplete. All ranking output includes component scores, weights, version and limitations.
+- A trained model is a later gate: collect consented/legitimate creator feedback and outcome labels, create temporal train/validation splits, evaluate Precision@K/Recall@K/NDCG@K and calibration, then register the model and dataset version. Do not train on Watch as a negative label.
+- Douyin policy: no device login, login QR, cookies, session extraction, fingerprint spoofing or account interaction. Douyin authorized-read integration remains disabled until a separately approved official permission model is verified; phone-only use and manual/public permitted sources remain the safe path.
+- TikTok/Douyin discovery providers must be individually reviewed for terms, coverage, rate limits and allowed use. Disabled providers are not queried. No generic scraper is an acceptable fallback.
+- Tenant note: migration 014 extends the existing single-workspace discovery data model. Do not expose its new tables to multi-tenant users until a tenant-scoping migration and ownership tests are added.
