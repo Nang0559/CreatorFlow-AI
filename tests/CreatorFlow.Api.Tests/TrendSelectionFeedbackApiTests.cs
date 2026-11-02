@@ -232,4 +232,30 @@ public sealed class TrendSelectionFeedbackApiTests
             return candidate.Id;
         }
     }
+
+    [Fact]
+    public async Task Video_batch_requires_two_or_three_distinct_supported_styles()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        using var client = factory.CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/video/render-jobs/batch",
+            new { assetId = Guid.NewGuid(), title = "Tiêu đề", hook = "Câu mở đầu",
+                callToAction = (string?)null, styleKeys = new[] { "Tự nhiên" } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Video_single_job_rejects_unknown_style()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        using var client = factory.CreateAuthenticatedClient();
+
+        var response = await client.PostAsJsonAsync("/api/v1/video/render-jobs",
+            new { assetId = Guid.NewGuid(), title = "Tiêu đề", hook = "Câu mở đầu",
+                callToAction = (string?)null, styleKey = "Không tồn tại" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
