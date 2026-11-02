@@ -58,3 +58,24 @@ The setup script detects CapCut Desktop and After Effects but does not install t
 
 ## Mobile-first interface
 The same setup pulls the responsive Web UI. On phone-sized screens it switches to a compact top bar and five-item bottom navigation: Overview, Discover, Studio, Performance, Settings. Desktop retains the sidebar and secondary management links. Touch targets, input sizing, safe-area spacing for iPhone, compact cards and reduced-motion preferences are included. The home page prioritizes three common actions: discover content, create style variants, and review performance. The interface does not claim that unimplemented integrations are connected.
+
+
+## Dựng video tự động (After Effects + FFmpeg)
+
+Bộ dựng chạy bằng tiến trình Windows riêng trên HP Z240; không chạy trong container Web/AI. API và Worker phải dùng cùng VideoRendering__StorageRoot. Sao chép các biến VideoRendering__* từ .env.example vào .env, rồi sửa đường dẫn đúng với phiên bản After Effects và FFmpeg đang cài. Không commit .env.
+
+Sau khi migration 017 đã được áp dụng và Verify-Database.ps1 xác nhận đủ bảng, chạy kiểm tra công cụ:
+
+```powershell
+. .\scripts\docker\Import-LocalPilotEnv.ps1
+Import-LocalPilotEnv
+.\scripts\Test-VideoRenderer.ps1
+```
+
+Khởi động worker bằng cùng tài khoản Windows có quyền truy cập SQL Server và thư mục video:
+
+```powershell
+.\scripts\Start-VideoRenderWorker.ps1
+```
+
+Sau đó mở Thư viện video trong CreatorFlow, tải MP4/MOV/M4V lên, xác nhận quyền sử dụng, tạo tác vụ và chờ video hoàn tất. Trang sẽ tự cập nhật tiến độ, phát video và cung cấp liên kết tải MP4. Nghiệm thu render thật 15–30 giây trước khi sử dụng nội dung kinh doanh; CI chỉ kiểm tra biên dịch, không chứng minh After Effects đã render thành công trên máy.
