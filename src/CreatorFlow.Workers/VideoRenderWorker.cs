@@ -100,7 +100,9 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
         doc.applyStroke=true;doc.strokeColor=[0.12,0.08,0.2];doc.strokeWidth=3;
         doc.justification=ParagraphJustification.CENTER_JUSTIFY;
         layer.property("Source Text").setValue(doc);
-        var fit=Math.min(100,(w*0.86)/(Math.max(1,value.length)*fontSize*0.58)*100);\n        layer.property("Scale").setValue([fit,100]);\n        layer.property("Position").setValueAtTime(0,[w/2,y+48]);
+        var fit=Math.min(100,(w*0.86)/(Math.max(1,value.length)*fontSize*0.58)*100);
+        layer.property("Scale").setValue([fit,100]);
+        layer.property("Position").setValueAtTime(0,[w/2,y+48]);
         layer.property("Position").setValueAtTime(0.42,[w/2,y]);
         layer.property("Opacity").setValueAtTime(0,0);
         layer.property("Opacity").setValueAtTime(0.42,100);
