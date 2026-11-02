@@ -52,6 +52,28 @@ class DiscoveryQueryPlanResponse(CreatorFlowModel):
     exclusions: list[str] = Field(default_factory=list, max_length=12)
     requires_human_review: bool = True
 
+class DiscoveryFeedbackRequest(CreatorFlowModel):
+    profile_key: str = Field(min_length=1, max_length=200)
+    candidate_id: str = Field(min_length=1, max_length=100)
+    candidate_kind: str = Field(pattern="^(Video|Channel|Sound)$")
+    decision: str = Field(pattern="^(Interested|NotRelevant|Save|Hide|Followed|Converted)$")
+    reason_code: str = Field(min_length=1, max_length=60)
+    reason_text: str | None = Field(default=None, max_length=1000)
+    topic: str | None = Field(default=None, max_length=200)
+    candidate_features: dict[str, str | float | int | bool | None] = Field(default_factory=dict, max_length=40)
+
+
+class DiscoveryFeedbackInterpretation(CreatorFlowModel):
+    feedback_summary: str = Field(min_length=1, max_length=1000)
+    confirmed_signals: list[str] = Field(max_length=12)
+    uncertain_signals: list[str] = Field(max_length=12)
+    proposed_feature_adjustments: list[dict[str, str | float]] = Field(max_length=10)
+    similar_candidates_to_downrank: list[str] = Field(max_length=8)
+    next_discovery_hints: list[str] = Field(max_length=10)
+    requires_repeated_evidence: bool = True
+    requires_human_review: bool = True
+
+
 class AnalyzeRequest(CreatorFlowModel):
     text: str = Field(min_length=1, max_length=20_000)
     language: str = Field(default="vi", min_length=2, max_length=12)
