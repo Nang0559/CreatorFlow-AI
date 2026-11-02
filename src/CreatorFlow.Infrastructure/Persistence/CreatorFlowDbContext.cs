@@ -106,6 +106,10 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasIndex(x => new { x.TenantId, x.Status, x.ExpiresAt });
         });
 
+        // Declare Guid tenant properties before principal-side relationships create shadow FKs.
+        modelBuilder.Entity<CreatorStyleEvidence>().Property<Guid>("TenantId").IsRequired();
+        modelBuilder.Entity<StyleExperimentVariant>().Property<Guid>("TenantId").IsRequired();
+
         modelBuilder.Entity<ContentProject>(entity =>
         {
             entity.ToTable("ContentProjects");
