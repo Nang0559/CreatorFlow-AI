@@ -51,7 +51,7 @@ public sealed class TenantIsolationTests
     }
 
     [Fact]
-    public async Task Existing_row_cannot_be_moved_to_another_tenant()
+    public async Task Existing_row_tenant_key_cannot_be_changed()
     {
         var options = new DbContextOptionsBuilder<CreatorFlowDbContext>()
             .UseInMemoryDatabase($"tenant-move-{Guid.NewGuid():N}")
@@ -69,8 +69,10 @@ public sealed class TenantIsolationTests
         dbA.ContentProjects.Add(project);
         await dbA.SaveChangesAsync();
 
-        dbA.Entry(project).Property<Guid>("TenantId").CurrentValue = tenantB;
-        await Assert.ThrowsAsync<InvalidOperationException>(() => dbA.SaveChangesAsync());
+        // TenantId is part of every same-tenant alternate key; EF rejects a key move immediately.
+        Assert.Throws<InvalidOperationException>(() =>
+            dbA.Entry(project).Property<Guid>("TenantId").CurrentValue = tenantB);
+        Assert.Equal(tenantA, dbA.Entry(project).Property<Guid>("TenantId").CurrentValue);
     }
 
     private static async Task SeedWorkspaceAsync(DbContextOptions<CreatorFlowDbContext> options,
