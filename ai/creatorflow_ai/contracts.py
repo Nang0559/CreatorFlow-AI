@@ -12,6 +12,46 @@ class CreatorFlowModel(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
+
+class DiscoveryRankRequest(CreatorFlowModel):
+    topic_fit: float = Field(ge=0, le=100)
+    views_per_hour: float = Field(default=0, ge=0, le=1_000_000_000)
+    engagement_rate: float = Field(default=0, ge=0, le=1)
+    market_fit: float = Field(default=50, ge=0, le=100)
+    creator_quality: float = Field(default=50, ge=0, le=100)
+    data_coverage: float = Field(default=0.5, ge=0, le=1)
+    priority_signal: bool = False
+
+
+class DiscoveryRankResponse(CreatorFlowModel):
+    algorithm_version: str
+    score: float
+    topic_fit: float
+    momentum: float
+    market_fit: float
+    creator_quality: float
+    priority_boost: float
+    confidence: float
+    explanation: dict[str, object]
+
+
+class DiscoveryQueryPlanRequest(CreatorFlowModel):
+    topic: str = Field(min_length=1, max_length=200)
+    keywords: list[str] = Field(default_factory=list, max_length=30)
+    target_market: str = Field(default="Vietnam", min_length=2, max_length=80)
+    product_context: str | None = Field(default=None, max_length=1000)
+    audience_context: str | None = Field(default=None, max_length=1000)
+    max_queries: int = Field(default=8, ge=2, le=12)
+
+
+class DiscoveryQueryPlanResponse(CreatorFlowModel):
+    topic: str
+    queries: list[str] = Field(min_length=2, max_length=12)
+    related_topics: list[str] = Field(default_factory=list, max_length=12)
+    intent_signals: list[str] = Field(default_factory=list, max_length=12)
+    exclusions: list[str] = Field(default_factory=list, max_length=12)
+    requires_human_review: bool = True
+
 class AnalyzeRequest(CreatorFlowModel):
     text: str = Field(min_length=1, max_length=20_000)
     language: str = Field(default="vi", min_length=2, max_length=12)
