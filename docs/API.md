@@ -162,7 +162,7 @@ Feedback and outcome routes require authenticated tenant context and validate th
 
 ## Video source assets and render jobs
 
-- `POST /api/v1/video/assets`: multipart `file`, `confirmRights=true`, optional `rightsNote`. Accepts MP4/MOV/M4V up to 500 MB. User confirmation is not an automated legal-rights check.
+- `POST /api/v1/video/assets`: multipart `file`, `confirmRights=true`, optional `rightsNote`. Accepts MP4/MOV/M4V up to 500 MB. Same-tenant duplicate SHA-256 uploads return the existing asset. User confirmation is not an automated legal-rights check.
 - `GET /api/v1/video/assets` and `GET /api/v1/video/assets/{id}`: current-workspace assets only.
 - `POST /api/v1/video/render-jobs`: create one render job with `assetId`, `title`, `hook`, optional `callToAction`, optional `styleKey`.
 - `POST /api/v1/video/render-jobs/batch`: atomically create 2–3 distinct styles with `assetId`, `title`, `hook`, optional `callToAction`, `styleKeys`. The group is committed as one SQL transaction.
