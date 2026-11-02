@@ -14,6 +14,7 @@ public static class VideoRenderEndpoints
         g.MapPost("/assets",UploadAsync).DisableAntiforgery();
         g.MapGet("/assets",ListAssetsAsync);
         g.MapPost("/render-jobs",CreateJobAsync);
+        g.MapPost("/render-jobs/batch",CreateJobsBatchAsync);
         g.MapGet("/render-jobs",ListJobsAsync);
         g.MapGet("/render-jobs/{id:guid}",GetJobAsync);
         g.MapGet("/render-jobs/{id:guid}/preview",(Guid id,CreatorFlowDbContext? db,ITenantContext tenant,IConfiguration cfg,CancellationToken ct)=>OutputAsync(id,db,tenant,cfg,ct,false));
@@ -88,6 +89,45 @@ public static class VideoRenderEndpoints
         await cmd.ExecuteNonQueryAsync(ct);return Results.Accepted($"/api/v1/video/render-jobs/{id}",new{id,status="Queued",progressPercent=0});
     }
 
+    private static async Task<IResult> CreateJobsBatchAsync(BatchCreateRenderJobsRequest req,CreatorFlowDbContext? db,ITenantContext tenant,IConfiguration cfg,CancellationToken ct)
+    {
+        if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);
+        if(!tenant.TenantId.HasValue)return Results.Forbid();
+        var allowedStyles=new[]{"Tự nhiên","Kể chuyện","Đánh giá sản phẩm"};
+        var styles=req.StyleKeys?.Where(x=>!string.IsNullOrWhiteSpace(x)).Select(x=>x.Trim()).ToArray()??Array.Empty<string>();
+        if(req.AssetId==Guid.Empty||string.IsNullOrWhiteSpace(req.Title)||req.Title.Trim().Length>180||
+           string.IsNullOrWhiteSpace(req.Hook)||req.Hook.Trim().Length>500||req.CallToAction?.Trim().Length>300||
+           styles.Length is <2 or >3||styles.Distinct(StringComparer.Ordinal).Count()!=styles.Length||
+           styles.Any(x=>!allowedStyles.Contains(x,StringComparer.Ordinal)))
+            return Results.ValidationProblem(new Dictionary<string,string[]>{{"video",new[]{"Vui lòng kiểm tra video nguồn, nội dung và chọn 2 hoặc 3 phong cách khác nhau."}}});
+        await using var c=db.Database.GetDbConnection();
+        if(c.State!=ConnectionState.Open)await c.OpenAsync(ct);
+        await using var tx=await c.BeginTransactionAsync(ct);
+        await using var find=c.CreateCommand();
+        find.Transaction=tx;
+        find.CommandText="SELECT StoragePath FROM dbo.VideoAssets WHERE Id=@id AND TenantId=@t";
+        Add(find,"@id",req.AssetId);Add(find,"@t",tenant.TenantId.Value);
+        var source=(string?)await find.ExecuteScalarAsync(ct);
+        if(string.IsNullOrWhiteSpace(source)||!File.Exists(source))return Results.NotFound(new{error="Không tìm thấy video nguồn trong thư viện."});
+        var outputDir=Path.Combine(StorageRoot(cfg),"renders",tenant.TenantId.Value.ToString("N"));
+        Directory.CreateDirectory(outputDir);
+        var jobs=new List<object>();
+        foreach(var style in styles)
+        {
+            var id=Guid.NewGuid();
+            var output=Path.Combine(outputDir,id.ToString("N")+".mp4");
+            await using var cmd=c.CreateCommand();
+            cmd.Transaction=tx;
+            cmd.CommandText="INSERT dbo.VideoRenderJobs(Id,TenantId,AssetId,StyleKey,Title,Hook,CallToAction,Status,ProgressPercent,SourcePath,OutputPath,CreatedAt) VALUES(@id,@t,@a,@style,@title,@hook,@cta,N'Queued',0,@src,@out,SYSUTCDATETIME())";
+            Add(cmd,"@id",id);Add(cmd,"@t",tenant.TenantId.Value);Add(cmd,"@a",req.AssetId);Add(cmd,"@style",style);
+            Add(cmd,"@title",req.Title.Trim());Add(cmd,"@hook",req.Hook.Trim());Add(cmd,"@cta",TrimTo(req.CallToAction,300));Add(cmd,"@src",source);Add(cmd,"@out",output);
+            await cmd.ExecuteNonQueryAsync(ct);
+            jobs.Add(new{id,status="Queued",progressPercent=0,styleKey=style});
+        }
+        await tx.CommitAsync(ct);
+        return Results.Accepted("/api/v1/video/render-jobs",new{jobs});
+    }
+
     private static async Task<IResult> ListJobsAsync(CreatorFlowDbContext? db,ITenantContext tenant,CancellationToken ct)
     {
         if(db is null)return Results.Problem("Cơ sở dữ liệu chưa được cấu hình.",statusCode:503);if(!tenant.TenantId.HasValue)return Results.Forbid();
@@ -120,3 +160,4 @@ public static class VideoRenderEndpoints
     private static void Add(IDbCommand c,string key,object? value){var p=c.CreateParameter();p.ParameterName=key;p.Value=value??DBNull.Value;c.Parameters.Add(p);}
 }
 public sealed record CreateRenderJobRequest(Guid AssetId,string Title,string Hook,string? CallToAction=null,string? StyleKey=null);
+public sealed record BatchCreateRenderJobsRequest(Guid AssetId,string Title,string Hook,string? CallToAction,string[] StyleKeys);
