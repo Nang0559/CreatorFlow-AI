@@ -1,5 +1,9 @@
 [CmdletBinding()]
-param([string]$SqlInstance=$env:CREATORFLOW_QC_SQL_INSTANCE,[string]$Database=$env:CREATORFLOW_QC_DATABASE)
+param(
+    [string]$SqlInstance=$env:CREATORFLOW_QC_SQL_INSTANCE,
+    [string]$Database=$env:CREATORFLOW_QC_DATABASE,
+    [bool]$TrustServerCertificate=$true
+)
 $ErrorActionPreference='Stop'; Set-StrictMode -Version Latest
 if ([string]::IsNullOrWhiteSpace($SqlInstance)) { throw 'CREATORFLOW_QC_SQL_INSTANCE is required.' }
 if ([string]::IsNullOrWhiteSpace($Database)) { $Database='CreatorFlow_QC' }
@@ -19,8 +23,8 @@ LEFT JOIN [CreatorFlow_QC].sys.extended_properties ep ON ep.class=0 AND ep.name=
 LEFT JOIN [CreatorFlow_QC].sys.extended_properties rp ON rp.class=0 AND rp.name=N'CreatorFlowRepository'
 WHERE d.name=N'CreatorFlow_QC';
 "@
-$rows=@(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database master -Query $query -ErrorAction Stop)
-if ($rows.Count -ne 1) { throw 'CreatorFlow_QC database does not exist.' }
+$rows=@(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database master -Query $query -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop)
+if ($rows.Count -ne 1) { throw 'CreatorFlow_QC database does not exist. Run database/Initialize-CreatorFlowDatabase.ps1 as a SQL administrator first.' }
 $r=$rows[0]
 if ($r.StateDesc -ne 'ONLINE') { throw 'QC database is not ONLINE.' }
 if ($r.IsReadOnly -ne 0) { throw 'QC database is READ_ONLY.' }

@@ -4,6 +4,7 @@
 - .NET 9 SDK (current branch baseline only; migrate to .NET 10 LTS before public launch)
 - Python 3.11+
 - SQL Server 2022+ (optional for API health endpoint)
+- PowerShell 5.1+ and the SqlServer PowerShell module for database setup
 - FFmpeg only when media processing is introduced
 
 ## .NET
@@ -18,7 +19,7 @@ The API exposes `/` and `/health`. Set `ConnectionStrings__CreatorFlow` to confi
 ## Python AI service
 ```bash
 python -m venv .venv
-# Windows: .venv\\Scripts\\activate
+# Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -e ai
 uvicorn creatorflow_ai.main:app --app-dir ai --reload --port 8001
@@ -56,9 +57,31 @@ The API URL must match the actual local API address/certificate. On Windows Powe
 
 For real LLM calls, configure `CREATORFLOW_AI_BASE_URL` and `CREATORFLOW_AI_API_KEY` on the .NET API, plus `CREATORFLOW_AI_API_KEY`, `CREATORFLOW_LLM_API_KEY` and `CREATORFLOW_LLM_MODEL` on the Python service. Use separate internal service and provider keys; never expose either to the browser.
 
-## SQL setup
+## SQL database setup
 
-Apply all numbered SQL scripts in order (001–010) to the dedicated CreatorFlow database, following the migration-specific notes in this repository. Do not apply to an unrelated or production database without backup and review. Migration 010 SQL Server execution tests against both an empty database and schema-009 upgrade database remain an outstanding release gate.
+The repository now includes a guarded SQL Server initializer. It creates only the local `CreatorFlow_QC` database, applies numbered migrations in order, records SHA-256 checksums in `dbo.SchemaMigrations`, and verifies the resulting schema.
+
+Install the SQL Server PowerShell module once from an elevated PowerShell session:
+
+```powershell
+Install-Module SqlServer -Scope AllUsers -Force -AllowClobber
+```
+
+From the repository root, initialize the complete Trend Intelligence + tenant schema:
+
+```powershell
+.\database\Initialize-CreatorFlowDatabase.ps1 -SqlInstance localhost -IncludeTenantMigrations -ConfirmLegacyWorkspaceAssignment
+```
+
+The tenant flag applies migrations 011–012. Migration 012 assigns existing rows in its listed single-workspace tables to the explicit `legacy-workspace` tenant; review that assumption before using it on a database containing multiple customers. The initializer refuses to adopt an existing untagged database or a database with user tables but no migration ledger. It never drops or restores a database.
+
+To initialize only the baseline schema (001–010), omit both tenant switches:
+
+```powershell
+.\database\Initialize-CreatorFlowDatabase.ps1 -SqlInstance localhost
+```
+
+The QC runner uses a non-sysadmin Windows identity. Run initialization separately as a SQL administrator; CI never creates databases or runs migrations. See [SQL database setup](SQL_DATABASE_SETUP.md) and [Windows SQL Server QC runner](SQLSERVER_QC_RUNNER.md).
 
 ## Design documentation
 

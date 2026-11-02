@@ -1,13 +1,20 @@
 [CmdletBinding()]
-param([string]$SqlInstance=$env:CREATORFLOW_QC_SQL_INSTANCE,[string]$Database=$env:CREATORFLOW_QC_DATABASE,[switch]$SkipDotNetTests)
+param(
+    [string]$SqlInstance=$env:CREATORFLOW_QC_SQL_INSTANCE,
+    [string]$Database=$env:CREATORFLOW_QC_DATABASE,
+    [switch]$SkipDotNetTests,
+    [bool]$TrustServerCertificate=$true
+)
 $ErrorActionPreference='Stop'; Set-StrictMode -Version Latest
 $root=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 & (Join-Path $PSScriptRoot 'Test-SqlQcPreflight.ps1') -SqlInstance $SqlInstance -Database $Database
 if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Preflight failed.' }
-& (Join-Path $PSScriptRoot 'Protect-QcDatabase.ps1') -SqlInstance $SqlInstance -Database $Database
+& (Join-Path $PSScriptRoot 'Protect-QcDatabase.ps1') -SqlInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate
 if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Database safety guard failed.' }
+& (Join-Path $PSScriptRoot '../../database/Verify-Database.ps1') -SqlInstance $SqlInstance -Database $Database -RequireTenantMigrations -TrustServerCertificate:$TrustServerCertificate
+if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Database schema verification failed. Initialize CreatorFlow_QC as an administrator before running QC.' }
 Import-Module SqlServer -ErrorAction Stop
-$result=Invoke-Sqlcmd -ServerInstance $SqlInstance -Database 'CreatorFlow_QC' -Query "SELECT DB_NAME() AS DatabaseName, CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(128)) AS ProductVersion, 1 AS ConnectivityCheck;" -ErrorAction Stop
+$result=Invoke-Sqlcmd -ServerInstance $SqlInstance -Database 'CreatorFlow_QC' -TrustServerCertificate:$TrustServerCertificate -Query "SELECT DB_NAME() AS DatabaseName, CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(128)) AS ProductVersion, 1 AS ConnectivityCheck;" -ErrorAction Stop
 if ($result.DatabaseName -cne 'CreatorFlow_QC' -or $result.ConnectivityCheck -ne 1) { throw 'SQL connectivity smoke test failed.' }
 Write-Host "SQL connectivity passed: $($result.DatabaseName), SQL $($result.ProductVersion)."
 if (-not $SkipDotNetTests) {
