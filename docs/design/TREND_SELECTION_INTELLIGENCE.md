@@ -14,8 +14,8 @@ CreatorFlow learns the creator's selection preferences, measures market saturati
 1. Creator chooses Select, Reject or Watch and a reason code such as Hook, Story, Novelty, VietnamDemand, LowSaturation, CommercialPotential, Format, Sound or Other.
 2. Optional note may be empty; example decision=Select, reasonCode=Hook, reasonNote="".
 3. API captures immutable candidate metadata and appends the decision.
-4. Feature extraction runs separately and writes a versioned feature snapshot; until implemented the snapshot remains {}.
-5. Preference analysis compares Select and Reject; Watch is excluded from binary labels.
+4. The API extracts and persists versioned metadata-only feature snapshot schema v1 (discovery method, source/topic presence, title shape, publication age and discovery age); it excludes creator decision and mutable candidate status to avoid label leakage.
+5. End-to-end preference analysis is not yet connected to this SQL feedback stream. When implemented, Select/Reject may form the binary decision labels; Watch must remain deferred/uncertain and excluded from binary labels.
 6. Adaptation, publication and measured market results are appended as separate outcome observations.
 
 ## Implemented in migration 010
@@ -39,7 +39,7 @@ List-first paginated dashboard; indexed queries; creator feedback writes stay sy
 Proposed, unmeasured SLO targets: dashboard P95 <2s; feedback write P95 <500ms; status visibility <1s.
 
 ## API currently implemented
-POST and GET /api/v1/douyin/videos/{id}/feedback, plus POST and GET /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes. FeatureSnapshotJson remains {} until a real extractor exists. Existing shared API-key auth is bootstrap-only; verified user identity and tenant ownership remain production blockers.
+POST and GET /api/v1/douyin/videos/{id}/feedback, plus POST and GET /api/v1/douyin/videos/{id}/feedback/{feedbackId}/outcomes. FeatureSnapshotJson stores the deterministic schema-v1 metadata snapshot. OIDC bearer identity and tenant membership foundations exist; the shared API key is Development-only. Production OIDC configuration, cross-tenant negative tests and tenant-scoping of the separate Discovery SQL tables remain blockers.
 
 ## Release gates
 Migration tests on empty and schema-009 databases; decision validation and empty-note round-trip; append-only history; preference labels exclude Watch; connector compliance and coverage; rights review; calibrated risk model; human approval and official publishing API.
@@ -57,3 +57,8 @@ Migration tests on empty and schema-009 databases; decision validation and empty
 - Douyin policy: no device login, login QR, cookies, session extraction, fingerprint spoofing or account interaction. Douyin authorized-read integration remains disabled until a separately approved official permission model is verified; phone-only use and manual/public permitted sources remain the safe path.
 - TikTok/Douyin discovery providers must be individually reviewed for terms, coverage, rate limits and allowed use. Disabled providers are not queried. No generic scraper is an acceptable fallback.
 - Tenant note: migration 014 extends the existing single-workspace discovery data model. Do not expose its new tables to multi-tenant users until a tenant-scoping migration and ownership tests are added.
+
+
+## Current Discovery ranking boundary
+
+The Python service exposes a transparent heuristic candidate ranker and an LLM query planner. The ranker can score candidates supplied to it without a user-shared link; a shared URL is only an optional bounded priority signal. The query planner returns permitted search queries and exclusions but does not collect data. No verified live Douyin/TikTok provider, candidate ingestion worker, persistent ranking orchestration or feedback-to-next-ranking loop is active. Do not describe the current baseline as trained ML or automatic live trend crawling.
