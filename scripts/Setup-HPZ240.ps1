@@ -96,6 +96,7 @@ try {
     Write-Stage '1/8 - Validate local secrets without displaying them'
     . '.\scripts\docker\Import-LocalPilotEnv.ps1'
     Import-LocalPilotEnv -Path (Join-Path $RepositoryPath '.env')
+    if ([string]::IsNullOrWhiteSpace($env:VideoRendering__StorageRoot)) { $env:VideoRendering__StorageRoot = 'C:\\CreatorFlowData\\Video' }
     if ($env:ConnectionStrings__CreatorFlow -notmatch 'Database=CreatorFlow_QC') {
         throw 'ConnectionStrings__CreatorFlow must target CreatorFlow_QC for this QC setup.'
     }
@@ -180,6 +181,23 @@ SELECT CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NOT NULL
             Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
     }
     if ($aeRender) { Write-Host "After Effects renderer: FOUND ($aeRender)" } else { Write-Host 'After Effects: not detected (optional; requires an Adobe license).' }
+    if ($aeRender -and -not (Test-Path -LiteralPath $env:VideoRendering__AerenderExe -PathType Leaf)) {
+        $env:VideoRendering__AerenderExe = $aeRender
+    }
+    if ($aeRender) {
+        $afterFxCandidate = Join-Path (Split-Path $aeRender -Parent) 'AfterFX.exe'
+        if (Test-Path -LiteralPath $afterFxCandidate -PathType Leaf) { $env:VideoRendering__AfterEffectsExe = $afterFxCandidate }
+    }
+    if ([string]::IsNullOrWhiteSpace($env:VideoRendering__FFmpegExe) -or -not (Test-Path -LiteralPath $env:VideoRendering__FFmpegExe -PathType Leaf)) {
+        $ffmpegCommand = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
+        if ($ffmpegCommand) { $env:VideoRendering__FFmpegExe = $ffmpegCommand.Source }
+    }
+    if ([string]::IsNullOrWhiteSpace($env:VideoRendering__FFprobeExe) -or -not (Test-Path -LiteralPath $env:VideoRendering__FFprobeExe -PathType Leaf)) {
+        if ($env:VideoRendering__FFmpegExe -and (Test-Path -LiteralPath $env:VideoRendering__FFmpegExe)) {
+            $probeCandidate = Join-Path (Split-Path $env:VideoRendering__FFmpegExe -Parent) 'ffprobe.exe'
+            if (Test-Path -LiteralPath $probeCandidate -PathType Leaf) { $env:VideoRendering__FFprobeExe = $probeCandidate }
+        }
+    }
 
     $cpuInfo = Get-CimInstance Win32_Processor -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Name
     $gpuInfo = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
