@@ -21,6 +21,7 @@ class DiscoveryRankRequest(CreatorFlowModel):
     creator_quality: float = Field(default=50, ge=0, le=100)
     data_coverage: float = Field(default=0.5, ge=0, le=1)
     priority_signal: bool = False
+    learned_adjustment: float = Field(default=0, ge=-30, le=30)
 
 
 class DiscoveryRankResponse(CreatorFlowModel):
