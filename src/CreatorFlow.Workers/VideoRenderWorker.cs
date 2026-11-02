@@ -83,7 +83,7 @@ internal sealed class VideoRenderWorker(IConfiguration config, ILogger<VideoRend
     }
 
     private static string BuildJsx(string payload) => """
-      var d=JSON.parse(__PAYLOAD__);
+      var d=__PAYLOAD__;
       app.beginSuppressDialogs();
       var p=app.newProject();
       var footage=p.importFile(new ImportOptions(new File(d.source)));
