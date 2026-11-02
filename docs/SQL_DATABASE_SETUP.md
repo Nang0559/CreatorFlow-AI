@@ -34,12 +34,12 @@ From the repository root:
 The initializer runs three stages:
 
 1. `Create-Database.ps1`: creates `CreatorFlow_QC` if absent and tags it. If it already exists, exact tags and ONLINE/read-write state must be present; existing tags are not changed.
-2. `Apply-Migrations.ps1`: applies migrations 001–010, then 011–012 when tenant migrations are requested. Each applied file is recorded with its SHA-256 checksum.
-3. `Verify-Database.ps1`: checks migration history against repository files, required tables, and tenant ownership constraints.
+2. `Apply-Migrations.ps1`: applies migrations 001–010 and 014–020; when tenant migrations are requested, it also applies 011–013 in numeric order. Each applied file is recorded with its SHA-256 checksum.
+3. `Verify-Database.ps1`: checks migration history against repository files, required tables, tenant ownership constraints, trusted composite foreign keys and workspace-scoped unique indexes.
 
 Migration 012 explicitly assigns existing rows in its tenant-owned table list to `legacy-workspace`. The confirmation switch is mandatory whenever tenant migrations are requested. This is suitable for a fresh, single-workspace development database. Do not use it to infer ownership for a database already containing multiple customers.
 
-For only the non-tenant baseline (001–010), run:
+For legacy baseline-only compatibility checks (001–010), run:
 
 ```powershell
 .\database\Initialize-CreatorFlowDatabase.ps1 -SqlInstance localhost
@@ -51,7 +51,7 @@ For only the non-tenant baseline (001–010), run:
 .\database\Verify-Database.ps1 -SqlInstance localhost -RequireTenantMigrations
 ```
 
-Omit `-RequireTenantMigrations` to verify only migrations 001–010.
+Omit `-RequireTenantMigrations` to verify the non-tenant migrations 001–010 and 014–020; this does not mean the current app can run without the tenant migrations.
 
 ## Re-running and migration immutability
 
@@ -61,4 +61,4 @@ The migration ledger is not a substitute for backups or review. Never use these 
 
 ## QC runner integration
 
-After provisioning, configure the runner service identity with the database-scoped permissions documented in [SQL Server QC runner](SQLSERVER_QC_RUNNER.md). The QC runner verifies all 12 migrations and tenant metadata before running .NET tests. It does not create, drop, restore or migrate the database.
+After provisioning, configure the runner service identity with the database-scoped permissions documented in [SQL Server QC runner](SQLSERVER_QC_RUNNER.md). The QC runner verifies 17 non-tenant migrations plus 011–013 when tenant mode is required, including tenant metadata and composite relationship constraints, before running .NET tests. It does not create, drop, restore or migrate the database.
