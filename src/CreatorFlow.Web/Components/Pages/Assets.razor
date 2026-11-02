@@ -23,8 +23,9 @@
     <label class="field-label">Ghi chú quyền sử dụng (không bắt buộc)
         <input @bind="rightsNote" placeholder="Ví dụ: Video tự quay / đã được cấp phép sử dụng" />
     </label>
+    <label class="rights-confirm"><InputCheckbox @bind-Value="confirmRights" /> Tôi xác nhận mình có quyền sử dụng video này để biên tập và tạo nội dung mới.</label>
     <div class="upload-row">
-        <InputFile OnChange="UploadAsync" accept=".mp4,.mov,.m4v,video/mp4,video/quicktime" disabled="@(!Api.IsConfigured || busy)" />
+        <InputFile OnChange="UploadAsync" accept=".mp4,.mov,.m4v,video/mp4,video/quicktime" disabled="@(!Api.IsConfigured || busy || !confirmRights)" />
         <span class="muted">Định dạng MP4, MOV, M4V</span>
     </div>
     @if (busy) { <p class="muted">Đang xử lý, vui lòng giữ trang này mở…</p> }
@@ -88,7 +89,7 @@
 <style>
 .field-label,.render-form label{display:flex;flex-direction:column;gap:.45rem;font-weight:600}
 .field-label input,.render-form input,.render-form select{width:100%;padding:.75rem;border:1px solid var(--border,#ddd);border-radius:10px;background:var(--surface,#fff);color:inherit}
-.upload-row{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-top:1rem}
+.rights-confirm{display:flex;gap:.6rem;align-items:flex-start;margin-top:1rem;font-weight:500}.upload-row{display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-top:1rem}
 .render-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:1rem 0}
 .render-job{padding:1rem 0;border-top:1px solid var(--border,#ddd)}
 .progress-track{height:8px;border-radius:99px;background:var(--surface-alt,#eee);overflow:hidden}
@@ -105,6 +106,7 @@
     private List<CreatorFlow.Web.Services.VideoRenderJobItem> jobs = [];
     private string selectedAsset = "";
     private string rightsNote = "";
+    private bool confirmRights;
     private string title = "Video mới";
     private string hook = "Điều bạn cần biết trước khi lựa chọn";
     private string cta = "Xem thêm thông tin ở giỏ hàng";
@@ -133,7 +135,7 @@
         {
             busy = true; message = "";
             await using var stream = args.File.OpenReadStream(524_288_000);
-            var result = await Api.UploadVideoAsync(stream,args.File.Name,rightsNote);
+            var result = await Api.UploadVideoAsync(stream,args.File.Name,rightsNote,confirmRights);
             if (result is null) throw new InvalidOperationException();
             message = "Đã thêm video nguồn vào thư viện.";
             await LoadAsync();
