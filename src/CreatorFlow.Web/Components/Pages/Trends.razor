@@ -1,4 +1,5 @@
 @page "/trends"
+@using Microsoft.AspNetCore.Components
 @inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
 
 <PageTitle>Xu hướng Việt Nam · CreatorFlow</PageTitle>
@@ -87,7 +88,20 @@
     private string shareMessage = "";
     private List<SharedLinkItem> shareItems = [];
 
+    [Parameter, SupplyParameterFromQuery(Name = "sharedUrl")] public string? IncomingSharedUrl { get; set; }
+    private string? lastAutoSubmittedLink;
+
     protected override async Task OnInitializedAsync() { await LoadAsync(); await LoadShareInboxAsync(); }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(IncomingSharedUrl) && IncomingSharedUrl != lastAutoSubmittedLink)
+        {
+            lastAutoSubmittedLink = IncomingSharedUrl;
+            sharedUrl = IncomingSharedUrl;
+            await SaveSharedLinkAsync();
+        }
+    }
 
     private async Task LoadAsync()
     {
