@@ -158,8 +158,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
         {
             entity.ToTable("VietnamTrendMetricSnapshots");
             entity.HasKey(x => x.Id);
-            entity.HasOne<VietnamTrendSignal>().WithMany().HasForeignKey(x => x.TrendSignalId)
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<VietnamTrendSignal>().WithMany()
+                .HasForeignKey("TenantId", nameof(VietnamTrendMetricSnapshot.TrendSignalId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK_VietnamTrendMetricSnapshots_Tenant_Signal");
             entity.HasIndex(x => new { x.TrendSignalId, x.ObservedAt }).IsUnique();
         });
 
@@ -173,8 +174,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.StyleSummary).HasMaxLength(4000).IsRequired();
             entity.Property<Guid>("TenantId").IsRequired();
             entity.HasIndex("TenantId", nameof(CreatorStyleProfile.ProfileKey)).IsUnique();
-            entity.HasMany(x => x.Evidence).WithOne().HasForeignKey(x => x.CreatorStyleProfileId)
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(x => x.Evidence).WithOne()
+                .HasForeignKey("TenantId", nameof(CreatorStyleEvidence.CreatorStyleProfileId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK_CreatorStyleEvidence_Tenant_Profile");
         });
 
         modelBuilder.Entity<CreatorStyleEvidence>(entity =>
@@ -190,10 +192,12 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.AverageWatchSeconds).HasPrecision(12, 3);
             entity.Property(x => x.VideoDurationSeconds).HasPrecision(12, 3);
             entity.HasIndex(x => new { x.CreatorStyleProfileId, x.StyleExperimentId }).IsUnique();
-            entity.HasOne<StyleExperiment>().WithMany().HasForeignKey(x => x.StyleExperimentId)
-                .OnDelete(DeleteBehavior.NoAction);
-            entity.HasOne<StyleExperimentVariant>().WithMany().HasForeignKey(x => x.WinningVariantId)
-                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<StyleExperiment>().WithMany()
+                .HasForeignKey("TenantId", nameof(CreatorStyleEvidence.StyleExperimentId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_CreatorStyleEvidence_Tenant_Experiment");
+            entity.HasOne<StyleExperimentVariant>().WithMany()
+                .HasForeignKey("TenantId", nameof(CreatorStyleEvidence.WinningVariantId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_CreatorStyleEvidence_Tenant_WinningVariant");
         });
 
         modelBuilder.Entity<StyleLearningProposal>(entity =>
@@ -207,8 +211,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.Property(x => x.ReviewReason).HasMaxLength(2000);
             entity.Property(x => x.ReviewerId).HasMaxLength(160);
-            entity.HasOne<CreatorStyleProfile>().WithMany().HasForeignKey(x => x.CreatorStyleProfileId)
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<CreatorStyleProfile>().WithMany()
+                .HasForeignKey("TenantId", nameof(StyleLearningProposal.CreatorStyleProfileId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK_StyleLearningProposals_Tenant_Profile");
             entity.HasIndex(x => new { x.CreatorStyleProfileId, x.Status, x.CreatedAt });
         });
 
@@ -220,10 +225,12 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.Positioning).HasMaxLength(1000).IsRequired();
             entity.Property(x => x.StyleSummary).HasMaxLength(4000).IsRequired();
             entity.Property(x => x.CreatedBy).HasMaxLength(160).IsRequired();
-            entity.HasOne<CreatorStyleProfile>().WithMany().HasForeignKey(x => x.CreatorStyleProfileId)
-                .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne<StyleLearningProposal>().WithMany().HasForeignKey(x => x.ApprovedProposalId)
-                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<CreatorStyleProfile>().WithMany()
+                .HasForeignKey("TenantId", nameof(CreatorStyleProfileVersion.CreatorStyleProfileId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK_CreatorStyleProfileVersions_Tenant_Profile");
+            entity.HasOne<StyleLearningProposal>().WithMany()
+                .HasForeignKey("TenantId", nameof(CreatorStyleProfileVersion.ApprovedProposalId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_CreatorStyleProfileVersions_Tenant_Proposal");
             entity.HasIndex(x => new { x.CreatorStyleProfileId, x.VersionNumber }).IsUnique();
             entity.HasIndex(x => x.ApprovedProposalId).IsUnique().HasFilter("[ApprovedProposalId] IS NOT NULL");
         });
@@ -238,12 +245,15 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasIndex(x => new { x.Topic, x.Status, x.UpdatedAt });
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(24).IsRequired();
             entity.HasIndex(x => new { x.Status, x.UpdatedAt });
-            entity.HasMany(x => x.Variants).WithOne().HasForeignKey(x => x.StyleExperimentId)
-                .OnDelete(DeleteBehavior.Cascade);
-            entity.HasOne<StyleExperimentVariant>().WithMany().HasForeignKey(x => x.WinningVariantId)
-                .OnDelete(DeleteBehavior.NoAction);
-            entity.HasOne<ContentProject>().WithMany().HasForeignKey(x => x.ContentProjectId)
-                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasMany(x => x.Variants).WithOne()
+                .HasForeignKey("TenantId", nameof(StyleExperimentVariant.StyleExperimentId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK_StyleExperimentVariants_Tenant_Experiment");
+            entity.HasOne<StyleExperimentVariant>().WithMany()
+                .HasForeignKey("TenantId", nameof(StyleExperiment.WinningVariantId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_StyleExperiments_Tenant_WinningVariant");
+            entity.HasOne<ContentProject>().WithMany()
+                .HasForeignKey("TenantId", nameof(StyleExperiment.ContentProjectId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_StyleExperiments_Tenant_ContentProject");
         });
 
         modelBuilder.Entity<StyleExperimentVariant>(entity =>
@@ -270,8 +280,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasKey(x => x.Id);
             entity.Property(x => x.AverageWatchSeconds).HasPrecision(12, 3);
             entity.Property(x => x.VideoDurationSeconds).HasPrecision(12, 3);
-            entity.HasOne<StyleExperimentVariant>().WithMany().HasForeignKey(x => x.StyleExperimentVariantId)
-                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<StyleExperimentVariant>().WithMany()
+                .HasForeignKey("TenantId", nameof(StyleVariantMetricObservation.StyleExperimentVariantId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.Cascade).HasConstraintName("FK_StyleVariantMetricObservations_Tenant_Variant");
             entity.HasIndex(x => new { x.StyleExperimentVariantId, x.ObservedAt }).IsUnique();
             entity.HasIndex(x => new { x.ObservedAt, x.StyleExperimentVariantId });
         });
@@ -286,7 +297,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.ReasonNote).HasMaxLength(2000).IsRequired();
             entity.Property(x => x.CandidateSnapshotJson).IsRequired();
             entity.Property(x => x.FeatureSnapshotJson).IsRequired();
-            entity.HasOne<DouyinVideoCandidate>().WithMany().HasForeignKey(x => x.DouyinVideoCandidateId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<DouyinVideoCandidate>().WithMany()
+                .HasForeignKey("TenantId", nameof(TrendSelectionFeedback.DouyinVideoCandidateId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_TrendSelectionFeedback_Tenant_Candidate");
             entity.HasIndex(x => new { x.DouyinVideoCandidateId, x.ReviewedAt });
             entity.HasIndex(x => new { x.Decision, x.ReasonCode, x.ReviewedAt });
         });
@@ -299,7 +312,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.OutcomeValue).HasMaxLength(1000);
             entity.Property(x => x.MetricsSnapshotJson).IsRequired();
             entity.Property(x => x.Source).HasMaxLength(80).IsRequired();
-            entity.HasOne<TrendSelectionFeedback>().WithMany().HasForeignKey(x => x.FeedbackId).OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<TrendSelectionFeedback>().WithMany()
+                .HasForeignKey("TenantId", nameof(TrendCandidateOutcomeObservation.FeedbackId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_TrendCandidateOutcomeObservations_Tenant_Feedback");
             entity.HasIndex(x => new { x.FeedbackId, x.ObservedAt });
         });
 
@@ -315,10 +330,12 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property<Guid>("TenantId").IsRequired();
             entity.HasIndex("TenantId", nameof(DouyinVideoCandidate.DouyinVideoId)).IsUnique();
             entity.HasIndex(x => new { x.Status, x.DiscoveredAt });
-            entity.HasOne<DouyinSourceChannel>().WithMany().HasForeignKey(x => x.SourceChannelId)
-                .OnDelete(DeleteBehavior.NoAction);
-            entity.HasOne<ContentTopic>().WithMany().HasForeignKey(x => x.ContentTopicId)
-                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<DouyinSourceChannel>().WithMany()
+                .HasForeignKey("TenantId", nameof(DouyinVideoCandidate.SourceChannelId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_DouyinVideoCandidates_Tenant_Channel");
+            entity.HasOne<ContentTopic>().WithMany()
+                .HasForeignKey("TenantId", nameof(DouyinVideoCandidate.ContentTopicId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_DouyinVideoCandidates_Tenant_Topic");
         });
         modelBuilder.Entity<SharedLinkInboxItem>(entity =>
         {
@@ -330,8 +347,9 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.Property(x => x.ReviewNote).HasMaxLength(500);
             entity.Property<Guid>("TenantId").IsRequired();
-            entity.HasOne<DouyinSourceChannel>().WithMany().HasForeignKey(x => x.LinkedChannelId)
-                .OnDelete(DeleteBehavior.NoAction);
+            entity.HasOne<DouyinSourceChannel>().WithMany()
+                .HasForeignKey("TenantId", nameof(SharedLinkInboxItem.LinkedChannelId)).HasPrincipalKey("TenantId", "Id")
+                .OnDelete(DeleteBehavior.NoAction).HasConstraintName("FK_SharedLinkInboxItems_Tenant_Channel");
             entity.HasIndex("TenantId", nameof(SharedLinkInboxItem.UrlHash)).IsUnique();
             entity.HasIndex("TenantId", nameof(SharedLinkInboxItem.Status), nameof(SharedLinkInboxItem.SharedAt));
         });
