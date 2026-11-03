@@ -47,3 +47,16 @@ Readiness confirms configuration only, not remote key validity, quota or live av
 ## Boundaries
 
 AI providers supply inference only. They do not discover Douyin/TikTok channels or supply sales evidence. Discovery requires an approved data provider and permitted access. Views and engagement are not proof of sales; sales claims require authorized commerce/affiliate evidence.
+
+## Workspace-managed provider registry (implementation status)
+
+Migration `024_ai_provider_registry.sql` introduces the tenant-scoped `dbo.AIProviders` registry. It stores provider metadata, active state, routing role, fallback order, timeout and output-token limits. The encrypted credential column is reserved for ciphertext only. The schema enforces at most one active Primary and unique active fallback positions per workspace.
+
+The registry schema and EF persistence mapping are now present on `feature/topic-driven-channel-discovery`. **The management API, secret-protection service, AI runtime hand-off, connection test endpoint, UI and automated integration tests are not yet implemented.** Until those pieces are delivered, the AI service continues to use the environment-based configuration described above; do not enter credentials into the database manually and do not treat the registry as active routing configuration.
+
+The next implementation steps are:
+1. Add owner/admin-only tenant-scoped CRUD and routing validation endpoints.
+2. Encrypt credentials using a persistent server-side data-protection key ring; never return ciphertext or plaintext to the browser.
+3. Pass the selected tenant's decrypted, validated provider route from API to the AI service over the authenticated internal service channel.
+4. Add provider connection tests and transient-error failover reporting.
+5. Add the `/settings/ai-providers` UI and tests for tenant isolation, secret redaction, one-primary enforcement, ordering and failover.
