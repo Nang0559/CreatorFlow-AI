@@ -77,16 +77,19 @@ public sealed class CreatorFlowApiClient(
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
     }
 
-    public async Task<(TResponse? Data, string? ProviderTrace)> PostWithMetadataAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
+    public async Task<(TResponse? Data, string? ProviderTrace, string? Error)> PostWithMetadataAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
     {
         EnsureConfigured();
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
         await AddIdentityHeadersAsync(request);
         using var response = await http.SendAsync(request, ct);
-        await EnsureSuccessAsync(response, ct);
-        var data = await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
         response.Headers.TryGetValues("X-CreatorFlow-LLM-Trace", out var values);
-        return (data, values?.FirstOrDefault());
+        var trace = values?.FirstOrDefault();
+        var content = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            return (default, trace, $"API trả về HTTP {(int)response.StatusCode}: {(content.Length <= 1000 ? content : content[..1000])}");
+        var data = string.IsNullOrWhiteSpace(content) ? default : System.Text.Json.JsonSerializer.Deserialize<TResponse>(content, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        return (data, trace, null);
     }
 
     public async Task<TResponse?> PutAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
