@@ -43,8 +43,7 @@ if (-not $ffprobeConfiguredExists -and -not [string]::IsNullOrWhiteSpace($env:Vi
     }
 }
 
-$required = @('VideoRendering__StorageRoot','VideoRendering__AfterEffectsExe',
-    'VideoRendering__AerenderExe','VideoRendering__FFmpegExe','VideoRendering__FFprobeExe')
+$required = @('VideoRendering__StorageRoot','VideoRendering__FFmpegExe','VideoRendering__FFprobeExe')
 foreach ($name in $required) {
     $value = [Environment]::GetEnvironmentVariable($name,'Process')
     if ([string]::IsNullOrWhiteSpace($value)) { throw "Thiếu cấu hình trong .env: $name" }
@@ -81,6 +80,7 @@ if ($process.HasExited) {
     Get-Content -LiteralPath $stderr -Tail 40 -ErrorAction SilentlyContinue
     throw 'Worker đã thoát ngay sau khi khởi động. Xem log trong thư mục logs.'
 }
+Write-Host 'Engine dựng video: FFmpeg (After Effects không bắt buộc).'
 Write-Host "Worker dựng video đã khởi động (PID $($process.Id))."
 Write-Host "Thư mục video: $root"
 Write-Host "Log: $stdout"
