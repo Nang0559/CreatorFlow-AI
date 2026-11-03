@@ -4,6 +4,7 @@
 @using CreatorFlow.Web.Services
 @attribute [Authorize]
 @inject CreatorFlowApiClient Api
+@inject AuthenticationStateProvider AuthState
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -96,11 +97,7 @@
     private bool busy;
     private bool CanManage => activeWorkspace?.Role is "Owner" or "Admin";
 
-    protected override async Task OnInitializedAsync()
-    {
-        var auth = await (await Task.FromResult(true)) switch { _ => Task.FromResult(true) };
-        await LoadAsync();
-    }
+    protected override async Task OnInitializedAsync() => await LoadAsync();
 
     private async Task LoadAsync()
     {
@@ -109,8 +106,8 @@
         {
             busy = true; error = "";
             workspaces = await Api.GetAsync<List<WorkspaceItem>>("/api/v1/identity/workspaces") ?? [];
-            var session = await Api.GetAsync<SessionItem>("/auth/session");
-            selectedTenant = session?.SelectedTenantId ?? "";
+            var authState = await AuthState.GetAuthenticationStateAsync();
+            selectedTenant = authState.User.FindFirst("creatorflow_tenant")?.Value ?? "";
             activeWorkspace = workspaces.FirstOrDefault(x => x.Id.ToString("D") == selectedTenant);
             if (activeWorkspace is not null)
             {
@@ -176,6 +173,5 @@
 
     private sealed record WorkspaceItem(Guid Id, string Name, string Slug, string Role);
     private sealed record MemberItem(Guid Id, string Role, string Status, DateTimeOffset CreatedAt);
-    private sealed record SessionItem(bool Authenticated, string? Subject, string? SelectedTenantId, DateTimeOffset? AccessTokenExpiresAt);
     private sealed record InvitationCreated(Guid Id, string Email, string Role, DateTimeOffset ExpiresAt, string Token);
 }
