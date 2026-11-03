@@ -51,6 +51,34 @@
 </section>
 
 <section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">KHÁM PHÁ CHỦ ĐỘNG</p><h2>Tìm kênh theo chủ đề bạn quan tâm</h2>
+        <p class="muted">Chọn chủ đề đã lưu. CreatorFlow sẽ dùng AI tạo bộ truy vấn tìm kênh/video, gồm từ khóa sản phẩm và ý định mua hàng. Đây là kế hoạch tìm kiếm, chưa phải kết quả kênh đã được thu thập.</p></div></div>
+    <div class="trend-form">
+        <label>Chủ đề<select @bind="selectedTopicId">
+            <option value="">-- Chọn chủ đề --</option>
+            @foreach (var item in topicItems) { <option value="@item.Id">@item.Name</option> }
+        </select></label>
+        <label>Sản phẩm / ngách muốn bán <span class="field-hint">Không bắt buộc</span><input @bind="discoveryProductContext" maxlength="1000" placeholder="Ví dụ: máy hút bụi mini, đồ gia dụng thông minh" /></label>
+        <label>Khách hàng mục tiêu <span class="field-hint">Không bắt buộc</span><input @bind="discoveryAudienceContext" maxlength="1000" placeholder="Ví dụ: nữ 25–40 tuổi, gia đình trẻ" /></label>
+    </div>
+    <div class="form-actions"><button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(selectedTopicId))" @onclick="DiscoverByTopicAsync">@(busy ? "Đang lập kế hoạch…" : "Tìm kênh theo chủ đề")</button>
+        <span class="muted">Cần có chủ đề trong mục quản lý chủ đề. Không tự tạo số liệu bán hàng.</span></div>
+    @if (discoveryPlan is not null)
+    {
+        <div class="discovery-plan">
+            <h3>Bộ truy vấn đề xuất cho: @discoveryPlan.Topic</h3>
+            <p class="muted">Thị trường: Việt Nam · Cần người duyệt: @((discoveryPlan.RequiresHumanReview) ? "Có" : "Không")</p>
+            <strong>Từ khóa tìm kiếm</strong>
+            <ul>@foreach (var query in discoveryPlan.Queries) { <li>@query</li> }</ul>
+            @if (discoveryPlan.RelatedTopics.Length > 0) { <strong>Chủ đề liên quan</strong><p>@string.Join(" · ", discoveryPlan.RelatedTopics)</p> }
+            @if (discoveryPlan.IntentSignals.Length > 0) { <strong>Tín hiệu ý định mua hàng</strong><p>@string.Join(" · ", discoveryPlan.IntentSignals)</p> }
+            @if (discoveryPlan.Exclusions.Length > 0) { <strong>Loại trừ</strong><p>@string.Join(" · ", discoveryPlan.Exclusions)</p> }
+            <p class="muted">Bước thu thập kết quả và xác minh hiệu suất thương mại chỉ hoạt động khi connector được cấp quyền và cấu hình. Không coi kế hoạch truy vấn là danh sách kênh đã tìm thấy.</p>
+        </div>
+    }
+</section>
+
+<section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">GHI NHẬN</p><h2>Ghi nhận xu hướng mới</h2></div></div>
     <div class="trend-form">
         <label>Loại<select @bind="kind"><option>Video</option><option value="CreatorChannel">Kênh sáng tạo</option><option value="Sound">Âm thanh</option></select></label>
@@ -92,11 +120,14 @@
     private string sharedUrl = "";
     private string shareMessage = "";
     private List<SharedLinkItem> shareItems = [];
+    private List<TopicItem> topicItems = [];
+    private string selectedTopicId = "", discoveryProductContext = "", discoveryAudienceContext = "";
+    private DiscoveryPlanItem? discoveryPlan;
 
     [Parameter, SupplyParameterFromQuery(Name = "sharedUrl")] public string? IncomingSharedUrl { get; set; }
     private string? lastAutoSubmittedLink;
 
-    protected override async Task OnInitializedAsync() { await LoadAsync(); await LoadShareInboxAsync(); }
+    protected override async Task OnInitializedAsync() { await LoadAsync(); await LoadShareInboxAsync(); await LoadTopicsAsync(); }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -121,6 +152,28 @@
         finally { busy = false; }
     }
 
+
+    private async Task LoadTopicsAsync()
+    {
+        if (!Api.IsConfigured) return;
+        try { topicItems = await Api.GetAsync<List<TopicItem>>("/api/v1/topics?take=100") ?? []; }
+        catch (Exception ex) { error = "Không tải được danh sách chủ đề: " + ex.Message; }
+    }
+
+    private async Task DiscoverByTopicAsync()
+    {
+        if (!Guid.TryParse(selectedTopicId, out var topicId)) { error = "Vui lòng chọn chủ đề."; return; }
+        try
+        {
+            busy = true; error = ""; successMessage = ""; discoveryPlan = null;
+            discoveryPlan = await Api.PostAsync<object, DiscoveryPlanItem>($"/api/v1/topics/{topicId}/discovery-plan",
+                new { productContext = discoveryProductContext, audienceContext = discoveryAudienceContext, maxQueries = 8 });
+            if (discoveryPlan is null) error = "AI chưa trả về kế hoạch tìm kiếm.";
+            else successMessage = "Đã tạo bộ truy vấn khám phá cho chủ đề.";
+        }
+        catch (Exception ex) { error = ToUserMessage(ex); }
+        finally { busy = false; }
+    }
 
     private async Task LoadShareInboxAsync()
     {
@@ -149,6 +202,9 @@
     private static string KindLabel(string value) => value switch { "Video" => "Video", "CreatorChannel" => "Kênh sáng tạo", "Sound" => "Âm thanh", _ => "Khác" };
     private static string PlatformLabel(string value) => value switch { "TikTokVietnam" => "TikTok Việt Nam", "YouTubeShortsVietnam" => "YouTube Shorts Việt Nam", "FacebookReelsVietnam" => "Facebook Reels Việt Nam", "Douyin" => "Douyin", _ => "Khác" };
     private static string ShareStatusLabel(string value) => value switch { "Pending" => "Chờ xem xét", "Reviewed" => "Đã xem xét", "Linked" => "Đã liên kết", "Ignored" => "Đã bỏ qua", _ => "Chưa xác định" };
+
+    private sealed record TopicItem(Guid Id, string Name, string Keywords, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    private sealed record DiscoveryPlanItem(string Topic, string[] Queries, string[] RelatedTopics, string[] IntentSignals, string[] Exclusions, bool RequiresHumanReview);
 
     private sealed record SharedLinkItem(Guid Id, string Platform, string SharedUrl,
         DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId);
