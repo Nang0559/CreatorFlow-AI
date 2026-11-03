@@ -45,12 +45,6 @@ else if (!string.IsNullOrWhiteSpace(error))
     @if (workspaces.Count == 0)
     {
         <p class="muted">Tài khoản chưa có workspace đang hoạt động. Nếu đây là lần triển khai đầu tiên, người vận hành được ủy quyền có thể khởi tạo Owner một lần.</p>
-        <div class="trend-form">
-            <label>Tên workspace<input @bind="workspaceName" maxlength="160" placeholder="Tên doanh nghiệp / nhóm" /></label>
-            <label>Mã workspace<input @bind="workspaceSlug" maxlength="80" placeholder="ten-doanh-nghiep" /></label>
-        </div>
-        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(workspaceName) || string.IsNullOrWhiteSpace(workspaceSlug))" @onclick="BootstrapOwnerAsync">Khởi tạo workspace Owner</button>
-        <p class="muted">Chỉ thành công khi máy chủ đã cấu hình mã bootstrap và chưa có Owner đang hoạt động. Không phải chức năng tạo workspace tùy ý cho mọi tài khoản.</p>
     }
     @foreach (var workspace in workspaces)
     {
@@ -114,8 +108,6 @@ else if (!string.IsNullOrWhiteSpace(error))
     private string inviteRole = "Editor";
     private string invitationToken = "";
     private string acceptToken = "";
-    private string workspaceName = "";
-    private string workspaceSlug = "";
     private string error = "";
     private string message = "";
     private bool busy;
@@ -157,22 +149,6 @@ else if (!string.IsNullOrWhiteSpace(error))
             busy = true; error = "";
             await JS.InvokeVoidAsync("creatorFlowWorkspace.select", id.ToString("D"));
             Navigation.NavigateTo("/account", forceLoad: true);
-        }
-        catch (Exception ex) { error = ex.Message; }
-        finally { busy = false; }
-    }
-
-    private async Task BootstrapOwnerAsync()
-    {
-        try
-        {
-            busy = true; error = "";
-            await Api.BootstrapOwnerAsync<object, WorkspaceItem>("/api/v1/identity/owner/bootstrap",
-                new { name = workspaceName.Trim(), slug = workspaceSlug.Trim() });
-            workspaceName = workspaceSlug = "";
-            message = "Đã khởi tạo workspace và cấp vai trò Owner.";
-            busy = false;
-            await LoadAsync();
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
