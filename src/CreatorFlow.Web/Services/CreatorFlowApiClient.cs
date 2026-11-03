@@ -77,6 +77,16 @@ public sealed class CreatorFlowApiClient(
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
     }
 
+    public async Task<TResponse?> PutAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var request = new HttpRequestMessage(HttpMethod.Put, path) { Content = JsonContent.Create(body) };
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, ct);
+        await EnsureSuccessAsync(response, ct);
+        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
+    }
+
     public async Task PostNoContentAsync<TRequest>(string path, TRequest body, CancellationToken ct = default)
     {
         EnsureConfigured();
