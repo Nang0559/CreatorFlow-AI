@@ -117,7 +117,7 @@ Roles: Owner, Admin, Editor, Analyst, Publisher. Analyst is read-only. Publisher
 - API access-token refresh/rotation is not implemented yet. When the provider-issued API access token expires, API calls require reauthentication; do not request `offline_access` until a secure refresh-token rotation and server-side ticket update flow is implemented.
 - `GET /auth/csrf` issues the anti-forgery token required by workspace selection and logout POSTs.
 - `POST /auth/logout` clears the local cookie and initiates OIDC provider sign-out.
-- `GET /auth/session` reports the authenticated subject, selected workspace and access-token expiry (never the token).
+- `GET /auth/session` returns JSON with authentication state, subject, selected workspace and access-token expiry (never the token). For an unauthenticated request it returns `authenticated: false` rather than redirecting to the identity provider.
 - MFA, password reset, account lockout, compromised-credential response and provider-side session revocation must be configured at the OIDC provider. The current implementation does not provide a local password database, central per-device session-revocation console, or forced sign-out of every active CreatorFlow cookie session.
 
 ## 9. Tenant isolation guarantees and remaining gates
