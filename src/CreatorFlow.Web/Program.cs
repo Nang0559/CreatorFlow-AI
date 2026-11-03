@@ -55,7 +55,7 @@ if (oidcEnabled)
         options.Authority = oidc["Authority"];
         options.ClientId = oidc["ClientId"];
         options.ClientSecret = oidc["ClientSecret"];
-        options.RequireHttpsMetadata = true;
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.ResponseType = OpenIdConnectResponseType.Code;
         options.UsePkce = true;
         options.SaveTokens = true;
