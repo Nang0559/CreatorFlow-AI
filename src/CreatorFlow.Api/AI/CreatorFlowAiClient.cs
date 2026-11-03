@@ -31,27 +31,26 @@ public sealed class CreatorFlowAiClient(
             var rows = await db.AIProviderConfigurations.AsNoTracking()
                 .Where(x => x.IsActive).OrderBy(x => x.RoutingRole).ThenBy(x => x.FallbackOrder).ToListAsync(cancellationToken);
             var primary = rows.FirstOrDefault(x => x.RoutingRole == "Primary");
-            if (primary is not null)
+            if (primary is null)
+                return Results.Problem("Workspace chưa bật nhà cung cấp AI Primary. Yêu cầu bị chặn để không âm thầm dùng cấu hình Gemini/OpenAI từ môi trường.", statusCode: 503);
+            try
             {
-                try
-                {
-                    var protector = protection.CreateProtector("CreatorFlow.AIProvider.ApiKey.v1");
-                    object Convert(AIProviderConfiguration row) => new {
-                        name = row.DisplayName, base_url = row.BaseUrl, model = row.Model,
-                        api_key = protector.Unprotect(row.EncryptedApiKey ?? throw new InvalidOperationException("Provider credential is missing.")),
-                        timeout_seconds = row.TimeoutSeconds, max_output_tokens = row.MaxOutputTokens
-                    };
-                    var route = new {
-                        primary = Convert(primary),
-                        fallbacks = rows.Where(x => x.RoutingRole == "Fallback").OrderBy(x => x.FallbackOrder).Select(Convert).ToArray()
-                    };
-                    var encoded = System.Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(route)));
-                    request.Headers.TryAddWithoutValidation("X-CreatorFlow-LLM-Route", encoded);
-                }
-                catch (Exception)
-                {
-                    return Results.Problem("Workspace AI provider configuration cannot be decrypted. Check the API Data Protection key ring.", statusCode: 503);
-                }
+                var protector = protection.CreateProtector("CreatorFlow.AIProvider.ApiKey.v1");
+                object Convert(AIProviderConfiguration row) => new {
+                    name = row.DisplayName, base_url = row.BaseUrl, model = row.Model,
+                    api_key = protector.Unprotect(row.EncryptedApiKey ?? throw new InvalidOperationException("Provider credential is missing.")),
+                    timeout_seconds = row.TimeoutSeconds, max_output_tokens = row.MaxOutputTokens
+                };
+                var route = new {
+                    primary = Convert(primary),
+                    fallbacks = rows.Where(x => x.RoutingRole == "Fallback").OrderBy(x => x.FallbackOrder).Select(Convert).ToArray()
+                };
+                var encoded = System.Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(route)));
+                request.Headers.TryAddWithoutValidation("X-CreatorFlow-LLM-Route", encoded);
+            }
+            catch (Exception)
+            {
+                return Results.Problem("Workspace AI provider configuration cannot be decrypted. Check the API Data Protection key ring.", statusCode: 503);
             }
         }
 
