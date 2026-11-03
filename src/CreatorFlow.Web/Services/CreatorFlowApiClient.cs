@@ -81,6 +81,15 @@ public sealed class CreatorFlowApiClient(
         await EnsureSuccessAsync(response, ct);
     }
 
+    public async Task DeleteNoContentAsync(string path, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var request = new HttpRequestMessage(HttpMethod.Delete, path);
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, ct);
+        await EnsureSuccessAsync(response, ct);
+    }
+
     public async Task PutNoContentAsync<TRequest>(string path, TRequest body, CancellationToken ct = default)
     {
         EnsureConfigured();
