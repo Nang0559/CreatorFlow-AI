@@ -8,8 +8,16 @@
 </header>
 @if (!string.IsNullOrWhiteSpace(message)) { <section class="notice"><strong>@message</strong></section> }
 <section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">CẤU HÌNH TỪ MÔI TRƯỜNG</p><h2>Nhà cung cấp runtime (.env)</h2></div></div>
+    @if (runtimeProviders.Count == 0) { <p class="muted">API không nhìn thấy cấu hình provider từ môi trường. Có thể biến môi trường chỉ được cấp cho AI container; danh sách workspace bên dưới vẫn là nguồn cấu hình trực tiếp.</p> }
+    @foreach (var item in runtimeProviders)
+    {
+        <div class="variant-stats" style="padding:10px 0;border-bottom:1px solid var(--border,#ddd)"><div><strong>@item.Provider.ToUpperInvariant()</strong><div class="muted">@(item.Model ?? "Chưa khai báo model") · @(item.BaseUrl ?? "Chưa khai báo Base URL")</div><small>@(item.IsPrimary ? "Primary runtime" : item.IsFallback ? "Fallback runtime" : "Đã cấu hình") · @(item.HasApiKey ? "Đã có API key (ẩn)" : "Chưa phát hiện API key")</small></div></div>
+    }
+</section>
+<section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">DANH SÁCH NHÀ CUNG CẤP</p><h2>Thứ tự định tuyến</h2></div></div>
-    @if (providers.Count == 0) { <p>Chưa có cấu hình trong workspace. Tạo Gemini làm Primary trước.</p> }
+    @if (providers.Count == 0) { <p>Workspace chưa có nhà cung cấp nào được lưu. Nếu runtime (.env) có cấu hình, AI vẫn có thể sử dụng cấu hình runtime cho đến khi bạn thêm Primary trong workspace.</p> }
     @foreach (var item in providers)
     {
         <div class="variant-stats" style="padding:12px 0;border-bottom:1px solid var(--border,#ddd)">
@@ -44,6 +52,7 @@
 </section>
 @code {
     private List<ProviderItem> providers = [];
+    private List<RuntimeProviderItem> runtimeProviders = [];
     private Guid? editingId;
     private string displayName = "Gemini";
     private string model = "gemini-3.8-flash";
@@ -61,7 +70,7 @@
 
     private async Task ReloadAsync()
     {
-        try { busy = true; providers = await Api.GetAsync<List<ProviderItem>>("/api/v1/ai/providers") ?? []; message = ""; }
+        try { busy = true; providers = await Api.GetAsync<List<ProviderItem>>("/api/v1/ai/providers") ?? []; runtimeProviders = await Api.GetAsync<List<RuntimeProviderItem>>("/api/v1/ai/providers/runtime") ?? []; message = ""; }
         catch (HttpRequestException ex) { message = ex.Message; }
         catch { message = "Không thể tải cấu hình AI. Kiểm tra quyền Owner/Admin và kết nối API."; }
         finally { busy = false; }
@@ -117,6 +126,7 @@
         timeoutSeconds = 120; maxOutputTokens = 3000; isActive = true;
     }
 
+    private sealed class RuntimeProviderItem { public string Provider { get; set; } = ""; public string? Model { get; set; } public string? BaseUrl { get; set; } public bool HasApiKey { get; set; } public bool IsPrimary { get; set; } public bool IsFallback { get; set; } }
     private sealed record ProviderWrite(string DisplayName, string BaseUrl, string Model, string? ApiKey,
         bool IsActive, string RoutingRole, int? FallbackOrder, int TimeoutSeconds, int MaxOutputTokens);
     private sealed class ProviderItem
