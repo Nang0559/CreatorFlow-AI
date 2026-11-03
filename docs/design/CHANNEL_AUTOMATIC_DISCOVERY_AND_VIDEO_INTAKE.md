@@ -46,3 +46,42 @@ The intended flow is:
 ## Current honest status
 
 Migration 021 creates durable tenant-safe sync/download queue storage. It does not provide a live Douyin/TikTok connector, scheduler, rights-review UI, or downloader. The feature is therefore not yet operational and must remain disabled until the above components and evidence exist.
+
+
+## Downloader technology decision and source-file integrity
+
+### Chosen implementation boundary
+
+The downloader is **not FFmpeg**. FFmpeg/FFprobe are the post-acquisition media-processing and validation tools. The acquisition layer should use:
+
+- A provider-specific, permission-checked connector to resolve a canonical provider video ID into an approved media URL or a provider-issued file stream.
+- .NET `HttpClient` streaming for the actual transfer when the connector returns a documented, authorized HTTP(S) media URL/stream. Do not accept arbitrary URLs from the browser.
+- A bounded temporary-file writer with cancellation, connect/read timeouts, maximum byte limits, retry/backoff, and atomic move into tenant-scoped storage.
+- FFprobe to inspect container, codecs, duration, dimensions, streams and file readability after download.
+- SHA-256 to identify duplicate bytes; store provider ID, canonical source reference, acquisition time, connector/version, rights basis, original filename/MIME, byte size and hash as provenance.
+
+Do not add a generic yt-dlp fallback for arbitrary Douyin/TikTok URLs. A third-party downloader does not grant rights, platform permission or a stable/approved access method. It must not be used to bypass login, access controls, rate limits, DRM, signed URL restrictions or watermark/attribution controls. A connector may only be enabled after its exact provider/source method and permitted scope are documented and reviewed.
+
+### Original file and watermark/identity policy
+
+- Preserve the acquired source file byte-for-byte as an immutable **source master**. Never overwrite it with a rendered/cleaned version.
+- Record SHA-256 and provenance before any transformation. Recalculate and record a separate hash for every derivative.
+- Do not remove, obscure or alter a creator/platform watermark, attribution, ownership mark or other provenance identifier to disguise origin or evade platform controls.
+- If the rights holder supplies a separate clean master, or an authorized source explicitly provides a no-watermark file, that file may be ingested as the source master with its own provenance and rights evidence.
+- The editing pipeline may create transformative derivatives (crop, subtitles, narration, graphics, layout, audio mix) only within the documented license/permission. Preserve required attribution and do not imply ownership.
+- Keep source master and derivatives in separate tenant-scoped paths and expose the distinction in the asset record/UI.
+
+### Required acceptance tests before enabling a downloader
+
+1. No network request is made while rights status is `AwaitingRightsReview`.
+2. A download can only be claimed when a valid rights basis and reviewer/audit timestamp exist.
+3. Arbitrary browser-supplied URLs and non-HTTPS URLs are rejected; connector resolves provider IDs only.
+4. Cross-tenant candidate IDs cannot be claimed or written to another tenant's storage.
+5. Cancel, timeout, truncated stream, oversized response and retry do not leave a file marked Completed.
+6. A successful transfer is atomically committed only after size, hash and FFprobe checks pass.
+7. Source master is immutable; derivative generation never changes its bytes/hash.
+8. Watermark/attribution metadata is preserved and no watermark-removal step exists in the pipeline.
+9. Duplicate provider IDs and duplicate hashes are handled idempotently without cross-tenant data leakage.
+10. Logs contain correlation IDs and error codes but no signed media URLs, tokens or credentials.
+
+Until these tests pass with a reviewed connector, the UI must describe automatic download as unavailable rather than implying that a queue row is a downloaded video.
