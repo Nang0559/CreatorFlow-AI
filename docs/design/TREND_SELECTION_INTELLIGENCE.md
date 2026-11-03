@@ -62,3 +62,34 @@ Migration tests on empty and schema-009 databases; decision validation and empty
 ## Current Discovery ranking boundary
 
 The Python service exposes a transparent heuristic candidate ranker and an LLM query planner. The ranker can score candidates supplied to it without a user-shared link; a shared URL is only an optional bounded priority signal. The query planner returns permitted search queries and exclusions but does not collect data. No verified live Douyin/TikTok provider, candidate ingestion worker, persistent ranking orchestration or feedback-to-next-ranking loop is active. Do not describe the current baseline as trained ML or automatic live trend crawling.
+
+
+## Topic-driven channel discovery — implementation status
+
+The Trends page now offers a topic-driven discovery entry point:
+- The creator selects an active saved topic and may add product and audience context.
+- The authenticated API reads the topic from the current tenant, derives a bounded keyword list, and forwards a query-plan request to the AI service.
+- The AI service returns bounded queries, adjacent topics, purchase-intent signals and exclusions. Human review remains required.
+- This is a query plan only. It does not claim that channels were fetched, does not follow accounts, and does not create fabricated channel metrics.
+
+### Provider and commercial evidence gates
+
+Automatic channel acquisition is intentionally not enabled until a provider adapter is approved and configured. A provider must declare its platform, permitted search/profile/video capabilities, authorization model, rate limits, geographic coverage, retention rules and allowed commercial use. Disabled or unconfigured providers must fail closed and must never be replaced by browser-cookie extraction, private endpoints or generic scraping.
+
+Commercial ranking must keep separate evidence classes:
+1. Verified sales evidence: orders, units sold, GMV or affiliate conversion metrics returned by an authorized seller/affiliate integration, with the authorization scope and reporting window recorded.
+2. Creator-authorized performance evidence: creator profile/video/shop metrics available only after that creator authorizes the application.
+3. Public content evidence: views, likes, comments, shares, posting cadence and engagement velocity. These can indicate audience traction but are not proof of sales.
+4. Unknown: absent or unauthorized metrics. Unknown is not zero and cannot increase a commercial-sales score.
+
+TikTok Shop Affiliate API is approval-gated; Seller Analytics APIs are scoped to the authorized seller's shop and require the relevant scopes. Douyin Open Platform permissions are separately applied for and may be disabled by default. Therefore neither platform currently provides a universal, unrestricted cross-creator sales lookup for this application.
+
+### Remaining release gates
+
+- Implement and test an approved provider adapter for topic search and public/authorized channel discovery.
+- Persist discovery runs, candidate source provenance, coverage, timestamps and tenant ownership using a tenant-safe schema.
+- Deduplicate candidates by platform + stable external creator ID and preserve source URLs.
+- Add channel metric snapshots with nullable values and explicit source/authorization provenance.
+- Rank commercial potential only from verified sales evidence; expose public-content traction as a separate score.
+- Add scheduled worker execution, bounded retries, rate limiting, idempotency and a human review queue.
+- Verify API/Web builds, tenant isolation, migration checksums and connector contract tests before enabling automatic collection.
