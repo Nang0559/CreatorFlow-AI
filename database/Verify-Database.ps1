@@ -124,11 +124,11 @@ WHERE NOT EXISTS
 (
     SELECT 1
     FROM sys.foreign_keys fk
-    WHERE fk.name=e.ConstraintName
+    WHERE fk.name COLLATE DATABASE_DEFAULT=e.ConstraintName
       AND fk.parent_object_id=OBJECT_ID(N'dbo.'+QUOTENAME(e.ChildTable))
       AND fk.referenced_object_id=OBJECT_ID(N'dbo.'+QUOTENAME(e.ParentTable))
       AND fk.is_disabled=0 AND fk.is_not_trusted=0
-      AND fk.delete_referential_action_desc=e.DeleteAction
+      AND fk.delete_referential_action_desc COLLATE DATABASE_DEFAULT=e.DeleteAction
       AND (SELECT COUNT(*) FROM sys.foreign_key_columns fkc WHERE fkc.constraint_object_id=fk.object_id)=2
       AND EXISTS
       (
@@ -137,7 +137,7 @@ WHERE NOT EXISTS
           JOIN sys.columns childColumn ON childColumn.object_id=fkc.parent_object_id AND childColumn.column_id=fkc.parent_column_id
           JOIN sys.columns parentColumn ON parentColumn.object_id=fkc.referenced_object_id AND parentColumn.column_id=fkc.referenced_column_id
           WHERE fkc.constraint_object_id=fk.object_id AND fkc.constraint_column_id=1
-            AND childColumn.name=N'TenantId' AND parentColumn.name=N'TenantId'
+            AND childColumn.name COLLATE DATABASE_DEFAULT=N'TenantId' AND parentColumn.name COLLATE DATABASE_DEFAULT=N'TenantId'
       )
       AND EXISTS
       (
@@ -146,7 +146,7 @@ WHERE NOT EXISTS
           JOIN sys.columns childColumn ON childColumn.object_id=fkc.parent_object_id AND childColumn.column_id=fkc.parent_column_id
           JOIN sys.columns parentColumn ON parentColumn.object_id=fkc.referenced_object_id AND parentColumn.column_id=fkc.referenced_column_id
           WHERE fkc.constraint_object_id=fk.object_id AND fkc.constraint_column_id=2
-            AND childColumn.name=e.ChildColumn AND parentColumn.name=N'Id'
+            AND childColumn.name COLLATE DATABASE_DEFAULT=e.ChildColumn AND parentColumn.name COLLATE DATABASE_DEFAULT=N'Id'
       )
 );
 
@@ -198,7 +198,7 @@ WHERE NOT EXISTS
     SELECT 1
     FROM sys.indexes i
     WHERE i.object_id=OBJECT_ID(N'dbo.'+QUOTENAME(expected.TableName))
-      AND i.name=expected.IndexName
+      AND i.name COLLATE DATABASE_DEFAULT=expected.IndexName
       AND i.is_unique=1 AND i.is_disabled=0 AND i.has_filter=0
       AND (SELECT COUNT(*) FROM sys.index_columns ic WHERE ic.object_id=i.object_id AND ic.index_id=i.index_id AND ic.key_ordinal>0)
           =(SELECT COUNT(*) FROM @ExpectedIndexKeys k WHERE k.IndexName=expected.IndexName)
@@ -212,7 +212,7 @@ WHERE NOT EXISTS
                 FROM sys.index_columns ic
                 JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id
                 WHERE ic.object_id=i.object_id AND ic.index_id=i.index_id
-                  AND ic.key_ordinal=k.KeyOrdinal AND c.name=k.ColumnName
+                  AND ic.key_ordinal=k.KeyOrdinal AND c.name COLLATE DATABASE_DEFAULT=k.ColumnName
             )
       )
 );
