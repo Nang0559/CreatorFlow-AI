@@ -50,19 +50,71 @@
     <small class="muted">iPhone: bạn có thể dùng Shortcut “CreatorFlow – Nhận link” để chọn ngay trong bảng Chia sẻ; nếu chưa tạo Shortcut, hãy Sao chép liên kết rồi dán vào ô này. Hướng dẫn: docs/operations/IOS_SHARE_TO_CREATORFLOW.md.</small>
 </section>
 
+<section class="panel topic-management-panel">
+    <div class="panel-heading">
+        <div>
+            <p class="eyebrow">THIẾT LẬP KHÁM PHÁ</p>
+            <h2>Quản lý chủ đề</h2>
+            <p class="muted">Tạo các lĩnh vực bạn muốn theo dõi và nhập từ khóa để AI lập kế hoạch tìm kiếm. Chủ đề được lưu theo workspace của bạn.</p>
+        </div>
+        <span class="status">@topicItems.Count(x => x.IsActive) chủ đề đang dùng</span>
+    </div>
+    <div class="trend-form">
+        <label>Tên chủ đề <span class="required-mark">* Tối đa 120 ký tự</span>
+            <input @bind="topicName" maxlength="120" placeholder="Ví dụ: Đồ gia dụng thông minh" />
+        </label>
+        <label>Từ khóa tìm kiếm <span class="field-hint">Phân tách bằng dấu phẩy hoặc xuống dòng · mỗi từ khóa tối đa 100 ký tự</span>
+            <textarea @bind="topicKeywords" rows="3" placeholder="máy hút bụi mini&#10;máy lau nhà&#10;đồ dùng nhà bếp"></textarea>
+        </label>
+    </div>
+    <div class="form-actions">
+        <button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(topicName))" @onclick="SaveTopicAsync">@(busy ? "Đang lưu…" : editingTopicId.HasValue ? "Lưu thay đổi" : "Thêm chủ đề")</button>
+        @if (editingTopicId.HasValue)
+        {
+            <button class="secondary" disabled="@busy" @onclick="CancelTopicEdit">Hủy chỉnh sửa</button>
+        }
+    </div>
+    @if (topicItems.Count == 0)
+    {
+        <p class="muted">Chưa có chủ đề nào. Hãy tạo chủ đề đầu tiên ở trên để sử dụng chức năng tìm kênh theo chủ đề.</p>
+    }
+    else
+    {
+        <div class="topic-list">
+            @foreach (var item in topicItems)
+            {
+                <article class="trend-item">
+                    <div>
+                        <span class="status">@(item.IsActive ? "Đang sử dụng" : "Đã ngừng")</span>
+                        <h3>@item.Name</h3>
+                        <p class="muted">@(string.IsNullOrWhiteSpace(item.Keywords) ? "Chưa khai báo từ khóa" : item.Keywords.Replace("\n", " · "))</p>
+                    </div>
+                    <div class="form-actions">
+                        @if (item.IsActive)
+                        {
+                            <button class="secondary" disabled="@busy" @onclick="() => EditTopic(item)">Sửa</button>
+                            <button class="secondary" disabled="@busy" @onclick="() => DeactivateTopicAsync(item)">Ngừng sử dụng</button>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>
+
 <section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">KHÁM PHÁ CHỦ ĐỘNG</p><h2>Tìm kênh theo chủ đề bạn quan tâm</h2>
         <p class="muted">Chọn chủ đề đã lưu. CreatorFlow sẽ dùng AI tạo bộ truy vấn tìm kênh/video, gồm từ khóa sản phẩm và ý định mua hàng. Đây là kế hoạch tìm kiếm, chưa phải kết quả kênh đã được thu thập.</p></div></div>
     <div class="trend-form">
         <label>Chủ đề<select @bind="selectedTopicId">
             <option value="">-- Chọn chủ đề --</option>
-            @foreach (var item in topicItems) { <option value="@item.Id">@item.Name</option> }
+            @foreach (var item in topicItems.Where(x => x.IsActive)) { <option value="@item.Id">@item.Name</option> }
         </select></label>
         <label>Sản phẩm / ngách muốn bán <span class="field-hint">Không bắt buộc</span><input @bind="discoveryProductContext" maxlength="1000" placeholder="Ví dụ: máy hút bụi mini, đồ gia dụng thông minh" /></label>
         <label>Khách hàng mục tiêu <span class="field-hint">Không bắt buộc</span><input @bind="discoveryAudienceContext" maxlength="1000" placeholder="Ví dụ: nữ 25–40 tuổi, gia đình trẻ" /></label>
     </div>
     <div class="form-actions"><button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(selectedTopicId))" @onclick="DiscoverByTopicAsync">@(busy ? "Đang lập kế hoạch…" : "Tìm kênh theo chủ đề")</button>
-        <span class="muted">Cần có chủ đề trong mục quản lý chủ đề. Không tự tạo số liệu bán hàng.</span></div>
+        <span class="muted">Chọn một chủ đề đang sử dụng trong mục Quản lý chủ đề bên dưới. Không tự tạo số liệu bán hàng.</span></div>
     @if (discoveryPlan is not null)
     {
         <div class="discovery-plan">
@@ -122,6 +174,8 @@
     private List<SharedLinkItem> shareItems = [];
     private List<TopicItem> topicItems = [];
     private string selectedTopicId = "", discoveryProductContext = "", discoveryAudienceContext = "";
+    private string topicName = "", topicKeywords = "";
+    private Guid? editingTopicId;
     private DiscoveryPlanItem? discoveryPlan;
 
     [Parameter, SupplyParameterFromQuery(Name = "sharedUrl")] public string? IncomingSharedUrl { get; set; }
@@ -158,6 +212,71 @@
         if (!Api.IsConfigured) return;
         try { topicItems = await Api.GetAsync<List<TopicItem>>("/api/v1/topics?take=100") ?? []; }
         catch (Exception ex) { error = "Không tải được danh sách chủ đề: " + ex.Message; }
+    }
+
+    private void EditTopic(TopicItem item)
+    {
+        editingTopicId = item.Id;
+        topicName = item.Name;
+        topicKeywords = item.Keywords;
+        error = "";
+        successMessage = "";
+    }
+
+    private void CancelTopicEdit()
+    {
+        editingTopicId = null;
+        topicName = topicKeywords = "";
+    }
+
+    private async Task SaveTopicAsync()
+    {
+        if (string.IsNullOrWhiteSpace(topicName))
+        {
+            error = "Vui lòng nhập tên chủ đề.";
+            return;
+        }
+        if (topicName.Trim().Length > 120)
+        {
+            error = "Tên chủ đề không được vượt quá 120 ký tự.";
+            return;
+        }
+
+        try
+        {
+            busy = true;
+            error = "";
+            successMessage = "";
+            var request = new { name = topicName.Trim(), keywords = topicKeywords };
+            if (editingTopicId.HasValue)
+                await Api.PutNoContentAsync($"/api/v1/topics/{editingTopicId.Value}", request);
+            else
+                await Api.PostAsync<object, TopicItem>("/api/v1/topics", request);
+
+            var wasEditing = editingTopicId.HasValue;
+            CancelTopicEdit();
+            await LoadTopicsAsync();
+            successMessage = wasEditing ? "Đã cập nhật chủ đề." : "Đã tạo chủ đề. Bạn có thể chọn chủ đề này để tìm kênh.";
+        }
+        catch (Exception ex) { error = ToUserMessage(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task DeactivateTopicAsync(TopicItem item)
+    {
+        try
+        {
+            busy = true;
+            error = "";
+            successMessage = "";
+            await Api.PostAsync<object, object>($"/api/v1/topics/{item.Id}/deactivate", new { });
+            if (selectedTopicId == item.Id.ToString()) selectedTopicId = "";
+            if (editingTopicId == item.Id) CancelTopicEdit();
+            await LoadTopicsAsync();
+            successMessage = $"Đã ngừng sử dụng chủ đề \"{item.Name}\". Dữ liệu lịch sử không bị xóa.";
+        }
+        catch (Exception ex) { error = ToUserMessage(ex); }
+        finally { busy = false; }
     }
 
     private async Task DiscoverByTopicAsync()
