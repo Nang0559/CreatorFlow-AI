@@ -77,6 +77,20 @@ else if (!string.IsNullOrWhiteSpace(error))
         {
             <section class="notice"><strong>Mã lời mời – chỉ hiển thị lần này</strong><p>Gửi mã này cho đúng email đã mời. Không đăng công khai.</p><code>@invitationToken</code><button class="secondary" @onclick="CopyTokenAsync">Sao chép mã</button></section>
         }
+        @if (invitations.Count > 0)
+        {
+            <h3>Lời mời đã tạo</h3>
+            @foreach (var invitation in invitations)
+            {
+                <article class="trend-item">
+                    <div><strong>@invitation.Email</strong><p class="muted">@RoleLabel(invitation.Role) · @invitation.Status · Hết hạn @invitation.ExpiresAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</p></div>
+                    @if (invitation.Status == "Pending")
+                    {
+                        <button class="secondary" disabled="@busy" @onclick="() => RevokeInvitationAsync(invitation)">Thu hồi</button>
+                    }
+                </article>
+            }
+        }
         @foreach (var member in members)
         {
             <article class="trend-item">
@@ -101,6 +115,7 @@ else if (!string.IsNullOrWhiteSpace(error))
 @code {
     private List<WorkspaceItem> workspaces = [];
     private List<MemberItem> members = [];
+    private List<InvitationItem> invitations = [];
     private Dictionary<Guid, string> roleEdits = [];
     private WorkspaceItem? activeWorkspace;
     private string selectedTenant = "";
@@ -153,8 +168,10 @@ else if (!string.IsNullOrWhiteSpace(error))
             {
                 members = await Api.GetAsync<List<MemberItem>>($"/api/v1/identity/workspaces/{activeWorkspace.Id}/members") ?? [];
                 roleEdits = members.ToDictionary(x => x.Id, x => x.Role);
+        invitations = await Api.GetAsync<List<InvitationItem>>($"/api/v1/identity/workspaces/{activeWorkspace.Id}/invitations") ?? [];
+                invitations = await Api.GetAsync<List<InvitationItem>>($"/api/v1/identity/workspaces/{activeWorkspace.Id}/invitations") ?? [];
             }
-            else members = [];
+            else { members = []; invitations = []; }
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
@@ -209,6 +226,19 @@ else if (!string.IsNullOrWhiteSpace(error))
         roleEdits = members.ToDictionary(x => x.Id, x => x.Role);
     }
 
+    private async Task RevokeInvitationAsync(InvitationItem invitation)
+    {
+        try
+        {
+            busy = true; error = "";
+            await Api.DeleteNoContentAsync($"/api/v1/identity/workspaces/{activeWorkspace!.Id}/invitations/{invitation.Id}");
+            await LoadMembersAsync();
+            message = "Đã thu hồi lời mời.";
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
     private async Task ChangeRoleAsync(MemberItem member)
     {
         try { busy = true; error = ""; await Api.PutNoContentAsync($"/api/v1/identity/workspaces/{activeWorkspace!.Id}/members/{member.Id}/role", new { role = roleEdits[member.Id] }); await LoadMembersAsync(); message = "Đã cập nhật vai trò."; }
@@ -228,6 +258,7 @@ else if (!string.IsNullOrWhiteSpace(error))
 
     private sealed record WorkspaceItem(Guid Id, string Name, string Slug, string Role);
     private sealed record MemberItem(Guid Id, string? VerifiedEmail, string Role, string Status, DateTimeOffset CreatedAt);
+    private sealed record InvitationItem(Guid Id, string Email, string Role, string Status, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt);
     private sealed record InvitationCreated(Guid Id, string Email, string Role, DateTimeOffset ExpiresAt, string Token);
     private sealed record InvitationAccepted(Guid TenantId, string Role);
 }
