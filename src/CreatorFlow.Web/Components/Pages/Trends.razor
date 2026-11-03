@@ -292,7 +292,8 @@
         {
             busy = true; error = ""; successMessage = ""; discoveryPlan = null;
             var started = DateTimeOffset.UtcNow;
-            discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG GỌI AI", "Đã nhận thao tác. Đang gửi yêu cầu đến CreatorFlow API và chờ Gemini/fallback phản hồi."));
+            var configuredRoute = await GetConfiguredPrimaryProviderAsync();
+            discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG GỌI AI", $"Đã nhận thao tác. {configuredRoute}. Đang gửi yêu cầu đến CreatorFlow AI service."));
             await InvokeAsync(StateHasChanged);
             var result = await Api.PostWithMetadataAsync<object, DiscoveryPlanItem>($"/api/v1/topics/{topicId}/discovery-plan",
                 new { productContext = discoveryProductContext, audienceContext = discoveryAudienceContext, maxQueries = 8 });
@@ -306,10 +307,39 @@
         catch (Exception ex)
         {
             error = ToUserMessage(ex);
-            if (discoveryLogs.Count > 0 && discoveryLogs[0].Status == "ĐANG XỬ LÝ")
+            if (discoveryLogs.Count > 0 && discoveryLogs[0].Status == "ĐANG GỌI AI")
                 discoveryLogs[0] = discoveryLogs[0] with { Status = "THẤT BẠI", Detail = error };
         }
         finally { busy = false; }
+    }
+
+    private async Task<string> GetConfiguredPrimaryProviderAsync()
+    {
+        try
+        {
+            var configured = await Api.GetAsync<List<AIProviderSummary>>("/api/v1/ai/providers") ?? [];
+            var active = configured.Where(x => x.IsActive).ToArray();
+            var primary = active.FirstOrDefault(x => string.Equals(x.RoutingRole, "Primary", StringComparison.OrdinalIgnoreCase));
+            if (primary is null)
+                return "Không tìm thấy Primary workspace đang bật; không thể xác nhận tuyến AI workspace";
+            var fallbacks = active.Where(x => string.Equals(x.RoutingRole, "Fallback", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.FallbackOrder).Select(x => $"{x.DisplayName}/{x.Model}").ToArray();
+            return $"Primary workspace: {primary.DisplayName}/{primary.Model}" +
+                (fallbacks.Length == 0 ? "; không bật fallback, không chuyển sang Gemini/OpenAI" : $"; fallback: {string.Join(", ", fallbacks)}");
+        }
+        catch
+        {
+            return "Không đọc được cấu hình provider workspace; trace sau phản hồi sẽ xác nhận provider thực tế";
+        }
+    }
+
+    private sealed class AIProviderSummary
+    {
+        public string DisplayName { get; set; } = "";
+        public string Model { get; set; } = "";
+        public bool IsActive { get; set; }
+        public string RoutingRole { get; set; } = "";
+        public int? FallbackOrder { get; set; }
     }
 
     private static string ParseProviderTrace(string? encoded)
