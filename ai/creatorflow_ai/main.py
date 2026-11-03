@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import secrets
+import base64
+import json
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
@@ -37,11 +39,21 @@ def require_service_key(x_creatorflow_ai_key: str | None = Header(default=None))
         raise HTTPException(status_code=401, detail="Invalid CreatorFlow AI service credential.")
 
 
-def get_llm_client() -> OpenAICompatibleLLM:
+def get_llm_client(x_creatorflow_llm_route: str | None = Header(default=None)) -> OpenAICompatibleLLM:
     try:
-        return OpenAICompatibleLLM(LLMSettings.from_environment())
-    except AIConfigurationError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        if x_creatorflow_llm_route:
+            if len(x_creatorflow_llm_route) > 24000:
+                raise AIConfigurationError("Workspace AI provider route exceeds the allowed size.")
+            decoded = base64.b64decode(x_creatorflow_llm_route, validate=True)
+            route = json.loads(decoded.decode("utf-8"))
+            if not isinstance(route, dict):
+                raise AIConfigurationError("Workspace AI provider route is invalid.")
+            settings = LLMSettings.from_route(route)
+        else:
+            settings = LLMSettings.from_environment()
+        return OpenAICompatibleLLM(settings)
+    except (AIConfigurationError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail="AI provider configuration is invalid or unavailable.") from exc
 
 
 async def invoke_llm(client: OpenAICompatibleLLM, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
