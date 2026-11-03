@@ -123,13 +123,17 @@ if (oidcEnabled)
         return Results.Ok(new { requestToken = tokens.RequestToken });
     }).RequireAuthorization();
 
-    app.MapGet("/auth/session", async (HttpContext context) => Results.Ok(new
+    app.MapGet("/auth/session", async (HttpContext context) =>
     {
-        authenticated = context.User.Identity?.IsAuthenticated == true,
-        subject = context.User.FindFirst("sub")?.Value,
-        selectedTenantId = context.User.FindFirst("creatorflow_tenant")?.Value,
-        accessTokenExpiresAt = await context.GetTokenAsync("expires_at")
-    })).RequireAuthorization();
+        var authenticated = context.User.Identity?.IsAuthenticated == true;
+        return Results.Ok(new
+        {
+            authenticated,
+            subject = authenticated ? context.User.FindFirst("sub")?.Value : null,
+            selectedTenantId = authenticated ? context.User.FindFirst("creatorflow_tenant")?.Value : null,
+            accessTokenExpiresAt = authenticated ? await context.GetTokenAsync("expires_at") : null
+        });
+    }).AllowAnonymous();
 
     app.MapPost("/auth/select-workspace/{tenantId:guid}", async (Guid tenantId, HttpContext context,
         IAntiforgery antiforgery, CreatorFlow.Web.Services.CreatorFlowApiClient api) =>
