@@ -1,7 +1,8 @@
 """Provider-neutral runtime for OpenAI-compatible chat-completions APIs.
 
-The runtime intentionally has no local/mock fallback: missing credentials or a
-model configuration is an explicit service-unavailable condition.
+Gemini is the default hosted provider, but the endpoint, credential and model
+are configured independently so another compatible provider can be selected
+without changing feature code. The runtime has no local/mock fallback.
 """
 from __future__ import annotations
 
@@ -42,7 +43,10 @@ class LLMSettings:
             raise AIConfigurationError(
                 "CREATORFLOW_LLM_API_KEY and CREATORFLOW_LLM_MODEL must be configured."
             )
-        base_url = os.getenv("CREATORFLOW_LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+        base_url = os.getenv(
+            "CREATORFLOW_LLM_BASE_URL",
+            "https://generativelanguage.googleapis.com/v1beta/openai",
+        ).strip().rstrip("/")
         parsed_url = urlparse(base_url)
         is_local_http = parsed_url.scheme == "http" and parsed_url.hostname in {"localhost", "127.0.0.1", "::1"}
         if parsed_url.scheme != "https" and not is_local_http:
@@ -60,6 +64,8 @@ class LLMSettings:
 
 
 class OpenAICompatibleLLM:
+    """Calls any provider exposing the OpenAI-compatible Chat Completions API."""
+
     def __init__(self, settings: LLMSettings, transport: httpx.AsyncBaseTransport | None = None):
         self._settings = settings
         self._transport = transport
