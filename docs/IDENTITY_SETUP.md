@@ -19,9 +19,9 @@ The same issuer hostname must be reachable by the Windows-hosted API, the Docker
 4. Start the identity provider:
    ```powershell
    docker compose --env-file .env -f compose.dev.yaml up -d keycloak
-   Invoke-WebRequest http://creatorflow-id.test:8180/health/ready
+   Invoke-WebRequest http://localhost:9100/health/ready
    ```
-   Keycloak's management health endpoint may not be published to the host in this Compose file. If the URL above is unreachable, verify startup with `docker compose --env-file .env -f compose.dev.yaml logs --tail 100 keycloak` and open the Admin Console at `http://creatorflow-id.test:8180/admin/`.
+   The management health endpoint is published only on Z240 loopback port `9100`. Open the Admin Console at `http://creatorflow-id.test:8180/admin/`.
 5. Sign in with the bootstrap admin credentials from `.env`. Create a realm named `creatorflow`.
 6. In that realm create an OpenID Connect client named `creatorflow-web`:
    - Client authentication: **On** (confidential server-side client).
