@@ -20,13 +20,27 @@ if (Test-Path -LiteralPath $adobeRoot) {
         if ([string]::IsNullOrWhiteSpace($env:VideoRendering__AfterEffectsExe) -or -not (Test-Path -LiteralPath $env:VideoRendering__AfterEffectsExe -PathType Leaf)) { $env:VideoRendering__AfterEffectsExe = $detectedAfterFx }
     }
 }
-if ([string]::IsNullOrWhiteSpace($env:VideoRendering__FFmpegExe) -or -not (Test-Path -LiteralPath $env:VideoRendering__FFmpegExe -PathType Leaf)) {
+# Resolve FFmpeg/FFprobe without passing an empty path to Test-Path.
+$ffmpegConfigured = $env:VideoRendering__FFmpegExe
+$ffmpegConfiguredExists = $false
+if (-not [string]::IsNullOrWhiteSpace($ffmpegConfigured)) {
+    $ffmpegConfiguredExists = Test-Path -LiteralPath $ffmpegConfigured -PathType Leaf
+}
+if (-not $ffmpegConfiguredExists) {
     $ffmpegCommand = Get-Command ffmpeg.exe -ErrorAction SilentlyContinue
     if ($ffmpegCommand) { $env:VideoRendering__FFmpegExe = $ffmpegCommand.Source }
 }
-if (([string]::IsNullOrWhiteSpace($env:VideoRendering__FFprobeExe) -or -not (Test-Path -LiteralPath $env:VideoRendering__FFprobeExe -PathType Leaf)) -and (Test-Path -LiteralPath $env:VideoRendering__FFmpegExe -PathType Leaf)) {
-    $probeCandidate = Join-Path (Split-Path $env:VideoRendering__FFmpegExe -Parent) 'ffprobe.exe'
-    if (Test-Path -LiteralPath $probeCandidate -PathType Leaf) { $env:VideoRendering__FFprobeExe = $probeCandidate }
+
+$ffprobeConfigured = $env:VideoRendering__FFprobeExe
+$ffprobeConfiguredExists = $false
+if (-not [string]::IsNullOrWhiteSpace($ffprobeConfigured)) {
+    $ffprobeConfiguredExists = Test-Path -LiteralPath $ffprobeConfigured -PathType Leaf
+}
+if (-not $ffprobeConfiguredExists -and -not [string]::IsNullOrWhiteSpace($env:VideoRendering__FFmpegExe)) {
+    if (Test-Path -LiteralPath $env:VideoRendering__FFmpegExe -PathType Leaf) {
+        $probeCandidate = Join-Path (Split-Path $env:VideoRendering__FFmpegExe -Parent) 'ffprobe.exe'
+        if (Test-Path -LiteralPath $probeCandidate -PathType Leaf) { $env:VideoRendering__FFprobeExe = $probeCandidate }
+    }
 }
 
 $required = @('VideoRendering__StorageRoot','VideoRendering__AfterEffectsExe',
