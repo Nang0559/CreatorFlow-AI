@@ -45,41 +45,31 @@ This creates and tags only `CreatorFlow_QC`, applies migrations 001–020 (inclu
 
 Migration 012 assigns existing rows in its listed single-workspace tables to `legacy-workspace`. Review this ownership assumption before using tenant migrations on any database containing multi-customer data.
 
-## 4. Create least-privilege Windows/SQL identity
+## 4. Grant least-privilege SQL access to the existing Z240 runner
 
-Create a local standard Windows account creatorflow-runner through Computer Management. It must not be a member of Administrators or any privileged SQL/Windows group. Grant Log on as a service when installing the runner service.
+The currently registered Z240 runner service has been observed running as `NT AUTHORITY\NETWORK SERVICE`. The SQL QC workflow does not need schema-write privileges: it checks the already initialized schema and runs the .NET test suite. Do not grant this service sysadmin, db_owner, db_ddladmin or db_datawriter.
 
-In SSMS, replace YOURPC with the value of `$env:COMPUTERNAME` and run as SQL administrator:
+After confirming the runner service identity in Windows Services, run the following file once from SSMS as a SQL administrator on the local SQL Server host:
 
 ```sql
-USE [master];
-IF SUSER_ID(N'YOURPC\creatorflow-runner') IS NULL
-    CREATE LOGIN [YOURPC\creatorflow-runner] FROM WINDOWS;
-GO
-USE [CreatorFlow_QC];
-IF DATABASE_PRINCIPAL_ID(N'CreatorFlowQcRunner') IS NULL
-    CREATE USER [CreatorFlowQcRunner]
-      FOR LOGIN [YOURPC\creatorflow-runner] WITH DEFAULT_SCHEMA=[dbo];
-IF DATABASE_PRINCIPAL_ID(N'CreatorFlowQcRunnerRole') IS NULL
-    CREATE ROLE [CreatorFlowQcRunnerRole];
-ALTER ROLE [db_ddladmin] ADD MEMBER [CreatorFlowQcRunnerRole];
-ALTER ROLE [db_datareader] ADD MEMBER [CreatorFlowQcRunnerRole];
-ALTER ROLE [db_datawriter] ADD MEMBER [CreatorFlowQcRunnerRole];
-GRANT EXECUTE TO [CreatorFlowQcRunnerRole];
-ALTER ROLE [CreatorFlowQcRunnerRole] ADD MEMBER [CreatorFlowQcRunner];
-GO
-SELECT IS_SRVROLEMEMBER(N'sysadmin', N'YOURPC\creatorflow-runner') AS IsSysAdmin;
--- Expected: 0
+-- Open and execute database/security/Grant-CreatorFlowQcRunnerAccess.sql
 ```
 
-These rights are scoped to the QC database. Do not grant CONTROL SERVER, sysadmin, or server-level database creation rights.
+The script:
+- Creates the Windows login only if missing.
+- Maps it only into `CreatorFlow_QC`.
+- Grants `db_datareader` and database `VIEW DEFINITION` only.
+- Explicitly refuses a sysadmin identity.
+- Does not alter migrations, schema, production databases or business data.
+
+If the runner service is later changed to a dedicated local account (recommended for long-term hardening), replace the principal in that script with the exact service identity and re-run the least-privilege setup. Never grant permissions to an assumed identity without first checking the service's actual `StartName`.
 
 ## 5. Register the GitHub runner
 
 1. Open repository Nang0559/CreatorFlow-AI → Settings → Actions → Runners → New self-hosted runner.
 2. Select Windows x64. Use the time-limited registration token and exact commands shown by GitHub at setup time.
 3. Extract the runner to C:\actions-runner.
-4. Configure labels including creatorflow-sql-qc.
+4. Configure the custom labels `pctp-ui` and `sql-network` (along with GitHub's default `self-hosted` and `windows` labels).
 5. Install it as a Windows service running as `.\creatorflow-runner`.
 6. Verify it appears Online in repository Settings.
 
@@ -117,7 +107,7 @@ Scripts included:
 
 ## 8. Automatic workflow
 
-`.github/workflows/sqlserver-selfhosted-qc.yml` triggers on trusted pushes to main and feature/** when source, tests, database, QC scripts, solution or workflow files change. It also supports manual workflow_dispatch.
+`.github/workflows/sqlserver-selfhosted-qc.yml` triggers on trusted pushes to main and feature/** when source, tests, database, QC scripts, solution or workflow files change. It also supports manual workflow_dispatch. It targets the exact runner labels `self-hosted`, `windows`, `pctp-ui`, and `sql-network`.
 
 The workflow serializes jobs because the initial setup uses one shared QC database. Do not run concurrent tests or reset operations against it.
 
