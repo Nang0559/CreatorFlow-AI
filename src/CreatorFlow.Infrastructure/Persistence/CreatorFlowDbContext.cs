@@ -30,6 +30,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<StyleVariantMetricObservation> StyleVariantMetricObservations => Set<StyleVariantMetricObservation>();
     public DbSet<StyleLearningProposal> StyleLearningProposals => Set<StyleLearningProposal>();
     public DbSet<CreatorStyleProfileVersion> CreatorStyleProfileVersions => Set<CreatorStyleProfileVersion>();
+    public DbSet<AIProviderConfiguration> AIProviderConfigurations => Set<AIProviderConfiguration>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -79,10 +80,24 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             typeof(StyleExperiment), typeof(StyleExperimentVariant),
             typeof(CreatorStyleProfile), typeof(CreatorStyleEvidence),
             typeof(StyleVariantMetricObservation), typeof(StyleLearningProposal),
-            typeof(CreatorStyleProfileVersion)
+            typeof(CreatorStyleProfileVersion), typeof(AIProviderConfiguration)
         };
         foreach (var tenantOwnedType in tenantOwnedTypes)
             modelBuilder.Entity(tenantOwnedType).Property<Guid>("TenantId").IsRequired();
+        modelBuilder.Entity<AIProviderConfiguration>(entity =>
+        {
+            entity.ToTable("AIProviders");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.DisplayName).HasMaxLength(120).IsRequired();
+            entity.Property(x => x.ProviderType).HasMaxLength(32).IsRequired();
+            entity.Property(x => x.BaseUrl).HasMaxLength(500).IsRequired();
+            entity.Property(x => x.Model).HasMaxLength(160).IsRequired();
+            entity.Property(x => x.EncryptedApiKey).IsRequired(false);
+            entity.Property(x => x.RoutingRole).HasMaxLength(16).IsRequired();
+            entity.Property(x => x.RowVersion).IsRowVersion();
+            entity.HasIndex(x => new { x.TenantId, x.IsActive, x.RoutingRole, x.FallbackOrder });
+        });
+
         modelBuilder.Entity<Tenant>(entity =>
         {
             entity.ToTable("Tenants");
