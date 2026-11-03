@@ -61,6 +61,21 @@ else if (!string.IsNullOrWhiteSpace(error))
         </article>
     }
 </section>
+@if (isAuthenticated && workspaces.Count == 0 && string.IsNullOrWhiteSpace(error))
+{
+    <section class="panel">
+        <p class="eyebrow">KHỞI TẠO LẦN ĐẦU</p>
+        <h2>Tạo workspace và nhận quyền Owner</h2>
+        <p class="muted">Chỉ người vận hành được cấp Owner Bootstrap Token mới có thể thực hiện. Quy trình này chỉ thành công một lần trên toàn hệ thống và không tạo quyền từ email.</p>
+        <div class="trend-form">
+            <label>Tên workspace<input @bind="bootstrapWorkspaceName" maxlength="120" autocomplete="off" /></label>
+            <label>Đường dẫn định danh (slug)<input @bind="bootstrapWorkspaceSlug" maxlength="80" pattern="[a-z0-9-]+" autocomplete="off" /></label>
+        </div>
+        <div class="form-actions">
+            <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(bootstrapWorkspaceName) || string.IsNullOrWhiteSpace(bootstrapWorkspaceSlug))" @onclick="BootstrapOwnerAsync">Khởi tạo Owner đầu tiên</button>
+        </div>
+    </section>
+}
 @if (activeWorkspace is not null && CanManage)
 {
     <section class="panel">
@@ -123,6 +138,8 @@ else if (!string.IsNullOrWhiteSpace(error))
     private string inviteRole = "Editor";
     private string invitationToken = "";
     private string acceptToken = "";
+    private string bootstrapWorkspaceName = "CreatorFlow Workspace";
+    private string bootstrapWorkspaceSlug = "creatorflow-workspace";
     private string error = "";
     private string message = "";
     private bool busy;
@@ -183,6 +200,26 @@ else if (!string.IsNullOrWhiteSpace(error))
             busy = true; error = "";
             await JS.InvokeVoidAsync("creatorFlowWorkspace.select", id.ToString("D"));
             Navigation.NavigateTo("/account", forceLoad: true);
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task BootstrapOwnerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(bootstrapWorkspaceName) || string.IsNullOrWhiteSpace(bootstrapWorkspaceSlug))
+        {
+            error = "Vui lòng nhập tên và slug workspace.";
+            return;
+        }
+
+        try
+        {
+            busy = true; error = ""; message = "";
+            await Api.BootstrapOwnerAsync(bootstrapWorkspaceName.Trim(), bootstrapWorkspaceSlug.Trim());
+            message = "Đã khởi tạo workspace và cấp quyền Owner cho tài khoản hiện tại. Hãy chọn workspace bên dưới để bắt đầu.";
+            busy = false;
+            await LoadAsync();
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
