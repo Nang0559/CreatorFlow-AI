@@ -9,13 +9,14 @@
     <div class="header-actions"><a class="secondary" href="/assets">Dựng video MP4</a><button class="primary" @onclick="LoadAsync">Làm mới</button></div>
 </header>
 @if (!Api.IsConfigured) { <section class="notice"><strong>Chưa kết nối API</strong><p>Cần cấu hình CreatorFlowApi ở server Web.</p></section> }
-@if (!string.IsNullOrWhiteSpace(error)) { <section class="notice"><strong>Thông báo</strong><p>@error</p></section> }
+@if (!string.IsNullOrWhiteSpace(error)) { <section class="notice" role="alert"><strong>Chưa thực hiện được thao tác</strong><p>@error</p></section> }
+@if (!string.IsNullOrWhiteSpace(successMessage)) { <section class="success-notice" role="status" aria-live="polite"><strong>@successMessage</strong></section> }
 
 <section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">THỬ NGHIỆM MỚI</p><h2>Tạo thử nghiệm phong cách</h2></div></div>
     <div class="trend-form">
-        <label>Tên thử nghiệm<input @bind="name" /></label>
-        <label>Giả thuyết<input @bind="hypothesis" /></label>
+        <label>Tên thử nghiệm <span class="required-mark">* Bắt buộc</span><input @bind="name" maxlength="160" required /></label>
+        <label>Giả thuyết <span class="required-mark">* Bắt buộc</span><input @bind="hypothesis" maxlength="1000" required /></label>
         <label>Chủ đề nội dung<input @bind="topic" placeholder="Ví dụ: gia dụng, làm đẹp, chăm sóc da" /></label>
         <label>Số phương án<select @bind="variantCount"><option value="2">2 phương án</option><option value="3">3 phương án</option></select></label>
     </div>
@@ -53,7 +54,7 @@
                         <strong>@variant.Name</strong><span class="status">@StatusLabel(variant.Status)</span>
                         <p><b>Câu mở đầu:</b> @variant.Hook</p><p><b>Phong cách nói:</b> @variant.SpeakingStyle</p><p><b>Nhịp dựng:</b> @variant.EditPacing</p><p><b>Âm thanh:</b> @variant.AudioApproach</p>
                         <div class="variant-stats"><span>@variant.Views.ToString("N0") lượt xem</span><span>@(variant.EngagementRate?.ToString("0.00") ?? "—")% tương tác</span><span>@variant.FollowsGained lượt theo dõi</span><span>@variant.Orders đơn hàng</span></div>
-                        <button class="secondary" disabled="@busy" @onclick="() => DownloadEditingPackageAsync(experiment.Id, variant.Id)"></button>
+                        <button class="secondary" disabled="@busy" title="Tải gói dựng cho phương án này" @onclick="() => DownloadEditingPackageAsync(experiment.Id, variant.Id)">Tải gói dựng</button>
 
                         @if (variant.Status == "Draft") { <button class="secondary" disabled="@busy" @onclick="() => MarkReadyAsync(experiment.Id, variant.Id)">Đánh dấu đã chuẩn bị</button> }
                         @if (variant.Status == "Ready") { <button class="secondary" disabled="@busy" @onclick="() => MarkPublishedAsync(experiment.Id, variant.Id)">Đã đăng video này</button> }
@@ -111,6 +112,7 @@
     private int variantCount = 2;
     private bool busy;
     private string error = "";
+    private string successMessage = "";
     private Dictionary<Guid, MetricsInput> metricInputs = [];
     private Dictionary<Guid, string> winnerSelections = [];
 
@@ -139,7 +141,7 @@
         if (!Api.IsConfigured) return;
         try
         {
-            error = "";
+            error = ""; successMessage = "";
             experiments = await Api.GetAsync<List<CreatorFlow.Web.Services.StyleExperimentItem>>("/api/v1/style-experiments?take=100") ?? [];
             foreach (var e in experiments)
             {
@@ -147,21 +149,22 @@
                 foreach (var v in e.Variants) GetMetrics(v.Id);
             }
         }
-        catch (Exception ex) { error = ex.Message; }
+        catch (Exception ex) { error = ToUserMessage(ex); }
     }
 
     private async Task AnalyzeWithAiAsync()
     {
         try
         {
-            busy = true; error = ""; aiAnalysis = null; aiGenerated = false;
+            busy = true; error = ""; successMessage = ""; successMessage = ""; aiAnalysis = null; aiGenerated = false;
             aiAnalysis = await Api.PostAsync<CreatorFlow.Web.Services.AiAnalyzeRequest, CreatorFlow.Web.Services.AiAnalyzeResponse>(
                 "/api/v1/ai/analyze", new(sourceText, "vi", string.IsNullOrWhiteSpace(topic) ? null : topic, creatorPositioning));
             if (aiAnalysis is null) throw new InvalidOperationException("AI không trả về kết quả phân tích.");
             sourceAnalysis = $"Tóm tắt: {aiAnalysis.Summary}\nChủ đề: {string.Join(", ", aiAnalysis.Topics)}\nÝ định khán giả: {aiAnalysis.AudienceIntent}\nCơ chế: {string.Join("; ", aiAnalysis.StoryMechanisms)}\nHook: {string.Join("; ", aiAnalysis.HookPatterns)}\nCơ hội Việt hóa: {string.Join("; ", aiAnalysis.LocalizationOpportunities)}";
             aiAnalysisSummary = aiAnalysis.Summary;
+            successMessage = "Đã phân tích nội dung nguồn. Hãy kiểm tra kết quả trước khi tạo phương án.";
         }
-        catch (Exception ex) { error = ex.Message; }
+        catch (Exception ex) { error = ToUserMessage(ex); }
         finally { busy = false; }
     }
 
@@ -169,7 +172,7 @@
     {
         try
         {
-            busy = true; error = ""; aiGenerated = false;
+            busy = true; error = ""; successMessage = ""; aiGenerated = false;
             var generated = await Api.PostAsync<CreatorFlow.Web.Services.AiGenerateVariantsRequest, CreatorFlow.Web.Services.AiGenerateVariantsResponse>(
                 "/api/v1/ai/style-lab/generate-variants",
                 new(sourceAnalysis, string.IsNullOrWhiteSpace(topic) ? "Chưa phân loại" : topic,
@@ -183,10 +186,11 @@
                 EditPacing = x.EditPacing, AudioApproach = x.AudioApproach, Script = x.Script
             }).ToList();
             aiGenerated = true;
+            successMessage = "AI đã tạo đủ " + generated.Variants.Length + " phương án. Kiểm tra nội dung trước khi lưu thử nghiệm.";
             if (string.IsNullOrWhiteSpace(name)) name = $"AI · {topic}";
             if (string.IsNullOrWhiteSpace(hypothesis)) hypothesis = "So sánh các góc sáng tạo khác nhau trên cùng một chủ đề.";
         }
-        catch (Exception ex) { error = ex.Message; }
+        catch (Exception ex) { error = ToUserMessage(ex); }
         finally { busy = false; }
     }
 
@@ -197,8 +201,9 @@
             busy = true; error = "";
             var file = await Api.GetDownloadAsync($"/api/v1/style-experiments/{experimentId}/variants/{variantId}/editing-package");
             await JS.InvokeVoidAsync("creatorFlowDownload", file.FileName, file.ContentType, Convert.ToBase64String(file.Content));
+            successMessage = "Đã chuẩn bị gói dựng để tải xuống.";
         }
-        catch (Exception ex) { error = $"Không thể tạo gói dựng: {ex.Message}"; }
+        catch (Exception ex) { error = "Không thể tạo gói dựng: " + ToUserMessage(ex); }
         finally { busy = false; }
     }
 
@@ -225,12 +230,13 @@
     {
         try
         {
-            busy = true; error = "";
+            busy = true; error = ""; successMessage = "";
             if (payload is null) await Api.PostNoContentAsync(path, new { });
             else await Api.PostNoContentAsync(path, payload);
             await LoadAsync();
+            successMessage = "Đã cập nhật trạng thái thử nghiệm thành công.";
         }
-        catch (Exception ex) { error = ex.Message; }
+        catch (Exception ex) { error = ToUserMessage(ex); }
         finally { busy = false; }
     }
 
@@ -238,7 +244,11 @@
     {
         try
         {
-            busy = true; error = "";
+            busy = true; error = ""; successMessage = "";
+            if (string.IsNullOrWhiteSpace(name)) { error = "Vui lòng nhập tên thử nghiệm."; return; }
+            if (string.IsNullOrWhiteSpace(hypothesis)) { error = "Vui lòng nhập giả thuyết thử nghiệm."; return; }
+            if (variants.Take(variantCount).Any(x => string.IsNullOrWhiteSpace(x.Name) || string.IsNullOrWhiteSpace(x.Hook)))
+            { error = "Mỗi phương án cần có tên và câu mở đầu."; return; }
             var payload = new
             {
                 name, hypothesis, topic = string.IsNullOrWhiteSpace(topic) ? null : topic.Trim(), contentProjectId = (Guid?)null,
@@ -249,9 +259,20 @@
             };
             await Api.PostAsync<object, object>("/api/v1/style-experiments", payload);
             await LoadAsync();
+            successMessage = "Đã tạo thử nghiệm với " + variantCount + " phương án.";
         }
-        catch (Exception ex) { error = ex.Message; }
+        catch (Exception ex) { error = ToUserMessage(ex); }
         finally { busy = false; }
+    }
+
+    private static string ToUserMessage(Exception ex)
+    {
+        var message = ex.Message;
+        if (message.Contains("HTTP 400", StringComparison.OrdinalIgnoreCase))
+            return "Dữ liệu chưa hợp lệ. Hãy kiểm tra các trường bắt buộc và số liệu không âm.";
+        if (message.Contains("HTTP 409", StringComparison.OrdinalIgnoreCase))
+            return "Trạng thái hiện tại không cho phép thao tác này. Hãy tải lại thử nghiệm.";
+        return "Không thể hoàn tất thao tác. " + message;
     }
 
     private sealed class MetricsInput
