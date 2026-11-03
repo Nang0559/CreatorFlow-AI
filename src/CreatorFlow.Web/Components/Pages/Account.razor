@@ -1,0 +1,181 @@
+@page "/account"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using CreatorFlow.Web.Services
+@attribute [Authorize]
+@inject CreatorFlowApiClient Api
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Tài khoản và không gian làm việc · CreatorFlow</PageTitle>
+<header class="page-header">
+    <div>
+        <p class="eyebrow">TÀI KHOẢN SAAS</p>
+        <h1>Tài khoản và không gian làm việc</h1>
+        <p class="muted">Một tài khoản có thể tham gia nhiều không gian làm việc. Dữ liệu và quyền truy cập được tách theo từng không gian.</p>
+    </div>
+    <button class="secondary" @onclick="LogoutAsync">Đăng xuất</button>
+</header>
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <section class="notice validation-summary" role="alert"><strong>Không thể hoàn tất</strong><p>@error</p></section>
+}
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <section class="success-notice" role="status">@message</section>
+}
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">WORKSPACE</p><h2>Không gian làm việc của bạn</h2></div><button class="secondary" disabled="@busy" @onclick="LoadAsync">Làm mới</button></div>
+    @if (workspaces.Count == 0)
+    {
+        <p class="muted">Tài khoản chưa có workspace đang hoạt động. Hãy liên hệ quản trị viên để được mời vào workspace hoặc hoàn tất bước khởi tạo Owner.</p>
+    }
+    @foreach (var workspace in workspaces)
+    {
+        <article class="trend-item">
+            <div><h3>@workspace.Name</h3><p class="muted">@workspace.Slug · Vai trò: @workspace.Role</p></div>
+            @if (workspace.Id.ToString("D") == selectedTenant)
+            {
+                <span class="status">Đang sử dụng</span>
+            }
+            else
+            {
+                <button class="primary" disabled="@busy" @onclick="() => SelectWorkspaceAsync(workspace.Id)">Chuyển workspace</button>
+            }
+        </article>
+    }
+</section>
+@if (activeWorkspace is not null)
+{
+    <section class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">THÀNH VIÊN</p><h2>Quản lý thành viên</h2></div><span class="status">@members.Count thành viên</span></div>
+        @if (CanManage)
+        {
+            <div class="trend-form">
+                <label>Email thành viên<input @bind="inviteEmail" type="email" maxlength="320" placeholder="ten@example.com" /></label>
+                <label>Vai trò<select @bind="inviteRole"><option>Editor</option><option>Analyst</option><option>Publisher</option>@if (activeWorkspace.Role == "Owner"){<option>Admin</option>}</select></label>
+            </div>
+            <div class="form-actions"><button class="primary" disabled="@busy" @onclick="InviteAsync">Tạo lời mời</button><span class="muted">Lời mời có hiệu lực 72 giờ. Hệ thống chưa tự gửi email.</span></div>
+        }
+        @if (!string.IsNullOrWhiteSpace(invitationToken))
+        {
+            <section class="notice"><strong>Mã lời mời – chỉ hiển thị lần này</strong><p>Gửi mã này cho đúng email đã mời. Không đăng công khai.</p><code>@invitationToken</code><button class="secondary" @onclick="CopyTokenAsync">Sao chép mã</button></section>
+        }
+        @foreach (var member in members)
+        {
+            <article class="trend-item">
+                <div><strong>@member.Role</strong><p class="muted">Trạng thái: @member.Status · Tham gia: @member.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</p></div>
+                @if (activeWorkspace.Role == "Owner" && member.Status == "Active")
+                {
+                    <div class="form-actions">
+                        <select @bind="roleEdits[member.Id]"><option>Owner</option><option>Admin</option><option>Editor</option><option>Analyst</option><option>Publisher</option></select>
+                        <button class="secondary" disabled="@busy" @onclick="() => ChangeRoleAsync(member)">Lưu vai trò</button>
+                        <button class="secondary" disabled="@busy" @onclick="() => SuspendAsync(member)">Đình chỉ</button>
+                    </div>
+                }
+            </article>
+        }
+    </section>
+}
+<section class="notice">
+    <strong>Đăng nhập và bảo mật</strong>
+    <p>CreatorFlow sử dụng nhà cung cấp OpenID Connect để xác thực. Mật khẩu, MFA và khôi phục tài khoản do nhà cung cấp danh tính quản lý. Không nhập mật khẩu, cookie hoặc mã OTP vào CreatorFlow.</p>
+</section>
+
+@code {
+    private List<WorkspaceItem> workspaces = [];
+    private List<MemberItem> members = [];
+    private Dictionary<Guid, string> roleEdits = [];
+    private WorkspaceItem? activeWorkspace;
+    private string selectedTenant = "";
+    private string inviteEmail = "";
+    private string inviteRole = "Editor";
+    private string invitationToken = "";
+    private string error = "";
+    private string message = "";
+    private bool busy;
+    private bool CanManage => activeWorkspace?.Role is "Owner" or "Admin";
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await (await Task.FromResult(true)) switch { _ => Task.FromResult(true) };
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (busy) return;
+        try
+        {
+            busy = true; error = "";
+            workspaces = await Api.GetAsync<List<WorkspaceItem>>("/api/v1/identity/workspaces") ?? [];
+            var session = await Api.GetAsync<SessionItem>("/auth/session");
+            selectedTenant = session?.SelectedTenantId ?? "";
+            activeWorkspace = workspaces.FirstOrDefault(x => x.Id.ToString("D") == selectedTenant);
+            if (activeWorkspace is not null)
+            {
+                members = await Api.GetAsync<List<MemberItem>>($"/api/v1/identity/workspaces/{activeWorkspace.Id}/members") ?? [];
+                roleEdits = members.ToDictionary(x => x.Id, x => x.Role);
+            }
+            else members = [];
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task SelectWorkspaceAsync(Guid id)
+    {
+        try
+        {
+            busy = true; error = "";
+            await JS.InvokeVoidAsync("creatorFlowWorkspace.select", id.ToString("D"));
+            Navigation.NavigateTo("/account", forceLoad: true);
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task InviteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(inviteEmail)) { error = "Vui lòng nhập email thành viên."; return; }
+        try
+        {
+            busy = true; error = ""; invitationToken = "";
+            var result = await Api.PostAsync<object, InvitationCreated>($"/api/v1/identity/workspaces/{activeWorkspace!.Id}/invitations", new { email = inviteEmail.Trim(), role = inviteRole });
+            invitationToken = result?.Token ?? "";
+            message = "Đã tạo lời mời. Hãy gửi mã cho đúng địa chỉ email; email chưa được gửi tự động.";
+            inviteEmail = "";
+            await LoadMembersAsync();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task LoadMembersAsync()
+    {
+        members = await Api.GetAsync<List<MemberItem>>($"/api/v1/identity/workspaces/{activeWorkspace!.Id}/members") ?? [];
+        roleEdits = members.ToDictionary(x => x.Id, x => x.Role);
+    }
+
+    private async Task ChangeRoleAsync(MemberItem member)
+    {
+        try { busy = true; error = ""; await Api.PutNoContentAsync($"/api/v1/identity/workspaces/{activeWorkspace!.Id}/members/{member.Id}/role", new { role = roleEdits[member.Id] }); await LoadMembersAsync(); message = "Đã cập nhật vai trò."; }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task SuspendAsync(MemberItem member)
+    {
+        try { busy = true; error = ""; await Api.DeleteNoContentAsync($"/api/v1/identity/workspaces/{activeWorkspace!.Id}/members/{member.Id}"); await LoadMembersAsync(); message = "Đã đình chỉ thành viên."; }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task CopyTokenAsync() => await JS.InvokeVoidAsync("navigator.clipboard.writeText", invitationToken);
+    private async Task LogoutAsync() => await JS.InvokeVoidAsync("creatorFlowWorkspace.logout");
+
+    private sealed record WorkspaceItem(Guid Id, string Name, string Slug, string Role);
+    private sealed record MemberItem(Guid Id, string Role, string Status, DateTimeOffset CreatedAt);
+    private sealed record SessionItem(bool Authenticated, string? Subject, string? SelectedTenantId, DateTimeOffset? AccessTokenExpiresAt);
+    private sealed record InvitationCreated(Guid Id, string Email, string Role, DateTimeOffset ExpiresAt, string Token);
+}
