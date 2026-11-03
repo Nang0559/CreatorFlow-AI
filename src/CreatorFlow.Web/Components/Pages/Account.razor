@@ -1,8 +1,6 @@
 @page "/account"
-@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using CreatorFlow.Web.Services
-@attribute [Authorize]
 @inject CreatorFlowApiClient Api
 @inject AuthenticationStateProvider AuthState
 @inject NavigationManager Navigation
@@ -17,7 +15,15 @@
     </div>
     <button class="secondary" @onclick="LogoutAsync">Đăng xuất</button>
 </header>
-@if (!string.IsNullOrWhiteSpace(error))
+@if (!isAuthenticated)
+{
+    <section class="panel">
+        <h2>Đăng nhập để quản lý workspace</h2>
+        <p class="muted">Tài khoản SaaS sử dụng OpenID Connect. Nhà cung cấp danh tính phải được cấu hình trước khi bật đăng nhập.</p>
+        <a class="primary" href="/auth/login">Đăng nhập</a>
+    </section>
+}
+else if (!string.IsNullOrWhiteSpace(error))
 {
     <section class="notice validation-summary" role="alert"><strong>Không thể hoàn tất</strong><p>@error</p></section>
 }
@@ -95,9 +101,15 @@
     private string error = "";
     private string message = "";
     private bool busy;
+    private bool isAuthenticated;
     private bool CanManage => activeWorkspace?.Role is "Owner" or "Admin";
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        isAuthenticated = authState.User.Identity?.IsAuthenticated == true;
+        if (isAuthenticated) await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -109,7 +121,7 @@
             var authState = await AuthState.GetAuthenticationStateAsync();
             selectedTenant = authState.User.FindFirst("creatorflow_tenant")?.Value ?? "";
             activeWorkspace = workspaces.FirstOrDefault(x => x.Id.ToString("D") == selectedTenant);
-            if (activeWorkspace is not null)
+            if (activeWorkspace is not null && CanManage)
             {
                 members = await Api.GetAsync<List<MemberItem>>($"/api/v1/identity/workspaces/{activeWorkspace.Id}/members") ?? [];
                 roleEdits = members.ToDictionary(x => x.Id, x => x.Role);
