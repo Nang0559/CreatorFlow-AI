@@ -13,6 +13,40 @@
 @if (!string.IsNullOrWhiteSpace(successMessage)) { <section class="success-notice" role="status" aria-live="polite"><strong>@successMessage</strong></section> }
 
 <section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">TRỢ LÝ AI</p><h2>Phân tích nguồn và tạo phương án</h2></div></div>
+    <div class="trend-form">
+        <label>Nội dung nguồn để phân tích <span class="required-mark">* Bắt buộc để dùng AI</span>
+            <textarea @bind="sourceText" rows="5" maxlength="12000" placeholder="Dán lời thoại, mô tả video hoặc nội dung đã được phép sử dụng để AI phân tích…"></textarea>
+        </label>
+        <label>Định vị người sáng tạo <span class="field-hint">Không bắt buộc</span>
+            <input @bind="creatorPositioning" maxlength="500" placeholder="Ví dụ: nội dung review thực tế cho gia đình Việt" />
+        </label>
+        <label>Phong cách hiện tại <span class="field-hint">Không bắt buộc</span>
+            <textarea @bind="styleSummary" rows="2" maxlength="2000" placeholder="Mô tả phong cách muốn duy trì hoặc thử nghiệm…"></textarea>
+        </label>
+        <label>Bối cảnh sản phẩm <span class="field-hint">Không bắt buộc</span>
+            <input @bind="productContext" maxlength="1000" placeholder="Tên sản phẩm, lợi ích đã xác minh, đối tượng phù hợp…" />
+        </label>
+    </div>
+    <div class="form-actions">
+        <button class="secondary" disabled="@(busy || string.IsNullOrWhiteSpace(sourceText))" @onclick="AnalyzeWithAiAsync">@(busy ? "Đang phân tích…" : "Phân tích nội dung bằng AI")</button>
+        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(sourceAnalysis))" @onclick="GenerateWithAiAsync">Tạo @variantCount phương án bằng AI</button>
+    </div>
+    @if (aiAnalysis is not null)
+    {
+        <div class="evidence-card">
+            <strong>Kết quả phân tích</strong>
+            <p>@aiAnalysis.Summary</p>
+            <p><b>Chủ đề:</b> @string.Join(" · ", aiAnalysis.Topics)</p>
+            <p><b>Ý định khán giả:</b> @aiAnalysis.AudienceIntent</p>
+            <p><b>Cơ hội Việt hóa:</b> @string.Join(" · ", aiAnalysis.LocalizationOpportunities)</p>
+            <p class="muted">AI yêu cầu con người kiểm tra: @(aiAnalysis.RequiresHumanReview ? "Có" : "Không")</p>
+        </div>
+    }
+    <p class="muted">Chỉ sử dụng nội dung bạn có quyền phân tích. AI tạo bản nháp để bạn kiểm tra; không tự động sao chép kịch bản hoặc đăng video.</p>
+</section>
+
+<section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">THỬ NGHIỆM MỚI</p><h2>Tạo thử nghiệm phong cách</h2></div></div>
     <div class="trend-form">
         <label>Tên thử nghiệm <span class="required-mark">* Bắt buộc</span><input @bind="name" maxlength="160" required /></label>
