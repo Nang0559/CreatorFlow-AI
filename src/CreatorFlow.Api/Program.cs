@@ -152,7 +152,7 @@ topics.MapPut("/{id:guid}", async (Guid id, UpdateTopicRequest request, CreatorF
     catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["topic"] = [ex.Message] }); }
     catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
 });
-topics.MapPost("/{id:guid}/discovery-plan", async (Guid id, CreateTopicDiscoveryPlanRequest request, CreatorFlowDbContext? db, CreatorFlowAiClient aiClient, CancellationToken ct) =>
+topics.MapPost("/{id:guid}/discovery-plan", async (Guid id, CreateTopicDiscoveryPlanRequest request, CreatorFlowDbContext? db, CreatorFlowAiClient aiClient, HttpContext httpContext, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var topic = await db.ContentTopics.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.IsActive, ct);
@@ -163,7 +163,7 @@ topics.MapPost("/{id:guid}/discovery-plan", async (Guid id, CreateTopicDiscovery
         string.IsNullOrWhiteSpace(request.ProductContext) ? null : request.ProductContext.Trim(),
         string.IsNullOrWhiteSpace(request.AudienceContext) ? null : request.AudienceContext.Trim(),
         Math.Clamp(request.MaxQueries ?? 8, 2, 12));
-    return await aiClient.ForwardAsync("/v1/discovery/query-plan", payload, ct);
+    return await aiClient.ForwardAsync("/v1/discovery/query-plan", payload, ct, httpContext);
 });
 
 topics.MapPost("/{id:guid}/deactivate", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
