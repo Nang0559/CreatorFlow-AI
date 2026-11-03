@@ -99,6 +99,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             entity.HasKey(x => x.Id);
             entity.Property(x => x.IdentityIssuer).HasMaxLength(500).IsRequired();
             entity.Property(x => x.SubjectId).HasMaxLength(200).IsRequired();
+            entity.Property(x => x.VerifiedEmail).HasMaxLength(320);
             entity.Property(x => x.Role).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.Property(x => x.Status).HasConversion<string>().HasMaxLength(16).IsRequired();
             entity.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.NoAction);
