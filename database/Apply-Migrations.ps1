@@ -57,7 +57,7 @@ if ($tenantMigrationCount -notin @(0,3)) { throw 'Tenant migrations 011–013 ar
 if ($tenantMigrationCount -eq 0 -and $tenantTableExists) { throw 'dbo.Tenants exists without a complete tenant migration ledger. Refusing to guess schema ownership.' }
 if ($tenantMigrationCount -eq 3 -and -not $tenantTableExists) { throw 'Tenant migrations are recorded but dbo.Tenants is missing.' }
 if ($IncludeTenantMigrations -or $tenantMigrationCount -eq 3) {
-    $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_', '021_', '022_')
+    $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_', '021_', '022_', '023_')
 } else {
     Write-Warning 'Tenant migrations are not installed. Applying only non-tenant migrations 001–010 and 014–015; Share Inbox and video migrations 016–020 are deferred; migration 021 channel sync/download queue and migration 022 tenant subscription/usage schema are also deferred.'
 }
