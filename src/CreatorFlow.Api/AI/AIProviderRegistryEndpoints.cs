@@ -161,7 +161,9 @@ public static class AIProviderRegistryEndpoints
     }
 }
 
-public sealed record RuntimeAIProvider(string Provider, string? Model, string? BaseUrl, bool HasApiKey, bool IsPrimary, bool IsFallback);\n\npublic sealed record AIProviderWriteRequest(string DisplayName, string BaseUrl, string Model, string? ApiKey,
+public sealed record RuntimeAIProvider(string Provider, string? Model, string? BaseUrl, bool HasApiKey, bool IsPrimary, bool IsFallback);
+
+public sealed record AIProviderWriteRequest(string DisplayName, string BaseUrl, string Model, string? ApiKey,
     bool IsActive, string RoutingRole, int? FallbackOrder, int TimeoutSeconds = 120, int MaxOutputTokens = 3000);
 public sealed record AIProviderResponse(Guid Id, string DisplayName, string ProviderType, string BaseUrl, string Model,
     bool IsActive, string RoutingRole, int? FallbackOrder, int TimeoutSeconds, int MaxOutputTokens, bool HasApiKey,
