@@ -100,7 +100,7 @@ public static class TenantAccountEndpoints
             if (actor is null || (actor.Role != TenantRole.Owner && actor.Role != TenantRole.Admin)) return Results.Forbid();
             tenantContext.Set(tenantId, actor.Role.ToString());
             var rows = await db.TenantMemberships.AsNoTracking().Where(x => x.TenantId == tenantId)
-                .OrderBy(x => x.CreatedAt).Select(x => new MemberItem(x.Id, x.Role.ToString(), x.Status.ToString(), x.CreatedAt)).ToArrayAsync(ct);
+                .OrderBy(x => x.CreatedAt).Select(x => new MemberItem(x.Id, x.VerifiedEmail, x.Role.ToString(), x.Status.ToString(), x.CreatedAt)).ToArrayAsync(ct);
             return Results.Ok(rows);
         }).RequireAuthorization(oidcOnly);
 
