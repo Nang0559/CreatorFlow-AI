@@ -297,8 +297,9 @@
                 new { productContext = discoveryProductContext, audienceContext = discoveryAudienceContext, maxQueries = 8 });
             discoveryPlan = result.Data;
             var detail = ParseProviderTrace(result.ProviderTrace);
-            discoveryLogs[0] = new DiscoveryLogItem(started, discoveryPlan is null ? "KHÔNG CÓ KẾT QUẢ" : "THÀNH CÔNG", detail);
-            if (discoveryPlan is null) error = "AI chưa trả về kế hoạch tìm kiếm.";
+            discoveryLogs[0] = new DiscoveryLogItem(started, result.Error is not null ? "THẤT BẠI" : discoveryPlan is null ? "KHÔNG CÓ KẾT QUẢ" : "THÀNH CÔNG", string.Join(" · ", new[] { detail, result.Error }.Where(x => !string.IsNullOrWhiteSpace(x))));
+            if (result.Error is not null) error = result.Error;
+            else if (discoveryPlan is null) error = "AI chưa trả về kế hoạch tìm kiếm.";
             else successMessage = "Đã tạo bộ truy vấn khám phá cho chủ đề.";
         }
         catch (Exception ex)
