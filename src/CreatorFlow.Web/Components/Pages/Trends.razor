@@ -316,7 +316,7 @@
         try
         {
             var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
-            var attempts = System.Text.Json.JsonSerializer.Deserialize<List<ProviderAttempt>>(json) ?? [];
+            var attempts = System.Text.Json.JsonSerializer.Deserialize<List<ProviderAttempt>>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
             return attempts.Count == 0 ? "AI service không ghi nhận provider attempt." : string.Join(" → ", attempts.Select(x => $"{x.Provider}/{x.Model}: {x.Status}{(string.IsNullOrWhiteSpace(x.Reason) ? "" : " (" + x.Reason + ")")}"));
         }
         catch { return "Metadata provider nhận được nhưng không đọc được; kiểm tra log API/AI." ; }
