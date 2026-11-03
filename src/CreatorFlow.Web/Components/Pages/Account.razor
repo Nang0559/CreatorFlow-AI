@@ -61,7 +61,7 @@ else if (!string.IsNullOrWhiteSpace(error))
         </article>
     }
 </section>
-@if (isAuthenticated && workspaces.Count == 0 && string.IsNullOrWhiteSpace(error))
+@if (isAuthenticated && Api.CanBootstrapOwner && workspaces.Count == 0 && string.IsNullOrWhiteSpace(error))
 {
     <section class="panel">
         <p class="eyebrow">KHỞI TẠO LẦN ĐẦU</p>
