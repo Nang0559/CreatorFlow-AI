@@ -58,6 +58,11 @@ if (oidcEnabled)
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.ResponseType = OpenIdConnectResponseType.Code;
         options.UsePkce = true;
+        // Local Keycloak development uses the authorization-code endpoint directly.
+        // Keep PAR available in production, while avoiding the current local PAR rejection.
+        options.PushedAuthorizationBehavior = builder.Environment.IsDevelopment()
+            ? PushedAuthorizationBehavior.Disable
+            : PushedAuthorizationBehavior.UseIfAvailable;
         options.SaveTokens = true;
         options.GetClaimsFromUserInfoEndpoint = true;
         options.MapInboundClaims = false;
