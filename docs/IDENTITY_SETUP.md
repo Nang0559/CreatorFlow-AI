@@ -2,11 +2,48 @@
 
 This branch uses an external OpenID Connect provider for authentication. CreatorFlow does not store user passwords. The provider owns account creation, password policy, MFA, recovery and identity proofing; CreatorFlow stores only the immutable `issuer + subject` identity mapping and workspace memberships.
 
+## Local Z240 setup — Keycloak (Development only)
+
+The development Compose file includes Keycloak `26.8.1`, persisted in the `keycloak_data` Docker volume and bound only to the Z240 loopback interface at port `8180`. It uses Keycloak's `start-dev` mode and its development database; **this is not a production deployment**.
+
+The same issuer hostname must be reachable by the Windows-hosted API, the Docker Web container and the browser. This setup uses `creatorflow-id.test`:
+1. Open **PowerShell as Administrator** on Z240 and add the local host mapping once:
+   ```powershell
+   $hosts = Join-Path $env:SystemRoot "System32\drivers\etc\hosts"
+   if (-not (Select-String -Path $hosts -Pattern '^\s*127\.0\.0\.1\s+creatorflow-id\.test(\s|$)' -Quiet)) {
+       Add-Content -Path $hosts -Value "`r`n127.0.0.1 creatorflow-id.test"
+   }
+   ```
+2. In the project `.env` (never commit it), set unique strong values for `KEYCLOAK_ADMIN_PASSWORD`, `Authentication__Oidc__ClientSecret` and `Authentication__OwnerBootstrapToken`. Keep these values out of chat, logs and Git.
+3. Set `KEYCLOAK_PUBLIC_URL=http://creatorflow-id.test:8180` and the exact matching issuer `Authentication__Oidc__Authority=http://creatorflow-id.test:8180/realms/creatorflow`.
+4. Start the identity provider:
+   ```powershell
+   docker compose --env-file .env -f compose.dev.yaml up -d keycloak
+   Invoke-WebRequest http://creatorflow-id.test:8180/health/ready
+   ```
+   Keycloak's management health endpoint may not be published to the host in this Compose file. If the URL above is unreachable, verify startup with `docker compose --env-file .env -f compose.dev.yaml logs --tail 100 keycloak` and open the Admin Console at `http://creatorflow-id.test:8180/admin/`.
+5. Sign in with the bootstrap admin credentials from `.env`. Create a realm named `creatorflow`.
+6. In that realm create an OpenID Connect client named `creatorflow-web`:
+   - Client authentication: **On** (confidential server-side client).
+   - Standard flow: **On**; Direct access grants: **Off**.
+   - Valid redirect URI: `http://localhost:8080/signin-oidc`.
+   - Valid post-logout redirect URI: `http://localhost:8080/signout-callback-oidc`.
+   - Web origin: `http://localhost:8080`.
+   - Use PKCE with method **S256**. Do not enable implicit flow or request `offline_access`.
+   - Copy the generated client secret into `Authentication__Oidc__ClientSecret`.
+7. Create an OpenID Connect client scope named `creatorflow-api`. Add an **Audience** protocol mapper with custom audience `creatorflow-api`, enabled for the access token. Assign this scope to `creatorflow-web` as an optional client scope so the requested `creatorflow-api` scope adds the audience to the access token. Set `Authentication__Oidc__ApiScope=creatorflow-api` and `Authentication__Oidc__Audience=creatorflow-api`.
+8. Assign the built-in `profile` and `email` client scopes. Ensure the ID token/UserInfo provides `email` and `email_verified=true`. Create a test user, set a password, and verify the email claim. Configure OTP/MFA for Owner/Admin before any public or shared deployment.
+9. Rebuild/recreate Web after adding the OIDC settings, and restart the native API after loading the same `.env` values. The API must use the same `Authentication__Oidc__Authority` and `Authentication__Oidc__Audience` as Web/Keycloak.
+
+Development-only HTTP OIDC metadata is enabled only when ASP.NET Core runs in the `Development` environment. Both Web and API continue to require HTTPS metadata outside Development. Do not carry the HTTP authority, `start-dev`, or the development database into Production. Production requires a stable HTTPS issuer, TLS, a production database (for example PostgreSQL), protected secrets, and a non-public administration surface. See the [Keycloak production guide](https://www.keycloak.org/server/configuration-production).
+
+
 ## 1. OIDC application registration
 
-Register a confidential server-side web application with Authorization Code Flow and PKCE. Configure:
+Register a confidential server-side web application with Authorization Code Flow and PKCE. For Production configure:
 - Sign-in redirect URI: `https://<web-host>/signin-oidc`
 - Sign-out callback URI: `https://<web-host>/signout-callback-oidc`
+For the local Z240 Development setup above, use the exact HTTP localhost callback URIs configured on the `creatorflow-web` client.
 - Scopes: `openid`, `profile`, `email`, and the API scope configured below.
 - The API must issue access tokens whose audience matches `Authentication:Oidc:Audience`.
 - The ID token / UserInfo response must include `iss`, `sub`, `email`, and `email_verified` for invitation acceptance.
@@ -21,6 +58,7 @@ Web:
 - `Authentication:Oidc:ClientId`
 - `Authentication:Oidc:ClientSecret`
 - `Authentication:Oidc:ApiScope` (scope that yields an API access token accepted by CreatorFlow.Api)
+- `Authentication:Oidc:Audience` (API-side expected audience; for this Keycloak setup: `creatorflow-api`)
 - `CreatorFlowApi:BaseUrl`
 
 API:
