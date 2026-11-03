@@ -6,8 +6,7 @@ namespace CreatorFlow.Web.Services;
 public sealed class CreatorFlowApiClient(
     HttpClient http,
     IHttpContextAccessor httpContextAccessor,
-    IServiceProvider scopedServices,
-    IConfiguration configuration)
+    IServiceProvider scopedServices)
 {
     public bool IsConfigured => http.BaseAddress is not null;
 
@@ -60,20 +59,6 @@ public sealed class CreatorFlowApiClient(
         await AddIdentityHeadersAsync(request);
         try { return await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct); }
         finally { request.Dispose(); }
-    }
-
-    public async Task<TResponse?> BootstrapOwnerAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
-    {
-        EnsureConfigured();
-        var bootstrapToken = configuration["Authentication:OwnerBootstrapToken"];
-        if (string.IsNullOrWhiteSpace(bootstrapToken))
-            throw new InvalidOperationException("Chưa cấu hình mã khởi tạo Owner ở máy chủ Web.");
-        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
-        request.Headers.TryAddWithoutValidation("X-CreatorFlow-Owner-Bootstrap", bootstrapToken);
-        await AddIdentityHeadersAsync(request);
-        using var response = await http.SendAsync(request, ct);
-        await EnsureSuccessAsync(response, ct);
-        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
     }
 
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
