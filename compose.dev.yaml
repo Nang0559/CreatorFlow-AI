@@ -57,6 +57,7 @@ services:
       Authentication__Oidc__ClientId: ${Authentication__Oidc__ClientId:-}
       Authentication__Oidc__ClientSecret: ${Authentication__Oidc__ClientSecret:-}
       Authentication__Oidc__ApiScope: ${Authentication__Oidc__ApiScope:-}
+      Authentication__OwnerBootstrapToken: ${Authentication__OwnerBootstrapToken:-}
     ports:
       - "${CREATORFLOW_WEB_BIND_IP:-127.0.0.1}:8080:8080"
     depends_on:
