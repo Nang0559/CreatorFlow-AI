@@ -15,6 +15,15 @@
     </div>
     @if (isAuthenticated) { <button class="secondary" @onclick="LogoutAsync">Đăng xuất</button> }
 </header>
+@if (isAuthenticated)
+{
+    <section class="panel">
+        <p class="eyebrow">LỜI MỜI WORKSPACE</p>
+        <h2>Tham gia không gian làm việc</h2>
+        <label>Mã lời mời<input @bind="acceptToken" maxlength="256" autocomplete="off" /></label>
+        <button class="primary" disabled="@(busy || string.IsNullOrWhiteSpace(acceptToken))" @onclick="AcceptInvitationAsync">Chấp nhận lời mời</button>
+    </section>
+}
 @if (!isAuthenticated)
 {
     <section class="panel">
@@ -98,6 +107,7 @@ else if (!string.IsNullOrWhiteSpace(error))
     private string inviteEmail = "";
     private string inviteRole = "Editor";
     private string invitationToken = "";
+    private string acceptToken = "";
     private string error = "";
     private string message = "";
     private bool busy;
@@ -139,6 +149,20 @@ else if (!string.IsNullOrWhiteSpace(error))
             busy = true; error = "";
             await JS.InvokeVoidAsync("creatorFlowWorkspace.select", id.ToString("D"));
             Navigation.NavigateTo("/account", forceLoad: true);
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task AcceptInvitationAsync()
+    {
+        try
+        {
+            busy = true; error = "";
+            await Api.PostAsync<object, InvitationAccepted>("/api/v1/identity/invitations/accept", new { token = acceptToken.Trim() });
+            acceptToken = "";
+            message = "Đã tham gia workspace. Chọn workspace trong danh sách để bắt đầu.";
+            await LoadAsync();
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
@@ -186,4 +210,5 @@ else if (!string.IsNullOrWhiteSpace(error))
     private sealed record WorkspaceItem(Guid Id, string Name, string Slug, string Role);
     private sealed record MemberItem(Guid Id, string? VerifiedEmail, string Role, string Status, DateTimeOffset CreatedAt);
     private sealed record InvitationCreated(Guid Id, string Email, string Role, DateTimeOffset ExpiresAt, string Token);
+    private sealed record InvitationAccepted(Guid TenantId, string Role);
 }
