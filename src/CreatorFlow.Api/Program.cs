@@ -47,7 +47,7 @@ builder.Services.AddAuthentication(options =>
 {
     options.Authority = oidcAuthority;
     options.Audience = oidcAudience;
-    options.RequireHttpsMetadata = true;
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
     options.MapInboundClaims = false;
     options.TokenValidationParameters = new TokenValidationParameters
     {
