@@ -292,7 +292,8 @@
         {
             busy = true; error = ""; successMessage = ""; discoveryPlan = null;
             var started = DateTimeOffset.UtcNow;
-            discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG XỬ LÝ", "Đang gửi yêu cầu lập kế hoạch khám phá; chờ AI runtime phản hồi."));
+            discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG GỌI AI", "Đã nhận thao tác. Đang gửi yêu cầu đến CreatorFlow API và chờ Gemini/fallback phản hồi."));
+            await InvokeAsync(StateHasChanged);
             var result = await Api.PostWithMetadataAsync<object, DiscoveryPlanItem>($"/api/v1/topics/{topicId}/discovery-plan",
                 new { productContext = discoveryProductContext, audienceContext = discoveryAudienceContext, maxQueries = 8 });
             discoveryPlan = result.Data;
