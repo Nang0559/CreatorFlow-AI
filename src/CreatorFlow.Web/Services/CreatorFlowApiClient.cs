@@ -7,9 +7,13 @@ public sealed class CreatorFlowApiClient(
     HttpClient http,
     IHttpContextAccessor httpContextAccessor,
     IServiceProvider scopedServices,
-    IConfiguration configuration)
+    IConfiguration configuration,
+    IWebHostEnvironment environment)
 {
     public bool IsConfigured => http.BaseAddress is not null;
+    public bool CanBootstrapOwner => environment.IsDevelopment() &&
+        configuration.GetValue<bool>("Authentication:OwnerBootstrapEnabled") &&
+        !string.IsNullOrWhiteSpace(configuration["Authentication:OwnerBootstrapToken"]);
 
     public async Task<T?> GetAsync<T>(string path, CancellationToken ct = default)
     {
@@ -103,6 +107,8 @@ public sealed class CreatorFlowApiClient(
     public async Task BootstrapOwnerAsync(string name, string slug, CancellationToken ct = default)
     {
         EnsureConfigured();
+        if (!CanBootstrapOwner)
+            throw new InvalidOperationException("Owner bootstrap UI chỉ được bật trong Development khi Authentication:OwnerBootstrapEnabled=true và secret đã cấu hình.");
         var bootstrapSecret = configuration["Authentication:OwnerBootstrapToken"];
         if (string.IsNullOrWhiteSpace(bootstrapSecret))
             throw new InvalidOperationException("Web chưa được cấu hình Authentication:OwnerBootstrapToken. Hãy cấu hình secret ở môi trường Web rồi khởi động lại container.");
