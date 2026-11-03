@@ -1,4 +1,18 @@
 services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    command: ["start-dev"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Set KEYCLOAK_ADMIN_USERNAME in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?Set KEYCLOAK_PUBLIC_URL in .env}
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "127.0.0.1:8180:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+    restart: unless-stopped
+
   ai:
     build:
       context: .
@@ -33,9 +47,18 @@ services:
       ASPNETCORE_URLS: http://+:8080
       CreatorFlowApi__BaseUrl: ${CreatorFlowApi__BaseUrl:-http://host.docker.internal:7001}
       CreatorFlowApi__ApiKey: ${CreatorFlowApi__ApiKey:?Set CreatorFlowApi__ApiKey in .env (same value as Authentication__ApiKey)}
+      Authentication__Oidc__Authority: ${Authentication__Oidc__Authority:?Set Authentication__Oidc__Authority in .env}
+      Authentication__Oidc__ClientId: ${Authentication__Oidc__ClientId:?Set Authentication__Oidc__ClientId in .env}
+      Authentication__Oidc__ClientSecret: ${Authentication__Oidc__ClientSecret:?Set Authentication__Oidc__ClientSecret in .env}
+      Authentication__Oidc__ApiScope: ${Authentication__Oidc__ApiScope:?Set Authentication__Oidc__ApiScope in .env}
+    extra_hosts:
+      - "creatorflow-id.test:host-gateway"
     ports:
       - "${CREATORFLOW_WEB_BIND_IP:-127.0.0.1}:8080:8080"
     depends_on:
       ai:
         condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  keycloak_data:
