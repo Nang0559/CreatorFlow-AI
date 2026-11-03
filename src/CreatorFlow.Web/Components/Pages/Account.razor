@@ -69,7 +69,7 @@ else if (!string.IsNullOrWhiteSpace(error))
         {
             <div class="trend-form">
                 <label>Email thành viên<input @bind="inviteEmail" type="email" maxlength="320" placeholder="ten@example.com" /></label>
-                <label>Vai trò<select @bind="inviteRole"><option>Editor</option><option>Analyst</option><option>Publisher</option>@if (activeWorkspace.Role == "Owner"){<option>Admin</option>}</select></label>
+                <label>Vai trò<select @bind="inviteRole"><option value="Editor">Biên tập viên</option><option value="Analyst">Phân tích · chỉ xem</option><option value="Publisher">Người xuất bản</option>@if (activeWorkspace.Role == "Owner"){<option value="Admin">Quản trị viên</option>}</select></label>
             </div>
             <div class="form-actions"><button class="primary" disabled="@busy" @onclick="InviteAsync">Tạo lời mời</button><span class="muted">Lời mời có hiệu lực 72 giờ. Hệ thống chưa tự gửi email.</span></div>
         }
@@ -84,7 +84,7 @@ else if (!string.IsNullOrWhiteSpace(error))
                 @if (activeWorkspace.Role == "Owner" && member.Status == "Active")
                 {
                     <div class="form-actions">
-                        <select @bind="roleEdits[member.Id]"><option>Owner</option><option>Admin</option><option>Editor</option><option>Analyst</option><option>Publisher</option></select>
+                        <select @bind="roleEdits[member.Id]"><option value="Owner">Chủ sở hữu</option><option value="Admin">Quản trị viên</option><option value="Editor">Biên tập viên</option><option value="Analyst">Phân tích · chỉ xem</option><option value="Publisher">Người xuất bản</option></select>
                         <button class="secondary" disabled="@busy" @onclick="() => ChangeRoleAsync(member)">Lưu vai trò</button>
                         <button class="secondary" disabled="@busy" @onclick="() => SuspendAsync(member)">Đình chỉ</button>
                     </div>
