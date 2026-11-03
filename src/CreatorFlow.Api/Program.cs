@@ -150,6 +150,20 @@ topics.MapPut("/{id:guid}", async (Guid id, UpdateTopicRequest request, CreatorF
     catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["topic"] = [ex.Message] }); }
     catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
 });
+topics.MapPost("/{id:guid}/discovery-plan", async (Guid id, CreateTopicDiscoveryPlanRequest request, CreatorFlowDbContext? db, CreatorFlowAiClient aiClient, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var topic = await db.ContentTopics.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.IsActive, ct);
+    if (topic is null) return Results.NotFound();
+    var keywords = topic.Keywords.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Distinct(StringComparer.OrdinalIgnoreCase).Take(30).ToArray();
+    var payload = new AiDiscoveryQueryPlanRequest(topic.Name, keywords, "Vietnam",
+        string.IsNullOrWhiteSpace(request.ProductContext) ? null : request.ProductContext.Trim(),
+        string.IsNullOrWhiteSpace(request.AudienceContext) ? null : request.AudienceContext.Trim(),
+        Math.Clamp(request.MaxQueries ?? 8, 2, 12));
+    return await aiClient.ForwardAsync("/v1/discovery/query-plan", payload, ct);
+});
+
 topics.MapPost("/{id:guid}/deactivate", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
@@ -1040,6 +1054,8 @@ public sealed record StyleVariantResponse(Guid Id, string Name, string Hook, str
     long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds, decimal? VideoDurationSeconds,
     decimal? EngagementRate, DateTimeOffset? PublishedAt, DateTimeOffset? MeasuredAt);
 public sealed record CreateTopicRequest(string Name, string? Keywords);
+public sealed record CreateTopicDiscoveryPlanRequest(string? ProductContext, string? AudienceContext, int? MaxQueries);
+public sealed record AiDiscoveryQueryPlanRequest(string Topic, string[] Keywords, string TargetMarket, string? ProductContext, string? AudienceContext, int MaxQueries);
 public sealed record UpdateTopicRequest(string Name, string? Keywords);
 public sealed record TopicResponse(Guid Id, string Name, string Keywords, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 public sealed record CreateChannelRequest(string DouyinSecUserId, string DisplayName, string ProfileUrl);
