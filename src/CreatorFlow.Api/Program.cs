@@ -193,18 +193,46 @@ channels.MapPost("/{id:guid}/follow", async (Guid id, CreatorFlowDbContext? db, 
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var channel = await db.DouyinSourceChannels.SingleOrDefaultAsync(x => x.Id == id, ct);
     if (channel is null) return Results.NotFound();
-    channel.Follow(DateTimeOffset.UtcNow);
+
+    await using var transaction = await db.Database.BeginTransactionAsync(ct);
+    var now = DateTimeOffset.UtcNow;
+    channel.Follow(now);
     await db.SaveChangesAsync(ct);
-    return Results.NoContent();
+
+    // Create or re-enable the durable scan schedule. No scan is executed until an
+    // approved provider connector and the discovery worker are installed.
+    await db.Database.ExecuteSqlInterpolatedAsync($@"
+        IF EXISTS (SELECT 1 FROM dbo.DiscoveryChannelSyncStates WHERE TenantId =
+            (SELECT TenantId FROM dbo.DouyinSourceChannels WHERE Id = {id}) AND ChannelId = {id})
+            UPDATE dbo.DiscoveryChannelSyncStates
+               SET IsEnabled = 1, NextScanAt = DATEADD(minute, PollIntervalMinutes, SYSUTCDATETIME()),
+                   UpdatedAt = SYSUTCDATETIME()
+             WHERE TenantId = (SELECT TenantId FROM dbo.DouyinSourceChannels WHERE Id = {id})
+               AND ChannelId = {id};
+        ELSE
+            INSERT dbo.DiscoveryChannelSyncStates
+                (Id, TenantId, ChannelId, IsEnabled, PollIntervalMinutes, NextScanAt, UpdatedAt)
+            SELECT NEWID(), TenantId, Id, 1, 30, DATEADD(minute, 30, SYSUTCDATETIME()), SYSUTCDATETIME()
+              FROM dbo.DouyinSourceChannels WHERE Id = {id};", ct);
+    await transaction.CommitAsync(ct);
+    return Results.Ok(new { followed = true, scanSchedule = "Enabled", scanStatus = "WaitingForApprovedConnector" });
 });
 channels.MapPost("/{id:guid}/unfollow", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var channel = await db.DouyinSourceChannels.SingleOrDefaultAsync(x => x.Id == id, ct);
     if (channel is null) return Results.NotFound();
+
+    await using var transaction = await db.Database.BeginTransactionAsync(ct);
     channel.Unfollow(DateTimeOffset.UtcNow);
     await db.SaveChangesAsync(ct);
-    return Results.NoContent();
+    await db.Database.ExecuteSqlInterpolatedAsync($@"
+        UPDATE dbo.DiscoveryChannelSyncStates
+           SET IsEnabled = 0, UpdatedAt = SYSUTCDATETIME()
+         WHERE TenantId = (SELECT TenantId FROM dbo.DouyinSourceChannels WHERE Id = {id})
+           AND ChannelId = {id};", ct);
+    await transaction.CommitAsync(ct);
+    return Results.Ok(new { followed = false, scanSchedule = "Disabled" });
 });
 
 
