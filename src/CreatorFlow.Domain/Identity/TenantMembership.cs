@@ -15,13 +15,14 @@ public sealed class TenantMembership
     public Guid TenantId { get; private set; }
     public string IdentityIssuer { get; private set; } = string.Empty;
     public string SubjectId { get; private set; } = string.Empty;
+    public string? VerifiedEmail { get; private set; }
     public TenantRole Role { get; private set; }
     public TenantMembershipStatus Status { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
 
     public static TenantMembership Create(Guid tenantId, string identityIssuer, string subjectId,
-        TenantRole role, DateTimeOffset now)
+        TenantRole role, DateTimeOffset now, string? verifiedEmail = null)
     {
         if (tenantId == Guid.Empty) throw new ArgumentException("Tenant is required.", nameof(tenantId));
         if (string.IsNullOrWhiteSpace(identityIssuer) || identityIssuer.Trim().Length > 500)
@@ -36,11 +37,21 @@ public sealed class TenantMembership
             TenantId = tenantId,
             IdentityIssuer = identityIssuer.Trim(),
             SubjectId = subjectId.Trim(),
+            VerifiedEmail = NormalizeEmail(verifiedEmail),
             Role = role,
             Status = TenantMembershipStatus.Active,
             CreatedAt = now,
             UpdatedAt = now
         };
+    }
+
+    private static string? NormalizeEmail(string? email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return null;
+        var value = email.Trim().ToLowerInvariant();
+        if (value.Length > 320 || !value.Contains('@', StringComparison.Ordinal))
+            throw new ArgumentException("Verified email is invalid.", nameof(email));
+        return value;
     }
 
     public void ChangeRole(TenantRole role, DateTimeOffset now)
