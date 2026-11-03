@@ -168,7 +168,6 @@ else if (!string.IsNullOrWhiteSpace(error))
             {
                 members = await Api.GetAsync<List<MemberItem>>($"/api/v1/identity/workspaces/{activeWorkspace.Id}/members") ?? [];
                 roleEdits = members.ToDictionary(x => x.Id, x => x.Role);
-        invitations = await Api.GetAsync<List<InvitationItem>>($"/api/v1/identity/workspaces/{activeWorkspace.Id}/invitations") ?? [];
                 invitations = await Api.GetAsync<List<InvitationItem>>($"/api/v1/identity/workspaces/{activeWorkspace.Id}/invitations") ?? [];
             }
             else { members = []; invitations = []; }
@@ -224,6 +223,7 @@ else if (!string.IsNullOrWhiteSpace(error))
     {
         members = await Api.GetAsync<List<MemberItem>>($"/api/v1/identity/workspaces/{activeWorkspace!.Id}/members") ?? [];
         roleEdits = members.ToDictionary(x => x.Id, x => x.Role);
+        invitations = await Api.GetAsync<List<InvitationItem>>($"/api/v1/identity/workspaces/{activeWorkspace.Id}/invitations") ?? [];
     }
 
     private async Task RevokeInvitationAsync(InvitationItem invitation)
