@@ -112,16 +112,25 @@ class OpenAICompatibleLLM:
         routes=[(self._settings.provider,self._settings.base_url,self._settings.api_key,self._settings.model,
                  self._transport or self._transports.get(self._settings.provider))]
         routes += [(p.name,p.base_url,p.api_key,p.model,self._transports.get(p.name)) for p in self._settings.fallbacks]
-        last_error=None
+        failures:list[str]=[]
+        last_error:Exception|None=None
         for name,base,key,model,transport in routes:
+            provider_error:Exception|None=None
             for attempt in range(self._settings.retries_per_provider+1):
                 try:
                     return await self._complete_one(name,base,key,model,transport,system_prompt,user_payload)
                 except AIInvalidOutputError as exc:
-                    last_error=exc; break
+                    last_error=exc; provider_error=exc; break
                 except AIProviderError as exc:
-                    last_error=exc
+                    last_error=exc; provider_error=exc
                     if not exc.retryable or attempt>=self._settings.retries_per_provider: break
                     await asyncio.sleep(min(self._settings.retry_backoff_seconds*(2**attempt),8))
+            if provider_error is not None:
+                failures.append(f"{name}: {provider_error}")
         if last_error is None: raise AIConfigurationError("No AI provider is configured.")
-        raise last_error
+        if len(failures)==1:
+            raise last_error
+        # Preserve every provider's safe status summary; otherwise the final fallback
+        # error hides the primary provider failure and makes diagnosis misleading.
+        raise AIProviderError("All configured AI providers failed: "+"; ".join(failures),
+                              provider="multiple",retryable=False) from last_error
