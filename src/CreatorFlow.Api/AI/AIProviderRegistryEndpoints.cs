@@ -25,6 +25,23 @@ public static class AIProviderRegistryEndpoints
     public static IEndpointRouteBuilder MapAIProviderRegistry(this IEndpointRouteBuilder endpoints)
     {
         var group = endpoints.MapGroup("/api/v1/ai/providers").RequireAuthorization();
+        group.MapGet("/runtime", (IConfiguration config, ITenantContext tenant) =>
+        {
+            if (!CanManage(tenant)) return Results.Forbid();
+            var names = new[] { "gemini", "openai", "ollama" };
+            var rows = names.Select(name =>
+            {
+                var prefix = $"CREATORFLOW_LLM_{name.ToUpperInvariant()}_";
+                var legacyGemini = name == "gemini";
+                var key = config[prefix + "API_KEY"] ?? (legacyGemini ? config["CREATORFLOW_LLM_API_KEY"] : null);
+                var model = config[prefix + "MODEL"] ?? (legacyGemini ? config["CREATORFLOW_LLM_MODEL"] : null);
+                var url = config[prefix + "BASE_URL"] ?? (legacyGemini ? config["CREATORFLOW_LLM_BASE_URL"] : null);
+                return new RuntimeAIProvider(name, model, url, !string.IsNullOrWhiteSpace(key),
+                    string.Equals(config["CREATORFLOW_LLM_PRIMARY_PROVIDER"] ?? "gemini", name, StringComparison.OrdinalIgnoreCase),
+                    (config["CREATORFLOW_LLM_FALLBACK_PROVIDERS"] ?? "openai").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(name, StringComparer.OrdinalIgnoreCase));
+            }).Where(x => x.HasApiKey || !string.IsNullOrWhiteSpace(x.Model) || !string.IsNullOrWhiteSpace(x.BaseUrl)).ToArray();
+            return Results.Ok(rows);
+        });
         group.MapGet("/", async (CreatorFlowDbContext? db, ITenantContext tenant, CancellationToken ct) =>
         {
             if (!CanManage(tenant)) return Results.Forbid();
@@ -144,7 +161,7 @@ public static class AIProviderRegistryEndpoints
     }
 }
 
-public sealed record AIProviderWriteRequest(string DisplayName, string BaseUrl, string Model, string? ApiKey,
+public sealed record RuntimeAIProvider(string Provider, string? Model, string? BaseUrl, bool HasApiKey, bool IsPrimary, bool IsFallback);\n\npublic sealed record AIProviderWriteRequest(string DisplayName, string BaseUrl, string Model, string? ApiKey,
     bool IsActive, string RoutingRole, int? FallbackOrder, int TimeoutSeconds = 120, int MaxOutputTokens = 3000);
 public sealed record AIProviderResponse(Guid Id, string DisplayName, string ProviderType, string BaseUrl, string Model,
     bool IsActive, string RoutingRole, int? FallbackOrder, int TimeoutSeconds, int MaxOutputTokens, bool HasApiKey,
