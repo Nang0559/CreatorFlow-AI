@@ -9,9 +9,9 @@ This is strictly a development/test environment. SQL Server Developer is license
 - Install SQL Server 2022+ as a local default instance (localhost) or named instance (localhost\CREATORFLOW).
 - Provision `CreatorFlow_QC` using [the repository database initializer](SQL_DATABASE_SETUP.md). It is tagged with database-level extended properties `CreatorFlowEnvironment=QC` and `CreatorFlowRepository=CreatorFlow-AI`.
 - Run GitHub Actions service under a dedicated standard Windows account `.\creatorflow-runner`, not a local administrator.
-- Map that Windows identity only to CreatorFlow_QC; grant DDL/data permissions inside that database, never server sysadmin or CREATE ANY DATABASE.
+- Map only the verified runner service identity to CreatorFlow_QC; grant read-only access for QC verification, never server sysadmin or CREATE ANY DATABASE.
 - Keep SQL traffic local. Do not expose TCP 1433 to the Internet or LAN.
-- Use repository-level runner scope and label `creatorflow-sql-qc`.
+- Use repository-level runner scope and custom labels `pctp-ui` and `sql-network`.
 - Workflow intentionally excludes `pull_request`; self-hosted runners have access to local resources. Only trusted repository writers should trigger jobs. For a public repository, enable required approval for external contributors and review Actions access settings before enabling this runner.
 
 ## 2. Install SQL Server
