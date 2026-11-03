@@ -162,6 +162,7 @@ else if (!string.IsNullOrWhiteSpace(error))
             await Api.PostAsync<object, InvitationAccepted>("/api/v1/identity/invitations/accept", new { token = acceptToken.Trim() });
             acceptToken = "";
             message = "Đã tham gia workspace. Chọn workspace trong danh sách để bắt đầu.";
+            busy = false;
             await LoadAsync();
         }
         catch (Exception ex) { error = ex.Message; }
