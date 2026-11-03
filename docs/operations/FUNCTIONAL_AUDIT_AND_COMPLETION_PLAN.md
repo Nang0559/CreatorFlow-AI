@@ -95,3 +95,14 @@ Not yet implemented/verified:
 - asset-library linkage and end-to-end tests.
 
 Migration 021 is storage groundwork only. Do not enable polling or claim automatic downloads until an approved connector and worker exist and pass target-environment tests.
+
+
+## Channel management and follow scheduling implementation
+
+- Added `/channels` page for registering a public channel identifier/profile URL, listing channels and following/unfollowing them, with required-field validation and visible errors/success messages.
+- Added desktop and mobile navigation entries for channel management.
+- Follow/unfollow API operations now transactionally create/re-enable or disable the corresponding `DiscoveryChannelSyncStates` row. The response distinguishes schedule enabled from actual scan execution.
+- The schedule is intentionally inert until a permitted provider connector and discovery worker are deployed. The UI explicitly says no video has been scanned/downloaded yet.
+- Commit evidence: `235b6424` (API follow schedule), `43f5f29b` (channel management page), `d4605bca` (navigation).
+
+Remaining blocker: no approved Douyin/TikTok metadata connector or media-download capability has been provided/configured. The application must not scrape, extract sessions/cookies, or download media absent a documented permission basis. Automatic discovery/download remains not operational until a connector and worker are implemented and tested.
