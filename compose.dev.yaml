@@ -6,10 +6,15 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Set KEYCLOAK_ADMIN_USERNAME in .env}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
       KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?Set KEYCLOAK_PUBLIC_URL in .env}
+      KC_HTTP_PORT: "8180"
       KC_HEALTH_ENABLED: "true"
     ports:
-      - "127.0.0.1:8180:8080"
+      - "127.0.0.1:8180:8180"
       - "127.0.0.1:9100:9000"
+    networks:
+      default:
+        aliases:
+          - creatorflow-id.test
     volumes:
       - keycloak_data:/opt/keycloak/data
     restart: unless-stopped
@@ -52,8 +57,6 @@ services:
       Authentication__Oidc__ClientId: ${Authentication__Oidc__ClientId:?Set Authentication__Oidc__ClientId in .env}
       Authentication__Oidc__ClientSecret: ${Authentication__Oidc__ClientSecret:?Set Authentication__Oidc__ClientSecret in .env}
       Authentication__Oidc__ApiScope: ${Authentication__Oidc__ApiScope:?Set Authentication__Oidc__ApiScope in .env}
-    extra_hosts:
-      - "creatorflow-id.test:host-gateway"
     ports:
       - "${CREATORFLOW_WEB_BIND_IP:-127.0.0.1}:8080:8080"
     depends_on:
