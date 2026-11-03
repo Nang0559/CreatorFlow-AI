@@ -292,14 +292,14 @@ SELECT CASE WHEN OBJECT_ID(N'dbo.Tenants',N'U') IS NOT NULL
         Write-Warning 'Native API start explicitly skipped.'
     }
 
-    Write-Stage '8b/8 - Start native video renderer when fully configured'
-    $rendererPaths = @($env:VideoRendering__AfterEffectsExe, $env:VideoRendering__AerenderExe, $env:VideoRendering__FFmpegExe, $env:VideoRendering__FFprobeExe)
+    Write-Stage '8b/8 - Start native FFmpeg video renderer'
+    $rendererPaths = @($env:VideoRendering__FFmpegExe, $env:VideoRendering__FFprobeExe)
     $rendererReady = -not [string]::IsNullOrWhiteSpace($env:VideoRendering__StorageRoot) -and
-        $rendererPaths.Count -eq 4 -and @($rendererPaths | Where-Object { [string]::IsNullOrWhiteSpace($_) -or -not (Test-Path -LiteralPath $_ -PathType Leaf) }).Count -eq 0
+        $rendererPaths.Count -eq 2 -and @($rendererPaths | Where-Object { [string]::IsNullOrWhiteSpace($_) -or -not (Test-Path -LiteralPath $_ -PathType Leaf) }).Count -eq 0
     if ($rendererReady) {
         & '.\scripts\Start-VideoRenderWorker.ps1' -RepositoryPath $RepositoryPath -SqlInstance $SqlInstance
     } else {
-        Write-Host 'Worker dựng video chưa khởi động: hãy cài After Effects/FFmpeg và điền VideoRendering__* trong .env, sau đó chạy scripts/Start-VideoRenderWorker.ps1.'
+        Write-Host 'Worker dựng video chưa khởi động: hãy cài FFmpeg Essentials, cấu hình FFmpeg/FFprobe trong .env, sau đó chạy scripts/Start-VideoRenderWorker.ps1. After Effects là tùy chọn cho engine bổ sung trong tương lai.'
     }
 
     Write-Stage 'FINAL - Local pilot verification'
