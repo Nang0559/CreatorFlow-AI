@@ -8,6 +8,20 @@ def test_settings_require_provider_key_and_model(monkeypatch):
     monkeypatch.delenv("CREATORFLOW_LLM_API_KEY",raising=False); monkeypatch.delenv("CREATORFLOW_LLM_MODEL",raising=False)
     with pytest.raises(AIConfigurationError): LLMSettings.from_environment()
 
+def test_environment_defaults_to_ollama_without_cloud_fallback(monkeypatch):
+    monkeypatch.delenv("CREATORFLOW_LLM_PRIMARY_PROVIDER",raising=False)
+    monkeypatch.delenv("CREATORFLOW_LLM_FALLBACK_PROVIDERS",raising=False)
+    monkeypatch.setenv("CREATORFLOW_LLM_OLLAMA_MODEL","qwen2.5:3b")
+    monkeypatch.setenv("CREATORFLOW_LLM_GEMINI_API_KEY","cloud-gemini-key")
+    monkeypatch.setenv("CREATORFLOW_LLM_GEMINI_MODEL","gemini-cloud-model")
+    monkeypatch.setenv("CREATORFLOW_LLM_OPENAI_API_KEY","cloud-openai-key")
+    monkeypatch.setenv("CREATORFLOW_LLM_OPENAI_MODEL","gpt-cloud-model")
+    settings=LLMSettings.from_environment()
+    assert settings.provider=="ollama"
+    assert settings.model=="qwen2.5:3b"
+    assert settings.fallbacks==()
+
+
 def test_settings_reject_insecure_remote_provider_url(monkeypatch):
     monkeypatch.setenv("CREATORFLOW_LLM_API_KEY","secret"); monkeypatch.setenv("CREATORFLOW_LLM_MODEL","model")
     monkeypatch.setenv("CREATORFLOW_LLM_BASE_URL","http://remote.example/v1")
