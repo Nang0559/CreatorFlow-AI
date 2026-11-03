@@ -49,7 +49,7 @@ else if (!string.IsNullOrWhiteSpace(error))
     @foreach (var workspace in workspaces)
     {
         <article class="trend-item">
-            <div><h3>@workspace.Name</h3><p class="muted">@workspace.Slug · Vai trò: @workspace.Role</p></div>
+            <div><h3>@workspace.Name</h3><p class="muted">@workspace.Slug · Vai trò: @RoleLabel(workspace.Role)</p></div>
             @if (workspace.Id.ToString("D") == selectedTenant)
             {
                 <span class="status">Đang sử dụng</span>
@@ -80,7 +80,7 @@ else if (!string.IsNullOrWhiteSpace(error))
         @foreach (var member in members)
         {
             <article class="trend-item">
-                <div><strong>@(member.VerifiedEmail ?? "Tài khoản chưa có email xác minh") · @member.Role</strong><p class="muted">Trạng thái: @member.Status · Tham gia: @member.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</p></div>
+                <div><strong>@(member.VerifiedEmail ?? "Tài khoản chưa có email xác minh") · @RoleLabel(member.Role)</strong><p class="muted">Trạng thái: @StatusLabel(member.Status) · Tham gia: @member.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</p></div>
                 @if (activeWorkspace.Role == "Owner" && member.Status == "Active")
                 {
                     <div class="form-actions">
@@ -113,6 +113,24 @@ else if (!string.IsNullOrWhiteSpace(error))
     private bool busy;
     private bool isAuthenticated;
     private bool CanManage => activeWorkspace?.Role is "Owner" or "Admin";
+
+    private static string RoleLabel(string role) => role switch
+    {
+        "Owner" => "Chủ sở hữu",
+        "Admin" => "Quản trị viên",
+        "Editor" => "Biên tập viên",
+        "Analyst" => "Phân tích · chỉ xem",
+        "Publisher" => "Người xuất bản",
+        _ => "Chưa xác định"
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "Active" => "Đang hoạt động",
+        "Suspended" => "Đã đình chỉ",
+        _ => "Chưa xác định"
+    };
+
 
     protected override async Task OnInitializedAsync()
     {
