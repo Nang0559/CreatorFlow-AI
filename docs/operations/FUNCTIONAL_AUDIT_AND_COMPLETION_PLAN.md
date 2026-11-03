@@ -106,3 +106,28 @@ Migration 021 is storage groundwork only. Do not enable polling or claim automat
 - Commit evidence: `235b6424` (API follow schedule), `43f5f29b` (channel management page), `d4605bca` (navigation).
 
 Remaining blocker: no approved Douyin/TikTok metadata connector or media-download capability has been provided/configured. The application must not scrape, extract sessions/cookies, or download media absent a documented permission basis. Automatic discovery/download remains not operational until a connector and worker are implemented and tested.
+
+
+## SaaS identity, workspace and resource audit update (2026-11-03)
+
+### Implemented in this branch
+- Added `/account` UI for OIDC users: workspace list/switch, member list, invitations, Owner role changes and member suspension.
+- Added CSRF-protected browser operations for workspace selection and logout.
+- Added account/workspace navigation and explicit message when OIDC login is not configured.
+- Added migration `022_tenant_subscriptions_and_usage.sql`: plan catalog, tenant subscriptions, idempotent usage events and tenant storage metadata.
+- Added migration 022 to the tenant-enabled migration runner and Z240 read-only migration validation.
+- Added design and operator documentation for SaaS account/resource boundaries.
+
+### Confirmed gaps / not Go-live ready
+- Login is not active until a real OIDC provider, callback URLs, API audience/scope and secrets are configured.
+- Initial Owner bootstrap remains a privileged one-time API operation; it is not yet a guided onboarding screen.
+- Invitation tokens are displayed once but are not delivered by email.
+- Migration 022 is schema groundwork only: no payment-provider checkout/webhooks, commercial plan catalog/prices, recurring billing, quota reservation/enforcement, or complete AI/render/storage metering is wired.
+- The media file store and all worker execution paths still need tenant-scoped authorization and cross-tenant tests.
+- Existing role guard is a baseline restriction, not a full per-operation policy matrix. Analyst/Publisher and every resource endpoint require negative authorization tests.
+- OIDC access-token refresh, central session revocation, verified MFA policy and account recovery are provider/deployment gates.
+
+### Migration safety
+- `Apply-Migrations.ps1` still intentionally excludes 011–013 and dependent 016–022 unless both `-IncludeTenantMigrations` and `-ConfirmLegacyWorkspaceAssignment` are explicitly supplied.
+- Migration 012 assigns all listed existing rows to the single `legacy-workspace`. This is safe only after confirming the QC database is a single-workspace dataset. Never run it on multi-customer data without a reviewed ownership mapping.
+- Do not ask the operator to run migrations until the Z240 validation report and the actual QC ownership/ledger state have been reviewed.
