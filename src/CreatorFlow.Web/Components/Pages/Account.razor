@@ -71,7 +71,7 @@ else if (!string.IsNullOrWhiteSpace(error))
         @foreach (var member in members)
         {
             <article class="trend-item">
-                <div><strong>@member.Role</strong><p class="muted">Trạng thái: @member.Status · Tham gia: @member.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</p></div>
+                <div><strong>@(member.VerifiedEmail ?? "Tài khoản chưa có email xác minh") · @member.Role</strong><p class="muted">Trạng thái: @member.Status · Tham gia: @member.CreatedAt.ToLocalTime().ToString("dd/MM/yyyy")</p></div>
                 @if (activeWorkspace.Role == "Owner" && member.Status == "Active")
                 {
                     <div class="form-actions">
@@ -184,6 +184,6 @@ else if (!string.IsNullOrWhiteSpace(error))
     private async Task LogoutAsync() => await JS.InvokeVoidAsync("creatorFlowWorkspace.logout");
 
     private sealed record WorkspaceItem(Guid Id, string Name, string Slug, string Role);
-    private sealed record MemberItem(Guid Id, string Role, string Status, DateTimeOffset CreatedAt);
+    private sealed record MemberItem(Guid Id, string? VerifiedEmail, string Role, string Status, DateTimeOffset CreatedAt);
     private sealed record InvitationCreated(Guid Id, string Email, string Role, DateTimeOffset ExpiresAt, string Token);
 }
