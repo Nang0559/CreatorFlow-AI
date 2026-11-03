@@ -55,7 +55,8 @@ public static class TenantAccountEndpoints
             if (await db.TenantMemberships.AnyAsync(x => x.TenantId == tenant.Id &&
                 x.IdentityIssuer == issuer && x.SubjectId == subject, ct))
                 return Results.Conflict(new { error = "This identity already has a membership in this workspace." });
-            db.TenantMemberships.Add(TenantMembership.Create(tenant.Id, issuer, subject, TenantRole.Owner, DateTimeOffset.UtcNow));
+            var verifiedOwnerEmail = string.Equals(http.User.FindFirst("email_verified")?.Value, "true", StringComparison.OrdinalIgnoreCase) ? http.User.FindFirst("email")?.Value : null;
+            db.TenantMemberships.Add(TenantMembership.Create(tenant.Id, issuer, subject, TenantRole.Owner, DateTimeOffset.UtcNow, verifiedOwnerEmail));
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
             return Results.Created("/api/v1/identity/workspaces", new WorkspaceItem(tenant.Id, tenant.Name, tenant.Slug, "Owner"));
@@ -141,7 +142,7 @@ public static class TenantAccountEndpoints
             tenantContext.Set(invitation.TenantId, invitation.Role.ToString());
             var now = DateTimeOffset.UtcNow;
             invitation.Accept(issuer, subject, now);
-            db.TenantMemberships.Add(TenantMembership.Create(invitation.TenantId, issuer, subject, invitation.Role, now));
+            db.TenantMemberships.Add(TenantMembership.Create(invitation.TenantId, issuer, subject, invitation.Role, now, email));
             await db.SaveChangesAsync(ct);
             await Audit(db, invitation.TenantId, issuer, subject, "InvitationAccepted", issuer, subject,
                 new { invitation.Id, invitation.Role }, now, ct);
@@ -249,5 +250,5 @@ public sealed record CreateTenantInvitationRequest(string Email, string Role);
 public sealed record AcceptTenantInvitationRequest(string Token);
 public sealed record ChangeTenantRoleRequest(string Role);
 public sealed record WorkspaceItem(Guid Id, string Name, string Slug, string Role);
-public sealed record MemberItem(Guid Id, string Role, string Status, DateTimeOffset CreatedAt);
+public sealed record MemberItem(Guid Id, string? VerifiedEmail, string Role, string Status, DateTimeOffset CreatedAt);
 public sealed record InvitationItem(Guid Id, string Email, string Role, string Status, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt);
