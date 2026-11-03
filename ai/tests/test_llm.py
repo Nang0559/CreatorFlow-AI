@@ -56,3 +56,19 @@ def test_local_ollama_http_is_allowed_but_remote_http_is_not(monkeypatch):
     monkeypatch.setenv("CREATORFLOW_LLM_OLLAMA_MODEL","local-model")
     monkeypatch.setenv("CREATORFLOW_LLM_OLLAMA_BASE_URL","http://host.docker.internal:11434/v1")
     assert LLMSettings.from_environment().provider=="ollama"
+
+
+def test_all_provider_failures_report_primary_and_fallback_errors():
+    def gemini(r): return httpx.Response(503)
+    def openai(r): return httpx.Response(429)
+    settings=LLMSettings("https://g.example/v1","g","gm",2,512,"gemini",
+      (ProviderConfig("openai","https://o.example/v1","o","om"),),0,0)
+    llm=OpenAICompatibleLLM(settings,transports={
+      "gemini":httpx.MockTransport(gemini),
+      "openai":httpx.MockTransport(openai)})
+    with pytest.raises(Exception) as caught:
+        asyncio.run(llm.complete_json(system_prompt="JSON",user_payload={}))
+    message=str(caught.value)
+    assert "Gemini" not in message or "gemini:" in message
+    assert "gemini: AI provider 'gemini' returned HTTP 503." in message
+    assert "openai: AI provider 'openai' returned HTTP 429." in message
