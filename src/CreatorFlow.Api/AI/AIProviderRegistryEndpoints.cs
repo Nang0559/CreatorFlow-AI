@@ -12,7 +12,13 @@ public static class AIProviderRegistryEndpoints
         if (string.IsNullOrWhiteSpace(keyPath))
             keyPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CreatorFlow", "DataProtectionKeys");
         Directory.CreateDirectory(keyPath);
-        services.AddDataProtection().SetApplicationName("CreatorFlow.Api").PersistKeysToFileSystem(new DirectoryInfo(keyPath)).ProtectKeysWithDpapi();
+        var dataProtection = services.AddDataProtection()
+            .SetApplicationName("CreatorFlow.Api")
+            .PersistKeysToFileSystem(new DirectoryInfo(keyPath));
+        if (OperatingSystem.IsWindows())
+        {
+            dataProtection.ProtectKeysWithDpapi();
+        }
         return services;
     }
 
