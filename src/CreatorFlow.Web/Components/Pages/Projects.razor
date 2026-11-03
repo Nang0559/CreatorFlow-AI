@@ -5,13 +5,14 @@
 <header class="page-header">
     <div><p class="eyebrow">KHÔNG GIAN DỰ ÁN</p><h1>Dự án nội dung</h1>
         <p class="muted">Quản lý ý tưởng và gom các thử nghiệm phong cách theo từng dự án.</p></div>
-    <button class="primary" @onclick="LoadAsync" disabled="@busy">Làm mới</button>
+    <button class="primary" @onclick="LoadAsync" disabled="@busy">@(busy ? "Đang tải…" : "Làm mới")</button>
 </header>
-@if (!string.IsNullOrWhiteSpace(error)) { <section class="notice"><strong>Không thể tải dự án</strong><p>@error</p></section> }
+@if (!string.IsNullOrWhiteSpace(error)) { <section class="notice" role="alert"><strong>Chưa thực hiện được thao tác</strong><p>@error</p></section> }
+@if (!string.IsNullOrWhiteSpace(successMessage)) { <section class="success-notice" role="status" aria-live="polite"><strong>@successMessage</strong></section> }
 <section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">DỰ ÁN MỚI</p><h2>Tạo dự án</h2></div></div>
-    <div class="trend-form"><label>Tên dự án<input @bind="title" maxlength="200" placeholder="Ví dụ: Review đồ gia dụng tháng 11" /></label></div>
-    <button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(title))" @onclick="CreateAsync">Tạo dự án</button>
+    <div class="trend-form"><label>Tên dự án <span class="required-mark">* Bắt buộc · tối đa 200 ký tự</span><input @bind="title" maxlength="200" required aria-required="true" placeholder="Ví dụ: Review đồ gia dụng tháng 11" /></label></div>
+    <button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(title))" @onclick="CreateAsync">@(busy ? "Đang tạo…" : "Tạo dự án")</button>
 </section>
 <section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">THƯ VIỆN DỰ ÁN</p><h2>Danh sách dự án</h2></div><span class="status">@items.Count dự án</span></div>
@@ -28,20 +29,46 @@
     private List<ProjectItem> items = [];
     private string title = "";
     private string error = "";
+    private string successMessage = "";
     private bool busy, loading;
     protected override async Task OnInitializedAsync() => await LoadAsync();
     private async Task LoadAsync()
     {
-        if (!Api.IsConfigured) { error = "Web chưa cấu hình CreatorFlow API."; return; }
-        try { loading = true; error = ""; items = await Api.GetAsync<List<ProjectItem>>("/api/v1/content-projects?take=100") ?? []; }
-        catch (Exception ex) { error = ex.Message; }
+        if (!Api.IsConfigured) { error = "Web chưa được cấu hình kết nối đến máy chủ CreatorFlow."; return; }
+        if (loading || busy) return;
+        try
+        {
+            loading = true; error = ""; successMessage = "";
+            items = await Api.GetAsync<List<ProjectItem>>("/api/v1/content-projects?take=100") ?? [];
+            successMessage = "Đã cập nhật danh sách " + items.Count + " dự án.";
+        }
+        catch (Exception ex) { error = ToUserMessage(ex); }
         finally { loading = false; }
     }
     private async Task CreateAsync()
     {
-        try { busy = true; error = ""; await Api.PostAsync<object, ProjectItem>("/api/v1/content-projects", new { title = title.Trim() }); title = ""; await LoadAsync(); }
-        catch (Exception ex) { error = ex.Message; }
+        if (busy) return;
+        if (string.IsNullOrWhiteSpace(title)) { error = "Vui lòng nhập tên dự án."; return; }
+        if (title.Trim().Length > 200) { error = "Tên dự án không được vượt quá 200 ký tự."; return; }
+        try
+        {
+            busy = true; error = ""; successMessage = "";
+            var created = await Api.PostAsync<object, ProjectItem>("/api/v1/content-projects", new { title = title.Trim() });
+            if (created is null) throw new InvalidOperationException("Máy chủ chưa trả về thông tin dự án vừa tạo.");
+            title = "";
+            items = await Api.GetAsync<List<ProjectItem>>("/api/v1/content-projects?take=100") ?? [];
+            successMessage = "Đã tạo dự án thành công: " + created.Title;
+        }
+        catch (Exception ex) { error = ToUserMessage(ex); }
         finally { busy = false; }
     }
+    private static string ToUserMessage(Exception ex)
+    {
+        var message = ex.Message;
+        if (message.Contains("HTTP 400", StringComparison.OrdinalIgnoreCase))
+            return "Tên dự án chưa hợp lệ. Vui lòng kiểm tra trường bắt buộc.";
+        return "Không thể hoàn tất yêu cầu dự án. " + message;
+    }
+
     private sealed record ProjectItem(Guid Id, string Title, string Status, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 }
