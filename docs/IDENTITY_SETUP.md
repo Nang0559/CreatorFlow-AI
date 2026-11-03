@@ -53,7 +53,11 @@ Do not insert membership rows manually and do not use email as the identity key.
 - `POST /auth/select-workspace/{tenantId}` verifies the selected workspace against that list and stores the selection in the protected server cookie.
 - Web-to-API requests forward the server-held access token and selected tenant header. The API independently resolves the active membership; the header is only a selector, never authorization.
 
-## 6. Invite and manage members
+## 6. Use the account and workspace screen
+
+After configuring OIDC and completing the initial Owner bootstrap, open `/account` in CreatorFlow. The screen lists the signed-in identity's workspaces, lets the user switch workspace, and provides Owner/Admin member invitation controls and Owner role/suspension controls. Workspace selection and logout use the Web app's CSRF-protected endpoints. A user without a selected workspace cannot access tenant-protected business APIs.
+
+## 7. Invite and manage members
 
 - Owner/Admin: `POST /api/v1/identity/workspaces/{tenantId}/invitations` with `{ "email": "...", "role": "Editor" }`.
 - The API returns a random invitation token once. Only its SHA-256 hash is stored. Deliver the raw token to the invitee through a trusted channel; SMTP delivery is not configured by this change.
@@ -62,7 +66,7 @@ Do not insert membership rows manually and do not use email as the identity key.
 
 Roles: Owner, Admin, Editor, Analyst, Publisher. Analyst is read-only. Publisher mutations are denied except future publishing endpoints; Editor/Admin/Owner can use current content workflows. Fine-grained per-feature authorization remains a release gate.
 
-## 7. Session and account protection
+## 8. Session and account protection
 
 - Web uses a host-only, Secure, HttpOnly cookie with an eight-hour lifetime and sliding renewal.
 - OIDC uses Authorization Code + PKCE; tokens are held in the protected server-side authentication ticket, not browser JavaScript.
@@ -72,7 +76,7 @@ Roles: Owner, Admin, Editor, Analyst, Publisher. Analyst is read-only. Publisher
 - `GET /auth/session` reports the authenticated subject, selected workspace and access-token expiry (never the token).
 - MFA, password reset, account lockout, compromised-credential response and provider-side session revocation must be configured at the OIDC provider. The current implementation does not provide a local password database, central per-device session-revocation console, or forced sign-out of every active CreatorFlow cookie session.
 
-## 8. Tenant isolation guarantees and remaining gates
+## 9. Tenant isolation guarantees and remaining gates
 
 All API endpoints are protected by a fallback policy unless explicitly public or using the OIDC-only onboarding policy. Existing EF Core tenant query filters and write stamping remain in force. API tenant context is resolved from the validated `iss + sub` membership and selected tenant; caller-provided TenantId never grants access. Analyst and Publisher mutation restrictions are applied centrally.
 
