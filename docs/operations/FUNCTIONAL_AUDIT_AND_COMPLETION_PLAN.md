@@ -76,3 +76,22 @@ For each slice, implement and test the full path: UI → API → application/dom
 - **G6 Go-live:** full end-to-end, security, backup/recovery, deployment and documentation acceptance passes.
 
 A gate remains **not verified** until its test evidence is attached. No estimated completion percentages and no Go-live claim based only on static inspection.
+
+
+## Followed-channel automatic discovery and media intake — expanded finding
+
+The current channel endpoints only create/list/follow/unfollow curated channel records. The API source explicitly documents that actual feed synchronization is a separate connector. The current video intake endpoint accepts manually supplied metadata and deliberately does not download media. There is no deployed provider connector or channel polling worker, so automatic new-video discovery and automatic download are NOT implemented.
+
+Added:
+- `database/schema/021_channel_sync_and_video_download_queue.sql`: tenant-scoped channel sync state and rights-gated video download queue, with composite tenant foreign keys, unique candidate jobs, status/attempt constraints and due-queue indexes.
+- `docs/design/CHANNEL_AUTOMATIC_DISCOVERY_AND_VIDEO_INTAKE.md`: intended workflow, safety requirements, provider contract, rights gate and acceptance tests.
+
+Not yet implemented/verified:
+- live permitted provider connector and metadata polling;
+- scheduler/scan-run persistence and cursor continuation;
+- AI ranking wired to discovered candidates;
+- rights-review UI/API;
+- actual media downloader and worker;
+- asset-library linkage and end-to-end tests.
+
+Migration 021 is storage groundwork only. Do not enable polling or claim automatic downloads until an approved connector and worker exist and pass target-environment tests.
