@@ -29,7 +29,7 @@ def test_settings_reject_insecure_remote_provider_url(monkeypatch) -> None:
         LLMSettings.from_environment()
 
 
-def test_openai_compatible_adapter_sends_json_mode_and_parses_response() -> None:
+def test_gemini_openai_compatible_endpoint_sends_json_mode_and_parses_response() -> None:
     seen: dict[str, object] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -40,7 +40,13 @@ def test_openai_compatible_adapter_sends_json_mode_and_parses_response() -> None
             "choices": [{"message": {"content": json.dumps({"summary": "structured output"})}}]
         })
 
-    settings = LLMSettings("https://provider.example/v1", "server-secret", "test-model", 5, 512)
+    settings = LLMSettings(
+        "https://generativelanguage.googleapis.com/v1beta/openai",
+        "gemini-test-key",
+        "gemini-3.8-flash",
+        5,
+        512,
+    )
     llm = OpenAICompatibleLLM(settings, transport=httpx.MockTransport(handler))
     result = asyncio.run(llm.complete_json(
         system_prompt="Return JSON only.",
@@ -48,10 +54,12 @@ def test_openai_compatible_adapter_sends_json_mode_and_parses_response() -> None
     ))
 
     assert result == {"summary": "structured output"}
-    assert seen["url"] == "https://provider.example/v1/chat/completions"
-    assert seen["authorization"] == "Bearer server-secret"
+    assert seen["url"] == (
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    )
+    assert seen["authorization"] == "Bearer gemini-test-key"
     assert seen["body"]["response_format"] == {"type": "json_object"}
-    assert seen["body"]["model"] == "test-model"
+    assert seen["body"]["model"] == "gemini-3.8-flash"
 
 
 def test_openai_compatible_adapter_rejects_non_json_content() -> None:
