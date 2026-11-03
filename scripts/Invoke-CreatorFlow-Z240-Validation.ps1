@@ -29,8 +29,9 @@ function Invoke-Check([string]$Name, [scriptblock]$Action) {
     try {
         $global:LASTEXITCODE = 0
         $output = & $Action 2>&1
+        $commandSucceeded = $?
         $nativeExitCode = $global:LASTEXITCODE
-        if (-not $?) { throw 'Lệnh hệ thống kết thúc không thành công.' }
+        if (-not $commandSucceeded) { throw 'Lệnh hệ thống kết thúc không thành công.' }
         if ($nativeExitCode -ne 0) {
             $detail = ($output | Out-String).Trim()
             if (-not $detail) { $detail = "Native command exit code: $nativeExitCode" }
@@ -77,7 +78,9 @@ if (-not $SkipDotNetTests) {
 }
 if (-not $SkipPythonTests) {
     Require-Command python
-    if (-not (python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)" 2>$null)) {
+    & python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)" 2>$null
+    $pytestProbeExitCode = $LASTEXITCODE
+    if ($pytestProbeExitCode -ne 0) {
         Add-Result 'Python AI tests' 'BLOCKED' "Python=$((python --version 2>&1 | Out-String).Trim()); thiếu pytest nên không chạy test."
     } else {
         Invoke-Check 'Python AI tests' { python -m pytest ai/tests -q }
