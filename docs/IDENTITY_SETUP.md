@@ -6,7 +6,7 @@ This branch uses an external OpenID Connect provider for authentication. Creator
 
 The development Compose file includes Keycloak `26.8.1`, persisted in the `keycloak_data` Docker volume and bound only to the Z240 loopback interface at port `8180`. It uses Keycloak's `start-dev` mode and its development database; **this is not a production deployment**.
 
-The same issuer hostname must be reachable by the Windows-hosted API, the Docker Web container and the browser. This setup uses `creatorflow-id.test`:
+The same issuer hostname must resolve to the local Keycloak service in three places: Windows-hosted API and browser resolve it to loopback, while Docker Web resolves it through the Compose network alias. This setup uses `creatorflow-id.test`:
 1. Open **PowerShell as Administrator** on Z240 and add the local host mapping once:
    ```powershell
    $hosts = Join-Path $env:SystemRoot "System32\drivers\etc\hosts"
@@ -14,7 +14,13 @@ The same issuer hostname must be reachable by the Windows-hosted API, the Docker
        Add-Content -Path $hosts -Value "`r`n127.0.0.1 creatorflow-id.test"
    }
    ```
-2. In the project `.env` (never commit it), set unique strong values for `KEYCLOAK_ADMIN_PASSWORD`, `Authentication__Oidc__ClientSecret` and `Authentication__OwnerBootstrapToken`. Keep these values out of chat, logs and Git.
+2. In the project `.env` (never commit it), set unique strong values for `KEYCLOAK_ADMIN_PASSWORD` and `Authentication__OwnerBootstrapToken`; obtain `Authentication__Oidc__ClientSecret` from Keycloak after creating the confidential client. To generate a local high-entropy hex secret without displaying an existing secret, run this in PowerShell and copy its output directly into the local `.env`:
+   ```powershell
+   $bytes = [byte[]]::new(32)
+   [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+   [Convert]::ToHexString($bytes)
+   ```
+   Run it separately for the admin password and Owner bootstrap token. Keep these values out of chat, logs and Git.
 3. Set `KEYCLOAK_PUBLIC_URL=http://creatorflow-id.test:8180` and the exact matching issuer `Authentication__Oidc__Authority=http://creatorflow-id.test:8180/realms/creatorflow`.
 4. Start the identity provider:
    ```powershell
@@ -33,7 +39,7 @@ The same issuer hostname must be reachable by the Windows-hosted API, the Docker
    - Copy the generated client secret into `Authentication__Oidc__ClientSecret`.
 7. Create an OpenID Connect client scope named `creatorflow-api`. Add an **Audience** protocol mapper with custom audience `creatorflow-api`, enabled for the access token. Assign this scope to `creatorflow-web` as an optional client scope so the requested `creatorflow-api` scope adds the audience to the access token. Set `Authentication__Oidc__ApiScope=creatorflow-api` and `Authentication__Oidc__Audience=creatorflow-api`.
 8. Assign the built-in `profile` and `email` client scopes. Ensure the ID token/UserInfo provides `email` and `email_verified=true`. Create a test user, set a password, and verify the email claim. Configure OTP/MFA for Owner/Admin before any public or shared deployment.
-9. Rebuild/recreate Web after adding the OIDC settings, and restart the native API after loading the same `.env` values. The API must use the same `Authentication__Oidc__Authority` and `Authentication__Oidc__Audience` as Web/Keycloak.
+9. Rebuild/recreate Web after adding the OIDC settings, and restart the native API after loading the same `.env` values. The Compose network alias `creatorflow-id.test` routes Web to Keycloak internally; the Windows hosts entry routes the browser and native API to the loopback-published port. The API must use the same `Authentication__Oidc__Authority` and `Authentication__Oidc__Audience` as Web/Keycloak.
 
 Development-only HTTP OIDC metadata is enabled only when ASP.NET Core runs in the `Development` environment. Both Web and API continue to require HTTPS metadata outside Development. Do not carry the HTTP authority, `start-dev`, or the development database into Production. Production requires a stable HTTPS issuer, TLS, a production database (for example PostgreSQL), protected secrets, and a non-public administration surface. See the [Keycloak production guide](https://www.keycloak.org/server/configuration-production).
 
