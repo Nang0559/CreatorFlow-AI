@@ -60,6 +60,23 @@ public sealed class TenantIdentityTests
         Assert.Throws<ArgumentOutOfRangeException>(() => TenantMembership.Create(Guid.NewGuid(), "issuer", "subject", (TenantRole)999, Now));
     }
 
+
+    [Fact]
+    public void Membership_normalizes_verified_email_for_workspace_admin()
+    {
+        var membership = TenantMembership.Create(Guid.NewGuid(), "issuer", "subject",
+            TenantRole.Editor, Now, "  USER@Example.COM ");
+
+        Assert.Equal("user@example.com", membership.VerifiedEmail);
+    }
+
+    [Fact]
+    public void Membership_rejects_invalid_verified_email()
+    {
+        Assert.Throws<ArgumentException>(() => TenantMembership.Create(Guid.NewGuid(), "issuer",
+            "subject", TenantRole.Editor, Now, "not-an-email"));
+    }
+
     [Fact]
     public void Suspended_membership_cannot_change_role()
     {
