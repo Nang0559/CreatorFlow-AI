@@ -8,42 +8,41 @@ services:
       KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:?Set KEYCLOAK_PUBLIC_URL in .env}
       KC_HTTP_PORT: "8180"
       KC_HEALTH_ENABLED: "true"
-    ports:
-      - "127.0.0.1:8180:8180"
-      - "127.0.0.1:9100:9000"
+    ports: ["127.0.0.1:8180:8180","127.0.0.1:9100:9000"]
     networks:
       default:
-        aliases:
-          - creatorflow-id.test
-    volumes:
-      - keycloak_data:/opt/keycloak/data
+        aliases: [creatorflow-id.test]
+    volumes: [keycloak_data:/opt/keycloak/data]
     restart: unless-stopped
-
   ai:
     build:
       context: .
       dockerfile: docker/ai/Dockerfile
     environment:
       CREATORFLOW_AI_API_KEY: ${CREATORFLOW_AI_API_KEY:?Set CREATORFLOW_AI_API_KEY in .env (at least 32 characters)}
-      CREATORFLOW_LLM_BASE_URL: ${CREATORFLOW_LLM_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
-      CREATORFLOW_LLM_API_KEY: ${CREATORFLOW_LLM_API_KEY:-}
-      CREATORFLOW_LLM_MODEL: ${CREATORFLOW_LLM_MODEL:-gemini-3.8-flash}
+      CREATORFLOW_LLM_PRIMARY_PROVIDER: ${CREATORFLOW_LLM_PRIMARY_PROVIDER:-gemini}
+      CREATORFLOW_LLM_FALLBACK_PROVIDERS: ${CREATORFLOW_LLM_FALLBACK_PROVIDERS:-openai}
+      CREATORFLOW_LLM_GEMINI_BASE_URL: ${CREATORFLOW_LLM_GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      CREATORFLOW_LLM_GEMINI_API_KEY: ${CREATORFLOW_LLM_GEMINI_API_KEY:-${CREATORFLOW_LLM_API_KEY:-}}
+      CREATORFLOW_LLM_GEMINI_MODEL: ${CREATORFLOW_LLM_GEMINI_MODEL:-${CREATORFLOW_LLM_MODEL:-gemini-3.8-flash}}
+      CREATORFLOW_LLM_OPENAI_BASE_URL: ${CREATORFLOW_LLM_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      CREATORFLOW_LLM_OPENAI_API_KEY: ${CREATORFLOW_LLM_OPENAI_API_KEY:-}
+      CREATORFLOW_LLM_OPENAI_MODEL: ${CREATORFLOW_LLM_OPENAI_MODEL:-gpt-4.1-mini}
+      CREATORFLOW_LLM_OLLAMA_BASE_URL: ${CREATORFLOW_LLM_OLLAMA_BASE_URL:-http://host.docker.internal:11434/v1}
+      CREATORFLOW_LLM_OLLAMA_API_KEY: ${CREATORFLOW_LLM_OLLAMA_API_KEY:-ollama}
+      CREATORFLOW_LLM_OLLAMA_MODEL: ${CREATORFLOW_LLM_OLLAMA_MODEL:-}
       CREATORFLOW_LLM_TIMEOUT_SECONDS: ${CREATORFLOW_LLM_TIMEOUT_SECONDS:-60}
       CREATORFLOW_LLM_MAX_OUTPUT_TOKENS: ${CREATORFLOW_LLM_MAX_OUTPUT_TOKENS:-3000}
-    ports:
-      - "127.0.0.1:8001:8000"
+      CREATORFLOW_LLM_RETRIES_PER_PROVIDER: ${CREATORFLOW_LLM_RETRIES_PER_PROVIDER:-1}
+      CREATORFLOW_LLM_RETRY_BACKOFF_SECONDS: ${CREATORFLOW_LLM_RETRY_BACKOFF_SECONDS:-1}
+    ports: ["127.0.0.1:8001:8000"]
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"
+      test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
       interval: 15s
       timeout: 5s
       retries: 5
       start_period: 10s
     restart: unless-stopped
-
   web:
     build:
       context: .
@@ -59,12 +58,10 @@ services:
       Authentication__Oidc__ApiScope: ${Authentication__Oidc__ApiScope:-}
       Authentication__OwnerBootstrapToken: ${Authentication__OwnerBootstrapToken:-}
       Authentication__OwnerBootstrapEnabled: ${Authentication__OwnerBootstrapEnabled:-true}
-    ports:
-      - "${CREATORFLOW_WEB_BIND_IP:-127.0.0.1}:8080:8080"
+    ports: ["${CREATORFLOW_WEB_BIND_IP:-127.0.0.1}:8080"]
     depends_on:
       ai:
         condition: service_healthy
     restart: unless-stopped
-
 volumes:
   keycloak_data:
