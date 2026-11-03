@@ -34,6 +34,38 @@ class LLMSettings:
     retry_backoff_seconds:float=1.0
 
     @classmethod
+    def from_route(cls, route:dict[str,Any])->"LLMSettings":
+        try:
+            primary=route["primary"]
+            name=str(primary["name"]).strip()
+            base=str(primary["base_url"]).strip().rstrip("/")
+            key=str(primary["api_key"]).strip()
+            model=str(primary["model"]).strip()
+            timeout=float(primary.get("timeout_seconds",120))
+            tokens=int(primary.get("max_output_tokens",3000))
+            if not name or not key or not model or timeout<5 or timeout>300 or not 256<=tokens<=16000:
+                raise ValueError("Invalid primary provider settings.")
+            def validate(url:str)->None:
+                p=urlparse(url)
+                if p.scheme!="https" and not (p.scheme=="http" and p.hostname in {"localhost","127.0.0.1","::1","host.docker.internal"}):
+                    raise ValueError("Provider URL must use HTTPS except local endpoints.")
+                if not p.hostname or p.username or p.password or p.query or p.fragment:
+                    raise ValueError("Provider URL is invalid.")
+            validate(base)
+            fallbacks=[]
+            for item in route.get("fallbacks",[]):
+                fb_name=str(item["name"]).strip()
+                fb_base=str(item["base_url"]).strip().rstrip("/")
+                fb_key=str(item["api_key"]).strip()
+                fb_model=str(item["model"]).strip()
+                if fb_name and fb_key and fb_model:
+                    validate(fb_base)
+                    fallbacks.append(ProviderConfig(fb_name,fb_base,fb_key,fb_model))
+            return cls(base,key,model,timeout,tokens,name,tuple(fallbacks),1,1.0)
+        except (KeyError,TypeError,ValueError) as exc:
+            raise AIConfigurationError("Workspace AI provider route is invalid.") from exc
+
+    @classmethod
     def from_environment(cls)->"LLMSettings":
         try:
             timeout=float(os.getenv("CREATORFLOW_LLM_TIMEOUT_SECONDS","60"))
