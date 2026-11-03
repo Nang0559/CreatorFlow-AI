@@ -155,7 +155,7 @@ topics.MapPost("/{id:guid}/discovery-plan", async (Guid id, CreateTopicDiscovery
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
     var topic = await db.ContentTopics.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.IsActive, ct);
     if (topic is null) return Results.NotFound();
-    var keywords = topic.Keywords.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    var keywords = topic.Keywords.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
         .Distinct(StringComparer.OrdinalIgnoreCase).Take(30).ToArray();
     var payload = new AiDiscoveryQueryPlanRequest(topic.Name, keywords, "Vietnam",
         string.IsNullOrWhiteSpace(request.ProductContext) ? null : request.ProductContext.Trim(),
