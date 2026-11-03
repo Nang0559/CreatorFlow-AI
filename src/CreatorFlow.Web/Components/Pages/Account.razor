@@ -13,7 +13,7 @@
         <h1>Tài khoản và không gian làm việc</h1>
         <p class="muted">Một tài khoản có thể tham gia nhiều không gian làm việc. Dữ liệu và quyền truy cập được tách theo từng không gian.</p>
     </div>
-    <button class="secondary" @onclick="LogoutAsync">Đăng xuất</button>
+    @if (isAuthenticated) { <button class="secondary" @onclick="LogoutAsync">Đăng xuất</button> }
 </header>
 @if (!isAuthenticated)
 {
@@ -52,7 +52,7 @@ else if (!string.IsNullOrWhiteSpace(error))
         </article>
     }
 </section>
-@if (activeWorkspace is not null)
+@if (activeWorkspace is not null && CanManage)
 {
     <section class="panel">
         <div class="panel-heading"><div><p class="eyebrow">THÀNH VIÊN</p><h2>Quản lý thành viên</h2></div><span class="status">@members.Count thành viên</span></div>
