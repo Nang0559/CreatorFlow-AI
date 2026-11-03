@@ -73,3 +73,19 @@ Migration 021 tạo bảng lịch đồng bộ kênh và hàng đợi tải vide
 - Health HTTP thành công chỉ xác nhận tiến trình phản hồi, không xác nhận nghiệp vụ end-to-end.
 
 Khi script hoàn tất, vẫn cần kiểm thử thao tác thực tế trên UI: tạo chủ đề, đăng ký/theo dõi kênh, gửi link vào hộp thư, tạo nội dung/biến thể, tải video có quyền sử dụng, dựng MP4, xem trước và tải MP4. Chức năng quét Douyin tự động vẫn phụ thuộc connector chính thức/được cấp phép và worker tương ứng; migration 021 một mình không bật được tính năng đó.
+
+## SQL tenant migrations — chỉ thực hiện sau khi có xác nhận
+
+Lệnh migration thông thường không bật tenant migrations. Sau khi đã sao lưu database QC và xác nhận toàn bộ dữ liệu hiện tại thuộc duy nhất một workspace, lệnh đầy đủ sẽ là:
+
+```powershell
+.\database\Apply-Migrations.ps1 `
+    -SqlInstance localhost `
+    -Database CreatorFlow_QC `
+    -IncludeTenantMigrations `
+    -ConfirmLegacyWorkspaceAssignment
+```
+
+Lệnh này bao gồm các migration tenant 011–013 và các migration phụ thuộc 016–023. Migration 012 gán các bản ghi hiện hữu trong danh sách bảng của nó cho workspace `legacy-workspace`. Nếu database có dữ liệu của nhiều khách hàng hoặc chưa rõ chủ sở hữu, **không chạy lệnh này**; cần lập mapping TenantId theo dữ liệu đã được duyệt trước.
+
+Sau khi migration chạy, chạy lại script kiểm tra để xác nhận ledger ghi nhận 021, 022 và 023. Migration 022 hiện chỉ tạo cấu trúc gói/quota/usage; chưa bật thanh toán hoặc thực thi quota.
