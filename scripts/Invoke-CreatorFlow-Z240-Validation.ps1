@@ -16,7 +16,7 @@ Set-StrictMode -Version Latest
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $repoRoot
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$reportDir = Join-Path $repoRoot 'artifacts\z240-validation'
+$reportDir = Join-Path $repoRoot 'artifacts\\z240-validation'
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 $reportPath = Join-Path $reportDir "z240-validation-$stamp.txt"
 $results = [System.Collections.Generic.List[object]]::new()
@@ -27,8 +27,15 @@ function Add-Result([string]$Name, [string]$Status, [string]$Detail) {
 }
 function Invoke-Check([string]$Name, [scriptblock]$Action) {
     try {
+        $global:LASTEXITCODE = 0
         $output = & $Action 2>&1
+        $nativeExitCode = $global:LASTEXITCODE
         if (-not $?) { throw 'Lệnh hệ thống kết thúc không thành công.' }
+        if ($nativeExitCode -ne 0) {
+            $detail = ($output | Out-String).Trim()
+            if (-not $detail) { $detail = "Native command exit code: $nativeExitCode" }
+            throw $detail
+        }
         $text = ($output | Out-String).Trim()
         Add-Result $Name 'PASS' ($(if ($text) { $text } else { 'Hoàn tất.' }))
         return $true
@@ -70,7 +77,11 @@ if (-not $SkipDotNetTests) {
 }
 if (-not $SkipPythonTests) {
     Require-Command python
-    Invoke-Check 'Python AI tests' { python -m pytest ai/tests -q }
+    if (-not (python -c "import importlib.util,sys; sys.exit(0 if importlib.util.find_spec('pytest') else 1)" 2>$null)) {
+        Add-Result 'Python AI tests' 'BLOCKED' "Python=$((python --version 2>&1 | Out-String).Trim()); thiếu pytest nên không chạy test."
+    } else {
+        Invoke-Check 'Python AI tests' { python -m pytest ai/tests -q }
+    }
 }
 Require-Command docker
 Invoke-Check 'Docker daemon' { docker info --format 'Docker daemon sẵn sàng: {{.ServerVersion}}' }
@@ -128,6 +139,8 @@ ORDER BY MigrationId;
 $results | Format-Table -Wrap -AutoSize | Out-String -Width 240 | Set-Content -LiteralPath $reportPath -Encoding utf8
 $failed = @($results | Where-Object Status -eq 'FAIL').Count
 $blocked = @($results | Where-Object Status -eq 'BLOCKED').Count
-$summary = "Kết quả: $(@($results | Where-Object Status -eq 'PASS').Count) PASS, $failed FAIL, $blocked BLOCKED. Báo cáo: $reportPath"
+$passed = @($results | Where-Object Status -eq 'PASS').Count
+$summary = "Kết quả: $passed PASS, $failed FAIL, $blocked BLOCKED. Báo cáo: $reportPath"
 Write-Host $summary
 if ($failed -gt 0) { exit 1 }
+if ($blocked -gt 0) { exit 2 }
