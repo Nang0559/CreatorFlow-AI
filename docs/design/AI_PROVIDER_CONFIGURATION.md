@@ -48,15 +48,27 @@ Readiness confirms configuration only, not remote key validity, quota or live av
 
 AI providers supply inference only. They do not discover Douyin/TikTok channels or supply sales evidence. Discovery requires an approved data provider and permitted access. Views and engagement are not proof of sales; sales claims require authorized commerce/affiliate evidence.
 
-## Workspace-managed provider registry (implementation status)
+## Workspace-managed provider registry
 
-Migration `024_ai_provider_registry.sql` introduces the tenant-scoped `dbo.AIProviders` registry. It stores provider metadata, active state, routing role, fallback order, timeout and output-token limits. The encrypted credential column is reserved for ciphertext only. The schema enforces at most one active Primary and unique active fallback positions per workspace.
+Migration `024_ai_provider_registry.sql` creates the tenant-scoped `dbo.AIProviders` registry. Owner/Admin users manage providers at `/settings/ai-providers`. The API returns metadata and a `HasApiKey` flag only; it never returns the plaintext key or its ciphertext. An empty API-key field during update preserves the existing credential.
 
-The registry schema and EF persistence mapping are now present on `feature/topic-driven-channel-discovery`. **The management API, secret-protection service, AI runtime hand-off, connection test endpoint, UI and automated integration tests are not yet implemented.** Until those pieces are delivered, the AI service continues to use the environment-based configuration described above; do not enter credentials into the database manually and do not treat the registry as active routing configuration.
+The API encrypts credentials with ASP.NET Core Data Protection. The key ring is persisted outside the repository under `%LOCALAPPDATA%\\CreatorFlow\\DataProtectionKeys` for the Windows account running the API, unless `CREATORFLOW_DATA_PROTECTION_KEYS_PATH` is explicitly configured. Back up this directory securely; losing it makes stored provider credentials undecryptable. Do not copy it into Git, Docker images or shared logs.
 
-The next implementation steps are:
-1. Add owner/admin-only tenant-scoped CRUD and routing validation endpoints.
-2. Encrypt credentials using a persistent server-side data-protection key ring; never return ciphertext or plaintext to the browser.
-3. Pass the selected tenant's decrypted, validated provider route from API to the AI service over the authenticated internal service channel.
-4. Add provider connection tests and transient-error failover reporting.
-5. Add the `/settings/ai-providers` UI and tests for tenant isolation, secret redaction, one-primary enforcement, ordering and failover.
+When a workspace has an active Primary provider, the API decrypts its route and sends it to the AI service only over the authenticated internal API-to-AI channel. The AI service uses that route for the current request and applies the configured fallbacks. If no active workspace Primary exists, the existing environment-based Gemini/OpenAI/Ollama configuration remains the fallback. The browser never receives provider credentials.
+
+The provider test calls the OpenAI-compatible `/models` endpoint. A successful test confirms endpoint authentication/availability at that moment; it does not guarantee inference quota or that every model operation is supported.
+
+## Apply on the Z240
+
+1. Pull the latest `feature/topic-driven-channel-discovery` branch.
+2. Apply tenant migration `024_ai_provider_registry.sql` with the existing migration runner and its tenant-migration confirmation safeguards. Do not use `down -v`.
+3. Start the API using the same Windows account each time so the persistent Data Protection key ring remains accessible. If you choose a custom key-ring directory, set `CREATORFLOW_DATA_PROTECTION_KEYS_PATH` before starting the API and restrict its NTFS permissions to that account.
+4. Rebuild the Web and AI containers after pulling. The API runs natively on Windows and must be restarted to load the new code.
+5. Sign in as workspace Owner/Admin and open `/settings/ai-providers`. Add Gemini as active Primary. Add OpenAI as Fallback only after its API billing/key is ready. Add Ollama only if a local model is installed and reachable from the AI container at `host.docker.internal`.
+6. Test each provider, then run one real discovery-plan or analysis request. Provider test alone does not prove inference success.
+
+Keep the environment-based Gemini configuration in place during initial rollout so there is a fallback if the workspace registry is empty. Never paste credentials into chat, source files, migration scripts or logs.
+
+## Boundaries
+
+AI providers supply inference only. They do not discover Douyin/TikTok channels or supply sales evidence. Discovery requires an approved data provider and permitted access. Views and engagement are not proof of sales; sales claims require authorized commerce/affiliate evidence.
