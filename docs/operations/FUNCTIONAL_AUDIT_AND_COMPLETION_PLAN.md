@@ -131,3 +131,13 @@ Remaining blocker: no approved Douyin/TikTok metadata connector or media-downloa
 - `Apply-Migrations.ps1` still intentionally excludes 011–013 and dependent 016–022 unless both `-IncludeTenantMigrations` and `-ConfirmLegacyWorkspaceAssignment` are explicitly supplied.
 - Migration 012 assigns all listed existing rows to the single `legacy-workspace`. This is safe only after confirming the QC database is a single-workspace dataset. Never run it on multi-customer data without a reviewed ownership mapping.
 - Do not ask the operator to run migrations until the Z240 validation report and the actual QC ownership/ledger state have been reviewed.
+
+## Downloader technology and source integrity decision (2026-11-03)
+
+The acquisition design is now explicit: a reviewed provider connector resolves a canonical provider ID to an authorized stream; .NET `HttpClient` performs bounded streaming to tenant-isolated temporary storage; SHA-256 and FFprobe verify the acquired source; an atomic move commits the immutable source master. FFmpeg is reserved for derivative rendering, not provider acquisition.
+
+No generic yt-dlp fallback is approved for arbitrary Douyin/TikTok URLs. A downloader package does not establish permission to access or reuse media. No login/session extraction, access-control circumvention, DRM bypass, rate-limit evasion or watermark/attribution removal is permitted.
+
+Source masters must remain byte-for-byte immutable with provenance and rights evidence. Derivatives are separate files with separate hashes and must preserve legally/contractually required attribution. A clean master is accepted only when supplied by the rights holder or an authorized source.
+
+This is a documented engineering decision, **not an implemented downloader**. Migration 021 still supplies only queue/schedule storage. Connector, rights-review API/UI, acquisition worker, FFprobe/hash validation, asset linkage and end-to-end tests remain open.
