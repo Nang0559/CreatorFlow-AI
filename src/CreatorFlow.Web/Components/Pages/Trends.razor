@@ -115,6 +115,11 @@
     </div>
     <div class="form-actions"><button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(selectedTopicId))" @onclick="DiscoverByTopicAsync">@(busy ? "Đang lập kế hoạch…" : "Tìm kênh theo chủ đề")</button>
         <span class="muted">Chọn một chủ đề đang sử dụng trong mục Quản lý chủ đề bên dưới. Không tự tạo số liệu bán hàng.</span></div>
+    <div class="panel" style="margin-top:14px">
+        <div class="panel-heading"><div><p class="eyebrow">AI RUNTIME LOG</p><h3>Nhật ký nhà cung cấp AI</h3></div><span class="status">@discoveryLogs.Count lần gọi</span></div>
+        @if (discoveryLogs.Count == 0) { <p class="muted">Chưa có lần tìm kiếm nào trong phiên này. Nhật ký sẽ ghi provider/model thực tế và các lần fallback sau khi bạn nhấn tìm kiếm.</p> }
+        @foreach (var entry in discoveryLogs) { <div style="padding:8px 0;border-bottom:1px solid var(--border,#ddd)"><strong>@entry.Time.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") · @entry.Status</strong><div class="muted">@entry.Detail</div></div> }
+    </div>
     @if (discoveryPlan is not null)
     {
         <div class="discovery-plan">
@@ -177,6 +182,7 @@
     private string topicName = "", topicKeywords = "";
     private Guid? editingTopicId;
     private DiscoveryPlanItem? discoveryPlan;
+    private List<DiscoveryLogItem> discoveryLogs = [];
 
     [Parameter, SupplyParameterFromQuery(Name = "sharedUrl")] public string? IncomingSharedUrl { get; set; }
     private string? lastAutoSubmittedLink;
@@ -285,14 +291,39 @@
         try
         {
             busy = true; error = ""; successMessage = ""; discoveryPlan = null;
-            discoveryPlan = await Api.PostAsync<object, DiscoveryPlanItem>($"/api/v1/topics/{topicId}/discovery-plan",
+            var started = DateTimeOffset.UtcNow;
+            discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG XỬ LÝ", "Đang gửi yêu cầu lập kế hoạch khám phá; chờ AI runtime phản hồi."));
+            var result = await Api.PostWithMetadataAsync<object, DiscoveryPlanItem>($"/api/v1/topics/{topicId}/discovery-plan",
                 new { productContext = discoveryProductContext, audienceContext = discoveryAudienceContext, maxQueries = 8 });
+            discoveryPlan = result.Data;
+            var detail = ParseProviderTrace(result.ProviderTrace);
+            discoveryLogs[0] = new DiscoveryLogItem(started, discoveryPlan is null ? "KHÔNG CÓ KẾT QUẢ" : "THÀNH CÔNG", detail);
             if (discoveryPlan is null) error = "AI chưa trả về kế hoạch tìm kiếm.";
             else successMessage = "Đã tạo bộ truy vấn khám phá cho chủ đề.";
         }
-        catch (Exception ex) { error = ToUserMessage(ex); }
+        catch (Exception ex)
+        {
+            error = ToUserMessage(ex);
+            if (discoveryLogs.Count > 0 && discoveryLogs[0].Status == "ĐANG XỬ LÝ")
+                discoveryLogs[0] = discoveryLogs[0] with { Status = "THẤT BẠI", Detail = error };
+        }
         finally { busy = false; }
     }
+
+    private static string ParseProviderTrace(string? encoded)
+    {
+        if (string.IsNullOrWhiteSpace(encoded)) return "Không nhận được metadata provider từ AI service; không thể xác nhận model thực tế.";
+        try
+        {
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+            var attempts = System.Text.Json.JsonSerializer.Deserialize<List<ProviderAttempt>>(json) ?? [];
+            return attempts.Count == 0 ? "AI service không ghi nhận provider attempt." : string.Join(" → ", attempts.Select(x => $"{x.Provider}/{x.Model}: {x.Status}{(string.IsNullOrWhiteSpace(x.Reason) ? "" : " (" + x.Reason + ")")}"));
+        }
+        catch { return "Metadata provider nhận được nhưng không đọc được; kiểm tra log API/AI." ; }
+    }
+
+    private sealed record ProviderAttempt(string Provider, string Model, string Status, string? Reason);
+    private sealed record DiscoveryLogItem(DateTimeOffset Time, string Status, string Detail);
 
     private async Task LoadShareInboxAsync()
     {
