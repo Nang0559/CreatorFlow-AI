@@ -28,6 +28,7 @@ function Add-Result([string]$Name, [string]$Status, [string]$Detail) {
 function Invoke-Check([string]$Name, [scriptblock]$Action) {
     try {
         $output = & $Action 2>&1
+        if (-not $?) { throw 'Lệnh hệ thống kết thúc không thành công.' }
         $text = ($output | Out-String).Trim()
         Add-Result $Name 'PASS' ($(if ($text) { $text } else { 'Hoàn tất.' }))
         return $true
