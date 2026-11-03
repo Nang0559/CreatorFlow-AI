@@ -16,7 +16,7 @@ public sealed class CreatorFlowApiClient(
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
         await AddIdentityHeadersAsync(request);
         using var response = await http.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, ct);
         return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct);
     }
 
@@ -26,7 +26,7 @@ public sealed class CreatorFlowApiClient(
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
         await AddIdentityHeadersAsync(request);
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, ct);
         var content = await response.Content.ReadAsByteArrayAsync(ct);
         var fileName = response.Content.Headers.ContentDisposition?.FileNameStar ??
                        response.Content.Headers.ContentDisposition?.FileName ??
@@ -46,7 +46,7 @@ public sealed class CreatorFlowApiClient(
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/video/assets") { Content = form };
         await AddIdentityHeadersAsync(request);
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, ct);
         return await response.Content.ReadFromJsonAsync<VideoUploadResponse>(cancellationToken: ct);
     }
 
@@ -67,7 +67,7 @@ public sealed class CreatorFlowApiClient(
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
         await AddIdentityHeadersAsync(request);
         using var response = await http.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, ct);
         if (response.Content.Headers.ContentLength == 0) return default;
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
     }
@@ -78,7 +78,7 @@ public sealed class CreatorFlowApiClient(
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
         await AddIdentityHeadersAsync(request);
         using var response = await http.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, ct);
     }
 
     public async Task PutNoContentAsync<TRequest>(string path, TRequest body, CancellationToken ct = default)
@@ -87,7 +87,56 @@ public sealed class CreatorFlowApiClient(
         using var request = new HttpRequestMessage(HttpMethod.Put, path) { Content = JsonContent.Create(body) };
         await AddIdentityHeadersAsync(request);
         using var response = await http.SendAsync(request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessAsync(response, ct);
+    }
+
+    private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        if (response.IsSuccessStatusCode) return;
+
+        var body = await response.Content.ReadAsStringAsync(ct);
+        var detail = ExtractApiError(body);
+        var status = (int)response.StatusCode;
+        var reason = response.ReasonPhrase ?? "Lỗi từ máy chủ";
+        var message = string.IsNullOrWhiteSpace(detail)
+            ? $"API trả về HTTP {status} ({reason})."
+            : $"API trả về HTTP {status} ({reason}): {detail}";
+
+        throw new HttpRequestException(message, null, response.StatusCode);
+    }
+
+    private static string ExtractApiError(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return string.Empty;
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(body);
+            var root = document.RootElement;
+            var parts = new List<string>();
+
+            if (root.TryGetProperty("detail", out var detail) && detail.ValueKind == System.Text.Json.JsonValueKind.String)
+                parts.Add(detail.GetString()!);
+            else if (root.TryGetProperty("title", out var title) && title.ValueKind == System.Text.Json.JsonValueKind.String)
+                parts.Add(title.GetString()!);
+
+            if (root.TryGetProperty("errors", out var errors) && errors.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                foreach (var property in errors.EnumerateObject())
+                {
+                    var messages = property.Value.ValueKind == System.Text.Json.JsonValueKind.Array
+                        ? string.Join("; ", property.Value.EnumerateArray().Select(x => x.ToString()))
+                        : property.Value.ToString();
+                    if (!string.IsNullOrWhiteSpace(messages))
+                        parts.Add($"{property.Name}: {messages}");
+                }
+            }
+
+            return string.Join(" ", parts.Distinct()).Trim();
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return body.Length <= 1200 ? body : body[..1200] + "…";
+        }
     }
 
     private async Task AddIdentityHeadersAsync(HttpRequestMessage request)
