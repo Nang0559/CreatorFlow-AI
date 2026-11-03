@@ -45,7 +45,7 @@ public sealed class CreatorFlowAiClient(
                         primary = Convert(primary),
                         fallbacks = rows.Where(x => x.RoutingRole == "Fallback").OrderBy(x => x.FallbackOrder).Select(Convert).ToArray()
                     };
-                    var encoded = Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(route)));
+                    var encoded = System.Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(route)));
                     request.Headers.TryAddWithoutValidation("X-CreatorFlow-LLM-Route", encoded);
                 }
                 catch (Exception)
