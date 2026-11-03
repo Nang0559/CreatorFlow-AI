@@ -71,3 +71,21 @@ def test_all_provider_failures_report_primary_and_fallback_errors():
     message=str(caught.value)
     assert "gemini: AI provider 'gemini' returned HTTP 503." in message
     assert "openai: AI provider 'openai' returned HTTP 429." in message
+
+
+def test_workspace_route_builds_primary_and_fallback_settings():
+    settings=LLMSettings.from_route({
+      "primary":{"name":"Gemini workspace","base_url":"https://generativelanguage.googleapis.com/v1beta/openai",
+                 "api_key":"secret-primary","model":"gemini-flash","timeout_seconds":90,"max_output_tokens":2048},
+      "fallbacks":[{"name":"OpenAI backup","base_url":"https://api.openai.com/v1",
+                    "api_key":"secret-fallback","model":"gpt-mini"}]})
+    assert settings.provider=="Gemini workspace"
+    assert settings.api_key=="secret-primary"
+    assert settings.timeout_seconds==90 and settings.max_output_tokens==2048
+    assert len(settings.fallbacks)==1 and settings.fallbacks[0].name=="OpenAI backup"
+
+
+def test_workspace_route_rejects_insecure_remote_url():
+    with pytest.raises(AIConfigurationError):
+        LLMSettings.from_route({"primary":{"name":"bad","base_url":"http://provider.example/v1",
+            "api_key":"secret","model":"model"}})
