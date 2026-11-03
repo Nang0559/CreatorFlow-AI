@@ -6,7 +6,8 @@ import base64
 import json
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Response, Response
+from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from creatorflow_ai.contracts import (
@@ -95,7 +96,6 @@ def rank_candidate(request: DiscoveryRankRequest) -> DiscoveryRankResponse:
           dependencies=[Depends(require_service_key)])
 async def discovery_query_plan(
     request: DiscoveryQueryPlanRequest,
-    response: Response,
     client: OpenAICompatibleLLM = Depends(get_llm_client),
 ) -> DiscoveryQueryPlanResponse:
     system_prompt = (
@@ -107,17 +107,17 @@ async def discovery_query_plan(
     )
     try:
         raw = await invoke_llm(client, system_prompt, request.model_dump())
-    except HTTPException:
-        response.headers["X-CreatorFlow-LLM-Trace"] = base64.b64encode(json.dumps(client.last_trace, ensure_ascii=False).encode("utf-8")).decode("ascii")
-        raise
-    response.headers["X-CreatorFlow-LLM-Trace"] = base64.b64encode(json.dumps(client.last_trace, ensure_ascii=False).encode("utf-8")).decode("ascii")
+    except HTTPException as exc:
+        trace = base64.b64encode(json.dumps(client.last_trace, ensure_ascii=False).encode("utf-8")).decode("ascii")
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers={"X-CreatorFlow-LLM-Trace": trace})
+    trace = base64.b64encode(json.dumps(client.last_trace, ensure_ascii=False).encode("utf-8")).decode("ascii")
     try:
         result = DiscoveryQueryPlanResponse.model_validate({**raw, "requires_human_review": True})
         if len(result.queries) > request.max_queries:
             raise ValueError("The model returned more queries than requested.")
     except (ValidationError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="Discovery query plan did not match the required contract.") from exc
-    return result
+    return JSONResponse(status_code=200, content=result.model_dump(), headers={"X-CreatorFlow-LLM-Trace": trace})
 
 
 @app.post("/v1/analyze", response_model=AnalyzeResponse, dependencies=[Depends(require_service_key)])
