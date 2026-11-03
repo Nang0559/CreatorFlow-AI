@@ -6,7 +6,7 @@
 <header class="page-header">
     <div><p class="eyebrow">TRÍ TUỆ XU HƯỚNG VIỆT NAM</p><h1>Xu hướng Việt Nam</h1>
         <p class="muted">Theo dõi kênh, video và âm thanh; lưu lịch sử chỉ số để nhận biết xu hướng tăng tốc.</p></div>
-    <button class="primary" @onclick="LoadAsync">Làm mới</button>
+    <button class="primary" disabled="@busy" @onclick="LoadAsync">@(busy ? "Đang xử lý…" : "Làm mới")</button>
 </header>
 
 @if (!Api.IsConfigured)
@@ -15,7 +15,11 @@
 }
 @if (!string.IsNullOrWhiteSpace(error))
 {
-    <section class="notice"><strong>Có lỗi khi tải dữ liệu</strong><p>@error</p></section>
+    <section class="notice validation-summary" role="alert"><strong>Chưa thực hiện được thao tác</strong><p>@error</p></section>
+}
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <section class="success-notice" role="status" aria-live="polite"><strong>@successMessage</strong></section>
 }
 <section class="panel share-inbox-panel">
     <div class="panel-heading">
@@ -51,19 +55,19 @@
     <div class="trend-form">
         <label>Loại<select @bind="kind"><option>Video</option><option value="CreatorChannel">Kênh sáng tạo</option><option value="Sound">Âm thanh</option></select></label>
         <label>Nền tảng<select @bind="platform"><option value="TikTokVietnam">TikTok Việt Nam</option><option value="YouTubeShortsVietnam">YouTube Shorts Việt Nam</option><option value="FacebookReelsVietnam">Facebook Reels Việt Nam</option><option value="Other">Khác</option></select></label>
-        <label>Mã nguồn<input @bind="externalId" placeholder="Mã video / mã kênh / mã âm thanh" /></label>
-        <label>Tiêu đề<input @bind="title" placeholder="Tên video, kênh hoặc âm thanh" /></label>
-        <label>Người sáng tạo<input @bind="creator" /></label>
-        <label>Đường dẫn HTTPS<input @bind="sourceUrl" placeholder="https://..." /></label>
-        <label>Chủ đề<input @bind="topic" placeholder="Ví dụ: gia dụng, làm đẹp" /></label>
-        <label>Tên nhạc<input @bind="soundName" /></label>
+        <label>Mã nguồn <span class="required-mark">* Bắt buộc · tối đa 180 ký tự</span><input @bind="externalId" maxlength="180" required aria-required="true" placeholder="Mã video / mã kênh / mã âm thanh" /></label>
+        <label>Tiêu đề <span class="required-mark">* Bắt buộc</span><input @bind="title" maxlength="300" required aria-required="true" placeholder="Tên video, kênh hoặc âm thanh" /></label>
+        <label>Người sáng tạo <span class="field-hint">Không bắt buộc</span><input @bind="creator" /></label>
+        <label>Đường dẫn HTTPS <span class="required-mark">* Bắt buộc</span><input @bind="sourceUrl" type="url" required aria-required="true" placeholder="https://..." /></label>
+        <label>Chủ đề <span class="field-hint">Không bắt buộc</span><input @bind="topic" placeholder="Ví dụ: gia dụng, làm đẹp" /></label>
+        <label>Tên nhạc <span class="field-hint">Không bắt buộc</span><input @bind="soundName" /></label>
         <label>Lượt xem<input type="number" min="0" @bind="views" /></label>
         <label>Lượt thích<input type="number" min="0" @bind="likes" /></label>
         <label>Bình luận<input type="number" min="0" @bind="comments" /></label>
         <label>Chia sẻ<input type="number" min="0" @bind="shares" /></label>
         <label>Lưu video<input type="number" min="0" @bind="saves" /></label>
     </div>
-    <button class="primary" disabled="@(!Api.IsConfigured || busy)" @onclick="CreateAsync">Lưu quan sát</button>
+    <div class="form-actions"><button class="primary" disabled="@(!Api.IsConfigured || busy)" @onclick="CreateAsync">@(busy ? "Đang lưu…" : "Lưu quan sát")</button><span class="muted">* Trường bắt buộc. Các chỉ số mặc định là 0 nếu chưa có dữ liệu.</span></div>
 </section>
 
 <section class="panel">
@@ -81,6 +85,7 @@
 @code {
     private List<CreatorFlow.Web.Services.VietnamTrendItem> items = [];
     private string error = "";
+    private string successMessage = "";
     private bool busy;
     private string kind = "Video", platform = "TikTokVietnam", externalId = "", title = "", creator = "", sourceUrl = "", topic = "", soundName = "";
     private long views, likes, comments, shares, saves;
@@ -105,9 +110,15 @@
 
     private async Task LoadAsync()
     {
-        if (!Api.IsConfigured) return;
-        try { error = ""; items = await Api.GetAsync<List<CreatorFlow.Web.Services.VietnamTrendItem>>("/api/v1/vietnam-trends?take=100") ?? []; }
-        catch (Exception ex) { error = ex.Message; }
+        if (!Api.IsConfigured || busy) return;
+        try
+        {
+            busy = true; error = ""; successMessage = "";
+            items = await Api.GetAsync<List<CreatorFlow.Web.Services.VietnamTrendItem>>("/api/v1/vietnam-trends?take=100") ?? [];
+            successMessage = "Đã tải " + items.Count + " mục xu hướng.";
+        }
+        catch (Exception ex) { error = ToUserMessage(ex); }
+        finally { busy = false; }
     }
 
 
@@ -146,16 +157,45 @@
     {
         try
         {
-            busy = true; error = "";
-            var request = new { kind, platform, externalId, title, creatorName = creator, sourceUrl, topic,
+            busy = true; error = ""; successMessage = "";
+            var validation = ValidateTrendForm();
+            if (validation is not null) { error = validation; return; }
+            var request = new { kind, platform, externalId = externalId.Trim(), title = title.Trim(), creatorName = creator, sourceUrl = sourceUrl.Trim(), topic,
                 soundName = string.IsNullOrWhiteSpace(soundName) ? null : soundName, soundArtist = (string?)null,
                 views, likes, comments, shares, saves, publishedAt = (DateTimeOffset?)null };
             await Api.PostAsync<object, object>("/api/v1/vietnam-trends", request);
+            successMessage = "Đã lưu ghi nhận xu hướng thành công.";
             externalId = title = creator = sourceUrl = topic = soundName = "";
             views = likes = comments = shares = saves = 0;
-            await LoadAsync();
+            items = await Api.GetAsync<List<CreatorFlow.Web.Services.VietnamTrendItem>>("/api/v1/vietnam-trends?take=100") ?? [];
         }
-        catch (Exception ex) { error = ex.Message; }
+        catch (Exception ex) { error = ToUserMessage(ex); }
         finally { busy = false; }
+    }
+
+    private string? ValidateTrendForm()
+    {
+        if (string.IsNullOrWhiteSpace(externalId)) return "Vui lòng nhập Mã nguồn.";
+        if (externalId.Trim().Length > 180) return "Mã nguồn không được vượt quá 180 ký tự.";
+        if (string.IsNullOrWhiteSpace(title)) return "Vui lòng nhập Tiêu đề.";
+        if (string.IsNullOrWhiteSpace(sourceUrl)) return "Vui lòng nhập Đường dẫn HTTPS.";
+        if (!Uri.TryCreate(sourceUrl.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            return "Đường dẫn nguồn phải là URL hợp lệ bắt đầu bằng https://.";
+        if (new[] { views, likes, comments, shares, saves }.Any(x => x < 0))
+            return "Các chỉ số không được là số âm.";
+        return null;
+    }
+
+    private static string ToUserMessage(Exception ex)
+    {
+        var message = ex.Message;
+        if (message.Contains("ExternalIdentifier", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("ExternalId", StringComparison.OrdinalIgnoreCase))
+            return "Mã nguồn là trường bắt buộc và không được vượt quá 180 ký tự.";
+        if (message.Contains("HTTP 409", StringComparison.OrdinalIgnoreCase))
+            return "Ghi nhận này đã tồn tại. Hãy dùng chức năng cập nhật quan sát thay vì tạo mục trùng.";
+        if (message.Contains("HTTP 400", StringComparison.OrdinalIgnoreCase))
+            return "Dữ liệu chưa hợp lệ. Hãy kiểm tra các trường có dấu * và định dạng đường dẫn HTTPS.";
+        return "Không thể hoàn tất yêu cầu. Chi tiết: " + message;
     }
 }
