@@ -111,7 +111,7 @@ ORDER BY MigrationId;
 "@ -ErrorAction Stop)
             $latest = if ($rows.Count) { $rows[-1].MigrationId } else { 'Chưa có migration' }
             Add-Result 'SQL migration ledger (chỉ đọc)' 'PASS' ("Đọc được $($rows.Count) migration; mới nhất: $latest")
-            $required = @('021_channel_sync_and_video_download_queue', '022_tenant_subscriptions_and_usage')
+            $required = @('021_channel_sync_and_video_download_queue', '022_tenant_subscriptions_and_usage', '023_tenant_member_contact')
             foreach ($id in $required) {
                 if ($rows.MigrationId -notcontains $id) {
                     Add-Result "SQL migration $id" 'BLOCKED' 'Chưa áp dụng. Script kiểm tra không tự chạy migration.'
