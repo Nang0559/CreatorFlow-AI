@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 import httpx
 import pytest
-from creatorflow_ai.llm import AIConfigurationError,AIInvalidOutputError,LLMSettings,OpenAICompatibleLLM,ProviderConfig
+from creatorflow_ai.llm import AIConfigurationError,AIInvalidOutputError,AIProviderError,LLMSettings,OpenAICompatibleLLM,ProviderConfig
 
 def test_settings_require_provider_key_and_model(monkeypatch):
     monkeypatch.delenv("CREATORFLOW_LLM_API_KEY",raising=False); monkeypatch.delenv("CREATORFLOW_LLM_MODEL",raising=False)
@@ -66,9 +66,8 @@ def test_all_provider_failures_report_primary_and_fallback_errors():
     llm=OpenAICompatibleLLM(settings,transports={
       "gemini":httpx.MockTransport(gemini),
       "openai":httpx.MockTransport(openai)})
-    with pytest.raises(Exception) as caught:
+    with pytest.raises(AIProviderError) as caught:
         asyncio.run(llm.complete_json(system_prompt="JSON",user_payload={}))
     message=str(caught.value)
-    assert "Gemini" not in message or "gemini:" in message
     assert "gemini: AI provider 'gemini' returned HTTP 503." in message
     assert "openai: AI provider 'openai' returned HTTP 429." in message
