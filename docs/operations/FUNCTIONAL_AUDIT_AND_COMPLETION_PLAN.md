@@ -36,12 +36,23 @@ This is a source-level baseline, not a completed audit or runtime acceptance.
 |---|---|---|
 | Trends page | `Trends.razor` wires LoadAsync, SaveSharedLinkAsync, LoadShareInboxAsync and CreateAsync. Its own UI text says shared links are stored but do not yet expand short links or change ranking. | Partial; runtime has reported HTTP 400/404 and must be traced to endpoint contracts. |
 | Analytics | `Analytics.razor` reads trend observations and style experiments and computes simple aggregate totals. It explicitly describes totals as raw recorded data, not direct platform metrics. | Partial; no evidence yet of complete attribution or experiment evaluation. |
-| Projects | `Projects.razor` lists and creates projects only in the inspected page. No edit/open/archive control was observed in that page. | Partial; verify API/domain capabilities and intended lifecycle. |
-| Style profiles | `StyleProfiles.razor` exists and uses the API client. Full workflow and persistence have not yet been verified. | Not yet assessed. |
-| Video workflow | The inspected Web UI exposes asset selection/upload and render jobs with preview/download for completed jobs. The visible failure text still mentions After Effects and FFmpeg, which conflicts with the selected FFmpeg-only initial engine. | Partial; align UI/config/docs and verify actual worker execution. |
-| Settings | `Settings.razor` checks the API root endpoint and labels the result “Đã kết nối”. This proves only the API root responded, not SQL, AI, storage, or render-worker readiness. | Failing health semantics; must report component-level checks honestly. |
+| Projects | `Projects.razor` and API currently expose list/create only; edit/open/archive lifecycle is not present in the inspected UI/API. Project page now validates title and shows busy/success/error feedback. | Partial; lifecycle operations remain to be designed and implemented with tenant-safe persistence. |
+| Style Lab | The page supports AI analysis/generation, 2–3 variants, ready/published/measure/evaluate actions and editing-package download. An editing-package button was rendered with no label; this has been corrected. Action feedback and basic required-field validation were added. | Partial; verify every route, metric validation, attribution and end-to-end AI/provider behavior. |
+| Style profiles | `StyleProfiles.razor` exposes create, analyze, LLM synthesis, learn and guidance update flows. | Partial; verify API contracts, tenant scoping, review/version history and failure UX. |
+| Video workflow | Upload, asset listing, render queue, batch jobs, job status, preview and download endpoints exist. Worker claims SQL jobs and invokes FFmpeg/FFprobe. | Partial; target-machine execution, retry correctness, output validation and worker health still require evidence. |
+| Settings | `Settings.razor` checks only the API root endpoint. It now explicitly states that this does not verify SQL Server, AI or worker; environment label reads the actual Web host environment. | Partial; component-level readiness endpoint and operational diagnostics remain to implement. |
 | Web startup | `Program.cs` registers Interactive Server components and the API client. This alone does not prove every event handler or endpoint contract works. | Source configuration present; runtime verification required. |
 | API startup | `CreatorFlow.Api/Program.cs` configures authentication/tenant middleware and maps some project/topic/video endpoints. Full endpoint-to-UI coverage remains to be inventoried. | Not yet assessed. |
+
+## Changes made during this audit
+
+- `Trends.razor`: basic client validation for required source ID/title/HTTPS URL, busy state, success/error feedback and duplicate/validation messages.
+- `Projects.razor`: required title validation, duplicate-submit guard, busy state and explicit success/error feedback.
+- `StyleLab.razor`: fixed the blank editing-package button label; added basic required-field checks and visible action feedback.
+- `Settings.razor`: corrected the health-check claim so API-root response is not represented as proof of SQL/AI/worker readiness; environment name is no longer hard-coded.
+- CSS: added shared styles for required/optional labels, validation summaries, success notices and disabled controls.
+
+These are source changes only until CI and Z240 runtime tests pass. No release gate is marked complete by these edits.
 
 ## Work sequence
 
