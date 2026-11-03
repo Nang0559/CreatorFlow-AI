@@ -1,10 +1,11 @@
 @page "/settings"
 @inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
+@inject IWebHostEnvironment Host
 <PageTitle>Cấu hình · CreatorFlow</PageTitle>
 <header class="page-header"><div><p class="eyebrow">CẤU HÌNH KHÔNG GIAN LÀM VIỆC</p><h1>Cấu hình hệ thống</h1><p class="muted">Kiểm tra trạng thái kết nối và các thành phần của môi trường local pilot.</p></div><button class="primary" @onclick="CheckAsync" disabled="@checking">Kiểm tra kết nối</button></header>
-<section class="panel"><div class="panel-heading"><div><p class="eyebrow">TRẠNG THÁI DỊCH VỤ</p><h2>Kết nối API</h2></div><span class="status">@status</span></div>
+<section class="panel"><div class="panel-heading"><div><p class="eyebrow">TRẠNG THÁI DỊCH VỤ</p><h2>Kết nối máy chủ API</h2></div><span class="status">@status</span></div>
     <p>@message</p>
-    <div class="variant-stats"><span>Web API client: @(Api.IsConfigured ? "Đã cấu hình Base URL" : "Chưa cấu hình")</span><span>API key: Không hiển thị trên giao diện</span><span>Environment: Development</span></div>
+    <div class="variant-stats"><span>Web API client: @(Api.IsConfigured ? "Đã cấu hình Base URL" : "Chưa cấu hình")</span><span>API key: Không hiển thị trên giao diện</span><span>Môi trường: @Host.EnvironmentName</span></div>
 </section>
 <section class="panel"><div class="panel-heading"><div><p class="eyebrow">KIẾN TRÚC TRIỂN KHAI</p><h2>Thành phần triển khai</h2></div></div>
     <div class="pipeline">
@@ -26,8 +27,9 @@
             checking = true;
             var response = await Api.GetAsync<System.Text.Json.JsonElement>("/");
             status = "Đã kết nối";
-            message = response.TryGetProperty("status", out var value) ? $"API phản hồi: {value.GetString()}." : "API đã phản hồi thành công.";
-        } catch (Exception ex) { status = "Lỗi kết nối"; message = ex.Message; }
+            message = response.TryGetProperty("status", out var value) ? $"Máy chủ API đang phản hồi ({value.GetString()}). Kiểm tra này chưa xác nhận SQL Server, AI hoặc worker." : "Máy chủ API đã phản hồi. Kiểm tra này chưa xác nhận SQL Server, AI hoặc worker.";
+        } catch (HttpRequestException) { status = "Lỗi kết nối"; message = "Web không thể kết nối tới API. Hãy kiểm tra API có đang chạy và Base URL có trỏ đúng địa chỉ từ bên trong Web container hay không."; }
+        catch (Exception) { status = "Kiểm tra thất bại"; message = "Không thể hoàn tất kiểm tra API. Hãy xem nhật ký máy chủ để biết chi tiết."; }
         finally { checking = false; }
     }
 }
