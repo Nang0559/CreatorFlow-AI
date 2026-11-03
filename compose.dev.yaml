@@ -9,6 +9,7 @@ services:
       KC_HEALTH_ENABLED: "true"
     ports:
       - "127.0.0.1:8180:8080"
+      - "127.0.0.1:9100:9000"
     volumes:
       - keycloak_data:/opt/keycloak/data
     restart: unless-stopped
