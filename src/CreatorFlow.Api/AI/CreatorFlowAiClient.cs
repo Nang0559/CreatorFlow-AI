@@ -9,7 +9,7 @@ public sealed class CreatorFlowAiClient(
     HttpClient http, IConfiguration configuration, CreatorFlowDbContext? db,
     ITenantContext tenant, IDataProtectionProvider protection)
 {
-    public async Task<IResult> ForwardAsync<TRequest>(string path, TRequest payload, CancellationToken cancellationToken)
+    public async Task<IResult> ForwardAsync<TRequest>(string path, TRequest payload, CancellationToken cancellationToken, HttpContext? context = null)
     {
         var baseUrl = configuration["CREATORFLOW_AI_BASE_URL"];
         var serviceKey = configuration["CREATORFLOW_AI_API_KEY"];
@@ -59,6 +59,8 @@ public sealed class CreatorFlowAiClient(
         {
             using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (context is not null && response.Headers.TryGetValues("X-CreatorFlow-LLM-Trace", out var traceValues))
+                context.Response.Headers["X-CreatorFlow-LLM-Trace"] = traceValues.FirstOrDefault();
             return Results.Content(body, response.Content.Headers.ContentType?.ToString() ?? "application/json", statusCode: (int)response.StatusCode);
         }
         catch (HttpRequestException) { return Results.Problem("CreatorFlow AI service could not be reached.", statusCode: 503); }
