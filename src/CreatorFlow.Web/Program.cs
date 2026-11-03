@@ -174,6 +174,12 @@ app.MapGet("/media/video/{id:guid}", async (Guid id, HttpContext context, Creato
 });
 var components = app.MapRazorComponents<CreatorFlow.Web.Components.App>().AddInteractiveServerRenderMode();
 if (oidcEnabled) components.RequireAuthorization();
+else
+{
+    app.MapGet("/auth/login", () => Results.Problem(
+        "Đăng nhập SaaS chưa được cấu hình. Hãy thiết lập Authentication:Oidc tại môi trường triển khai.",
+        statusCode: StatusCodes.Status503ServiceUnavailable)).AllowAnonymous();
+}
 app.Run();
 
 public sealed record WorkspaceSelectionItem(Guid Id, string Name, string Slug, string Role);
