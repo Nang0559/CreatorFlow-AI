@@ -1,4 +1,4 @@
-"""Multi-provider OpenAI-compatible runtime: Gemini primary, OpenAI fallback, optional Ollama."""
+"""OpenAI-compatible runtime: local Ollama by default; cloud providers only when explicitly configured."""
 from __future__ import annotations
 import asyncio, json, os
 from dataclasses import dataclass, field
@@ -88,9 +88,9 @@ class LLMSettings:
           "ollama":(os.getenv("CREATORFLOW_LLM_OLLAMA_BASE_URL","").strip() or "http://host.docker.internal:11434/v1",
                     os.getenv("CREATORFLOW_LLM_OLLAMA_API_KEY","").strip() or "ollama",
                     os.getenv("CREATORFLOW_LLM_OLLAMA_MODEL","").strip())}
-        primary=os.getenv("CREATORFLOW_LLM_PRIMARY_PROVIDER","gemini").strip().lower()
+        primary=os.getenv("CREATORFLOW_LLM_PRIMARY_PROVIDER","ollama").strip().lower()
         if primary not in configs: raise AIConfigurationError("Primary provider must be gemini, openai or ollama.")
-        names=[v.strip().lower() for v in os.getenv("CREATORFLOW_LLM_FALLBACK_PROVIDERS","openai").split(",") if v.strip()]
+        names=[v.strip().lower() for v in os.getenv("CREATORFLOW_LLM_FALLBACK_PROVIDERS","").split(",") if v.strip()]
         if any(v not in configs for v in names): raise AIConfigurationError("Fallback list contains an unsupported provider.")
         def validate(name,base):
             p=urlparse(base); local={"localhost","127.0.0.1","::1"}
