@@ -1,0 +1,153 @@
+@page "/channels"
+@using CreatorFlow.Web.Services
+@inject CreatorFlowApiClient Api
+
+<PageTitle>Kênh theo dõi · CreatorFlow</PageTitle>
+<header class="page-header">
+    <div>
+        <p class="eyebrow">NGUỒN NỘI DUNG</p>
+        <h1>Kênh theo dõi</h1>
+        <p class="muted">Quản lý các kênh bạn quan tâm. Khi bật theo dõi, CreatorFlow tạo lịch quét định kỳ; việc quét thực tế chỉ chạy khi có connector nguồn được cấp phép.</p>
+    </div>
+    <button class="primary" disabled="@busy" @onclick="LoadAsync">@(busy ? "Đang xử lý…" : "Làm mới")</button>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <section class="notice validation-summary" role="alert"><strong>Chưa thực hiện được thao tác</strong><p>@error</p></section>
+}
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <section class="success-notice" role="status" aria-live="polite"><strong>@message</strong></section>
+}
+
+<section class="panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">THÊM NGUỒN</p><h2>Đăng ký kênh Douyin</h2></div>
+    </div>
+    <div class="trend-form">
+        <label>Mã định danh kênh <span class="required-mark">* Bắt buộc · tối đa 160 ký tự</span>
+            <input @bind="secUserId" maxlength="160" required aria-required="true" placeholder="Mã định danh công khai của kênh" />
+        </label>
+        <label>Tên hiển thị <span class="required-mark">* Bắt buộc · tối đa 160 ký tự</span>
+            <input @bind="displayName" maxlength="160" required aria-required="true" placeholder="Tên kênh" />
+        </label>
+        <label>Đường dẫn hồ sơ HTTPS <span class="required-mark">* Bắt buộc</span>
+            <input @bind="profileUrl" type="url" required aria-required="true" placeholder="https://www.douyin.com/user/..." />
+        </label>
+    </div>
+    <div class="form-actions">
+        <button class="primary" disabled="@(busy || !Api.IsConfigured)" @onclick="CreateAsync">@(busy ? "Đang lưu…" : "Thêm kênh")</button>
+        <span class="muted">Chỉ đăng ký thông tin công khai; không yêu cầu mật khẩu, cookie hoặc phiên đăng nhập.</span>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">DANH SÁCH NGUỒN</p><h2>Kênh đã đăng ký</h2></div>
+        <span class="status">@channels.Count kênh</span>
+    </div>
+    @if (channels.Count == 0)
+    {
+        <p class="muted">Chưa có kênh nào. Thêm kênh ở biểu mẫu phía trên.</p>
+    }
+    @foreach (var channel in channels)
+    {
+        <article class="trend-item">
+            <div>
+                <span class="status">@(channel.IsFollowed ? "Đang theo dõi" : "Chưa theo dõi")</span>
+                <h3>@channel.DisplayName</h3>
+                <p class="muted">Mã kênh: @channel.DouyinSecUserId</p>
+                <a href="@channel.ProfileUrl" target="_blank" rel="noopener noreferrer">Mở hồ sơ ↗</a>
+                <p class="muted">@(channel.LastCheckedAt.HasValue ? "Lần kiểm tra gần nhất: " + channel.LastCheckedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "Chưa có lần quét nguồn nào.")</p>
+            </div>
+            <div class="form-actions">
+                @if (channel.IsFollowed)
+                {
+                    <button class="secondary" disabled="@busy" @onclick="() => SetFollowAsync(channel, false)">Bỏ theo dõi</button>
+                }
+                else
+                {
+                    <button class="primary" disabled="@busy" @onclick="() => SetFollowAsync(channel, true)">Theo dõi kênh</button>
+                }
+            </div>
+        </article>
+    }
+</section>
+
+<section class="notice">
+    <strong>Trạng thái tự động hóa</strong>
+    <p>Thao tác theo dõi hiện đã tạo hoặc bật lịch quét trong SQL. Worker quét và connector Douyin/TikTok chưa được kích hoạt; vì vậy chưa có video mới nào được tự động phát hiện hoặc tải xuống. Hệ thống sẽ không hiển thị trạng thái “đã quét” hoặc “đã tải” khi chưa thực sự có kết quả.</p>
+</section>
+
+@code {
+    private List<ChannelItem> channels = [];
+    private string secUserId = "";
+    private string displayName = "";
+    private string profileUrl = "";
+    private string error = "";
+    private string message = "";
+    private bool busy;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (!Api.IsConfigured || busy) return;
+        try
+        {
+            busy = true; error = ""; message = "";
+            channels = await Api.GetAsync<List<ChannelItem>>("/api/v1/douyin/channels?take=100") ?? [];
+        }
+        catch (Exception ex) { error = "Không tải được danh sách kênh. " + ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task CreateAsync()
+    {
+        if (busy) return;
+        if (string.IsNullOrWhiteSpace(secUserId)) { error = "Vui lòng nhập mã định danh kênh."; return; }
+        if (string.IsNullOrWhiteSpace(displayName)) { error = "Vui lòng nhập tên hiển thị."; return; }
+        if (!Uri.TryCreate(profileUrl.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+        { error = "Đường dẫn hồ sơ phải là URL HTTPS hợp lệ."; return; }
+        try
+        {
+            busy = true; error = ""; message = "";
+            await Api.PostAsync<object, ChannelItem>("/api/v1/douyin/channels",
+                new { douyinSecUserId = secUserId.Trim(), displayName = displayName.Trim(), profileUrl = uri.ToString() });
+            secUserId = displayName = profileUrl = "";
+            channels = await Api.GetAsync<List<ChannelItem>>("/api/v1/douyin/channels?take=100") ?? [];
+            message = "Đã thêm kênh vào danh sách nguồn.";
+        }
+        catch (Exception ex) { error = Explain(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task SetFollowAsync(ChannelItem channel, bool follow)
+    {
+        if (busy) return;
+        try
+        {
+            busy = true; error = ""; message = "";
+            await Api.PostNoContentAsync($"/api/v1/douyin/channels/{channel.Id}/{(follow ? "follow" : "unfollow")}", new { });
+            channels = await Api.GetAsync<List<ChannelItem>>("/api/v1/douyin/channels?take=100") ?? [];
+            message = follow
+                ? "Đã bật theo dõi và tạo lịch quét. Video mới sẽ được phát hiện khi connector được cấp phép và worker hoạt động."
+                : "Đã bỏ theo dõi và tắt lịch quét của kênh.";
+        }
+        catch (Exception ex) { error = Explain(ex); }
+        finally { busy = false; }
+    }
+
+    private static string Explain(Exception ex)
+    {
+        if (ex.Message.Contains("HTTP 409", StringComparison.OrdinalIgnoreCase))
+            return "Kênh này đã được đăng ký trong không gian làm việc.";
+        if (ex.Message.Contains("HTTP 400", StringComparison.OrdinalIgnoreCase))
+            return "Thông tin kênh chưa hợp lệ. Hãy kiểm tra mã kênh, tên và đường dẫn HTTPS.";
+        return "Không thể hoàn tất thao tác. " + ex.Message;
+    }
+
+    private sealed record ChannelItem(Guid Id, string DouyinSecUserId, string DisplayName,
+        string ProfileUrl, bool IsFollowed, DateTimeOffset? FollowedAt, DateTimeOffset? LastCheckedAt);
+}
