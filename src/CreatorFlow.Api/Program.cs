@@ -91,6 +91,7 @@ app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "ru
 app.MapVideoRenderEndpoints();
 app.MapAIProviderRegistry();
 app.MapDiscoveryTopicSchedulerEndpoints();
+app.MapDiscoverySearchEndpoints();
 
 app.MapGet("/api/v1/content-projects", async (int? skip, int? take, HttpContext context, CancellationToken cancellationToken) =>
 {
