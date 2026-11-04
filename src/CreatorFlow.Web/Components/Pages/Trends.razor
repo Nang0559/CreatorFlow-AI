@@ -130,7 +130,55 @@
             @if (discoveryPlan.RelatedTopics is { Length: > 0 }) { <strong>Chủ đề liên quan</strong><p>@string.Join(" · ", discoveryPlan.RelatedTopics)</p> }
             @if (discoveryPlan.IntentSignals is { Length: > 0 }) { <strong>Tín hiệu ý định mua hàng</strong><p>@string.Join(" · ", discoveryPlan.IntentSignals)</p> }
             @if (discoveryPlan.Exclusions is { Length: > 0 }) { <strong>Loại trừ</strong><p>@string.Join(" · ", discoveryPlan.Exclusions)</p> }
-            <p class="muted">Bước thu thập kết quả và xác minh hiệu suất thương mại chỉ hoạt động khi connector được cấp quyền và cấu hình. Không coi kế hoạch truy vấn là danh sách kênh đã tìm thấy.</p>
+            <p class="muted">Bộ truy vấn AI chỉ là đầu vào. Dùng nút bên dưới để gọi các nguồn tìm kiếm thật; chỉ URL trả về từ connector mới được hiển thị là kết quả.</p>
+        </div>
+        <div class="form-actions">
+            <button class="primary" disabled="@(busy || discoveryPlan.Queries is null || discoveryPlan.Queries.Length == 0)" @onclick="SearchDiscoverySourcesAsync">@(busy ? "Đang tìm nguồn thật…" : "Thu thập kênh và video thực tế")</button>
+        </div>
+    }
+    @if (discoverySearch is not null)
+    {
+        <div class="discovery-plan">
+            <h3>Kết quả connector · @discoverySearch.Channels.Length kênh · @discoverySearch.Videos.Length video</h3>
+            <p class="muted">Thời điểm tìm: @discoverySearch.SearchedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") · @discoverySearch.Status</p>
+            @foreach (var provider in discoverySearch.Providers)
+            {
+                <p class="muted"><strong>@provider.Provider:</strong> @provider.Status · @provider.ResultCount kết quả @(string.IsNullOrWhiteSpace(provider.Error) ? "" : " · " + provider.Error)</p>
+            }
+            @if (discoverySearch.Channels.Length == 0 && discoverySearch.Videos.Length == 0)
+            {
+                <p class="muted">Chưa tìm thấy URL TikTok phù hợp. Kiểm tra cấu hình API key/quyền connector hoặc thử từ khóa cụ thể hơn. Không có dữ liệu giả được hiển thị.</p>
+            }
+            @foreach (var channel in discoverySearch.Channels)
+            {
+                <article class="trend-item">
+                    <div>
+                        <span class="status">Kênh · @channel.Source</span>
+                        <h3>@channel.DisplayName</h3>
+                        <a href="@channel.ProfileUrl" target="_blank" rel="noopener noreferrer">Mở hồ sơ TikTok ↗</a>
+                        <p class="muted">Username: @channel.Username · Có @channel.VideoCount video liên quan trong kết quả</p>
+                        @if (channel.Followers.HasValue) { <p class="muted">Người theo dõi: @channel.Followers.Value.ToString("N0") · Nguồn API</p> }
+                        @if (channel.VideoUrls.Length > 0) { <p>@foreach (var link in channel.VideoUrls) { <a href="@link" target="_blank" rel="noopener noreferrer">Mở video ↗</a><text> </text> }</p> }
+                    </div>
+                </article>
+            }
+            @foreach (var video in discoverySearch.Videos)
+            {
+                <article class="trend-item">
+                    <div>
+                        <span class="status">Video · @video.Source</span>
+                        <h3>@video.Title</h3>
+                        <a href="@video.Url" target="_blank" rel="noopener noreferrer">Mở video TikTok ↗</a>
+                        <p class="muted">@(video.Username is null ? "Không xác định username" : "@" + video.Username) · Xác minh URL: @video.VerifiedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</p>
+                        @if (!string.IsNullOrWhiteSpace(video.Description)) { <p>@video.Description</p> }
+                        @if (video.Views.HasValue || video.Likes.HasValue || video.Comments.HasValue || video.Shares.HasValue)
+                        {
+                            <p class="muted">Chỉ số do API trả về: @((video.Views ?? 0).ToString("N0")) lượt xem · @((video.Likes ?? 0).ToString("N0")) thích · @((video.Comments ?? 0).ToString("N0")) bình luận · @((video.Shares ?? 0).ToString("N0")) chia sẻ</p>
+                        }
+                    </div>
+                </article>
+            }
+            <p class="muted">@discoverySearch.Notice</p>
         </div>
     }
 </section>
@@ -242,6 +290,7 @@
     private string topicName = "", topicKeywords = "";
     private Guid? editingTopicId;
     private DiscoveryPlanItem? discoveryPlan;
+    private DiscoverySearchResponse? discoverySearch;
     private List<DiscoveryLogItem> discoveryLogs = [];
     private string selectedScheduleTopicId = "";
     private int scheduleRefreshMinutes = 30;
@@ -476,6 +525,41 @@
         }
         finally { busy = false; }
     }
+
+    private async Task SearchDiscoverySourcesAsync()
+    {
+        if (discoveryPlan is null || discoveryPlan.Queries is not { Length: > 0 }) return;
+        try
+        {
+            busy = true; error = ""; successMessage = ""; discoverySearch = null;
+            var started = DateTimeOffset.UtcNow;
+            discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG TÌM NGUỒN", "Đang gọi Brave Search và TikTok Research API nếu đã cấu hình."));
+            await InvokeAsync(StateHasChanged);
+            discoverySearch = await Api.PostAsync<object, DiscoverySearchResponse>("/api/v1/discovery/search",
+                new { topic = discoveryPlan.Topic, queries = discoveryPlan.Queries });
+            var summary = string.Join(" · ", discoverySearch.Providers.Select(x => $"{x.Provider}: {x.Status} ({x.ResultCount})"));
+            discoveryLogs[0] = new DiscoveryLogItem(started, discoverySearch.Status == "Completed" ? "HOÀN TẤT TÌM NGUỒN" : "CHƯA CẤU HÌNH NGUỒN", summary);
+            successMessage = discoverySearch.Channels.Length > 0 || discoverySearch.Videos.Length > 0
+                ? $"Đã nhận {discoverySearch.Channels.Length} kênh và {discoverySearch.Videos.Length} video từ connector."
+                : "Connector đã chạy nhưng chưa trả về URL TikTok phù hợp. Kiểm tra trạng thái từng nguồn.";
+        }
+        catch (Exception ex)
+        {
+            error = ToUserMessage(ex);
+            if (discoveryLogs.Count > 0 && discoveryLogs[0].Status == "ĐANG TÌM NGUỒN")
+                discoveryLogs[0] = discoveryLogs[0] with { Status = "THẤT BẠI", Detail = error };
+        }
+        finally { busy = false; }
+    }
+
+    private sealed record DiscoverySearchResponse(string Topic, DateTimeOffset SearchedAt, string Status,
+        DiscoveryChannelResult[] Channels, DiscoverySearchResult[] Videos, DiscoveryProviderState[] Providers, string Notice);
+    private sealed record DiscoveryChannelResult(string Username, string DisplayName, string ProfileUrl, int VideoCount,
+        long MaxObservedViews, long? Followers, string[] VideoUrls, string Source, DateTimeOffset VerifiedAt);
+    private sealed record DiscoverySearchResult(string Url, string Title, string? Description, string? Username,
+        long? Views, long? Likes, long? Comments, long? Shares, string Kind, string Source,
+        DateTimeOffset VerifiedAt, DateTimeOffset? PublishedAt);
+    private sealed record DiscoveryProviderState(string Provider, string Status, int ResultCount, string? Error);
 
     private async Task<string> GetConfiguredPrimaryProviderAsync()
     {
