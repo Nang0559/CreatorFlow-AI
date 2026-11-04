@@ -38,7 +38,7 @@ if ($client.defaultClientScopes -notcontains 'profile' -or $client.defaultClient
 $scope = @($realm.clientScopes | Where-Object { $_.name -ceq 'creatorflow-api' })
 if ($scope.Count -ne 1) { throw 'The creatorflow-api client scope is missing or duplicated.' }
 $mapper = @($scope[0].protocolMappers | Where-Object {
-    $_.protocolMapper -ceq 'oidc-audience-mapper' -and $_.config.'included.client.audience' -ceq 'creatorflow-api'
+    $_.protocolMapper -ceq 'oidc-audience-mapper' -and $_.config.'included.custom.audience' -ceq 'creatorflow-api'
 })
 if ($mapper.Count -ne 1 -or $mapper[0].config.'access.token.claim' -cne 'true' -or
     $mapper[0].config.'id.token.claim' -cne 'false') {
