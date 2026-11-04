@@ -201,7 +201,7 @@ jobs:
           assert claims.get('sub'), 'subject claim missing'
           assert 'creatorflow-api' in claims.get('aud', []), claims.get('aud')
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env_file:
-              env_file.write('CREATORFLOW_LIVE_OIDC_TOKEN=' + access_token + '\\n')
+              env_file.write('CREATORFLOW_LIVE_OIDC_TOKEN=' + access_token + '\n')
           print('PASS signed access token from actual creatorflow-web client:', claims['iss'], 'aud=creatorflow-api')
           PY
       - name: Set up .NET for live API JWT acceptance test
