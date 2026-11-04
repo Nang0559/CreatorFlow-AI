@@ -66,7 +66,10 @@ catch {
     Invoke-KeycloakAdmin POST 'realms/creatorflow/roles' @{ name = $roleName; description = 'Local development user; workspace permissions are stored in CreatorFlow tenant membership.' } | Out-Null
 }
 $role = Invoke-KeycloakAdmin GET "realms/creatorflow/roles/$roleName"
-Invoke-KeycloakAdmin POST "realms/creatorflow/users/$($user.id)/role-mappings/realm" @($role) | Out-Null
+$currentMappings = @(Invoke-KeycloakAdmin GET "realms/creatorflow/users/$($user.id)/role-mappings/realm")
+if (-not ($currentMappings | Where-Object { $_.id -ceq $role.id })) {
+    Invoke-KeycloakAdmin POST "realms/creatorflow/users/$($user.id)/role-mappings/realm" @($role) | Out-Null
+}
 
 $clients = @(Invoke-KeycloakAdmin GET 'realms/creatorflow/clients?clientId=creatorflow-web')
 $client = $clients | Where-Object { $_.clientId -ceq 'creatorflow-web' } | Select-Object -First 1
