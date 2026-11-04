@@ -98,6 +98,7 @@ builder.Services.AddScoped<TenantContext>();
 builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
 builder.Services.AddTransient<TenantContextMiddleware>();
 builder.Services.AddScoped<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, TenantRoleAuthorizationHandler>();
 
 var oidcAuthority = builder.Configuration["Authentication:Oidc:Authority"];
 var oidcAudience = builder.Configuration["Authentication:Oidc:Audience"];
@@ -140,6 +141,9 @@ builder.Services.AddAuthorization(options =>
         .Build();
     options.DefaultPolicy = tenantPolicy;
     options.FallbackPolicy = tenantPolicy;
+    options.AddPolicy("TenantOwnerOrAdmin", policy => policy
+        .RequireAuthenticatedUser()
+        .AddRequirements(new TenantMembershipRequirement(), new TenantRoleRequirement("Owner", "Admin")));
 });
 
 var connectionString = builder.Configuration.GetConnectionString("CreatorFlow");
