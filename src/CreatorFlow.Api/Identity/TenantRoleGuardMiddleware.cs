@@ -19,7 +19,8 @@ public sealed class TenantRoleGuardMiddleware(RequestDelegate next)
         "/api/v1/vietnam-trends",
         "/api/v1/style-experiments",
         "/api/v1/style-profiles",
-        "/api/v1/ai",
+        "/api/v1/ai/analyze",
+        "/api/v1/ai/style-lab/generate-variants",
         "/api/v1/video",
         "/api/v1/discovery/search"
     ];
