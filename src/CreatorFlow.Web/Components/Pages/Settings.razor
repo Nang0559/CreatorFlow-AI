@@ -15,11 +15,111 @@
         <div><b>04</b><strong>SQL Server</strong><small>Windows · CreatorFlow_QC</small></div>
     </div>
 </section>
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">NGUỒN TÌM KIẾM KÊNH VÀ VIDEO</p><h2>Khóa kết nối khám phá</h2>
+        <p class="muted">Cấu hình khóa tại đây giống phần Nhà cung cấp AI. Bí mật được mã hóa ở API và gắn với workspace hiện tại.</p></div>
+        <button @onclick="LoadConnectorSettingsAsync" disabled="@connectorBusy">Làm mới</button></div>
+    <div class="form-grid">
+        <label>Brave Search API key
+            <input type="password" autocomplete="new-password" @bind="braveApiKey" placeholder="@(connector.HasBraveApiKey ? "Đã lưu khóa · nhập khóa mới để thay thế" : "Nhập Brave Search API key")" />
+            <small>@(connector.HasBraveApiKey ? "Đã cấu hình · khóa được ẩn" : "Chưa cấu hình")</small>
+        </label>
+        <label>TikTok Research Client Key
+            <input type="password" autocomplete="new-password" @bind="tiktokClientKey" placeholder="@(connector.HasTikTokResearchClientKey ? "Đã lưu khóa · nhập khóa mới để thay thế" : "Client Key")" />
+            <small>@(connector.HasTikTokResearchClientKey ? "Đã cấu hình · khóa được ẩn" : "Chưa cấu hình")</small>
+        </label>
+        <label>TikTok Research Client Secret
+            <input type="password" autocomplete="new-password" @bind="tiktokClientSecret" placeholder="@(connector.HasTikTokResearchClientSecret ? "Đã lưu secret · nhập secret mới để thay thế" : "Client Secret")" />
+            <small>Chỉ sử dụng khi ứng dụng được TikTok cấp quyền Research API.</small>
+        </label>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <button class="primary" @onclick="SaveConnectorSettingsAsync" disabled="@connectorBusy">Lưu khóa kết nối</button>
+        <button @onclick="ClearBraveKeyAsync" disabled="@(!connector.HasBraveApiKey || connectorBusy)">Xóa khóa Brave</button>
+        <button @onclick="ClearTikTokKeysAsync" disabled="@(!connector.HasTikTokResearchClientKey && !connector.HasTikTokResearchClientSecret || connectorBusy)">Xóa khóa TikTok</button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(connectorMessage)) { <p class="muted">@connectorMessage</p> }
+    <p class="muted">Khóa không được trả về trình duyệt sau khi lưu. Để trống trường khóa khi cập nhật để giữ giá trị đã lưu. Brave Search dùng để tìm trang TikTok công khai; TikTok Research API yêu cầu phê duyệt riêng.</p>
+</section>
 <section class="notice"><strong>Bảo mật</strong><p>API key và connection string chỉ được cấu hình ở server qua biến môi trường hoặc file .env. Trang này không đọc, hiển thị hoặc cho phép chỉnh sửa bí mật. Không công khai các cổng API, AI hoặc SQL Server ra Internet.</p></section>
 @code {
     private string status = "Chưa kiểm tra";
     private string message = "Bấm “Kiểm tra kết nối” để xác nhận API đang phản hồi.";
     private bool checking;
+    private bool connectorBusy;
+    private string braveApiKey = "";
+    private string tiktokClientKey = "";
+    private string tiktokClientSecret = "";
+    private string connectorMessage = "";
+    private ConnectorSettings connector = new();
+    protected override async Task OnInitializedAsync() => await LoadConnectorSettingsAsync();
+
+    private async Task LoadConnectorSettingsAsync()
+    {
+        try
+        {
+            connectorBusy = true;
+            connector = await Api.GetAsync<ConnectorSettings>("/api/v1/discovery/connectors/settings") ?? new();
+            connectorMessage = "Trạng thái khóa đã được tải. Giá trị bí mật hiện tại không được đọc lại.";
+        }
+        catch (Exception ex) { connectorMessage = ex is HttpRequestException ? ex.Message : "Không thể tải cấu hình connector. Cần quyền Owner/Admin."; }
+        finally { connectorBusy = false; }
+    }
+
+    private async Task SaveConnectorSettingsAsync()
+    {
+        if (string.IsNullOrWhiteSpace(braveApiKey) && string.IsNullOrWhiteSpace(tiktokClientKey) && string.IsNullOrWhiteSpace(tiktokClientSecret))
+        { connectorMessage = "Nhập ít nhất một khóa mới để lưu. Khóa đã lưu sẽ được giữ nguyên nếu trường để trống."; return; }
+        if (string.IsNullOrWhiteSpace(tiktokClientKey) != string.IsNullOrWhiteSpace(tiktokClientSecret))
+        { connectorMessage = "TikTok Client Key và Client Secret cần nhập cùng lúc."; return; }
+        try
+        {
+            connectorBusy = true;
+            var body = new ConnectorSettingsWrite(braveApiKey, tiktokClientKey, tiktokClientSecret);
+            connector = await Api.PutAsync<ConnectorSettingsWrite, ConnectorSettings>("/api/v1/discovery/connectors/settings", body) ?? new();
+            braveApiKey = ""; tiktokClientKey = ""; tiktokClientSecret = "";
+            connectorMessage = "Đã lưu khóa kết nối an toàn cho workspace.";
+        }
+        catch (Exception ex) { connectorMessage = ex is HttpRequestException ? ex.Message : "Không thể lưu khóa kết nối. Kiểm tra quyền và cấu hình Data Protection."; }
+        finally { connectorBusy = false; }
+    }
+
+    private async Task ClearBraveKeyAsync()
+    {
+        try
+        {
+            connectorBusy = true;
+            connector = await Api.PutAsync<ConnectorSettingsWrite, ConnectorSettings>("/api/v1/discovery/connectors/settings",
+                new(null, null, null, ClearBraveApiKey: true)) ?? new();
+            braveApiKey = ""; connectorMessage = "Đã xóa khóa Brave Search khỏi workspace.";
+        }
+        catch (Exception ex) { connectorMessage = ex is HttpRequestException ? ex.Message : "Không thể xóa khóa Brave."; }
+        finally { connectorBusy = false; }
+    }
+
+    private async Task ClearTikTokKeysAsync()
+    {
+        try
+        {
+            connectorBusy = true;
+            connector = await Api.PutAsync<ConnectorSettingsWrite, ConnectorSettings>("/api/v1/discovery/connectors/settings",
+                new(null, null, null, ClearTikTokResearchCredentials: true)) ?? new();
+            tiktokClientKey = ""; tiktokClientSecret = ""; connectorMessage = "Đã xóa thông tin TikTok Research API khỏi workspace.";
+        }
+        catch (Exception ex) { connectorMessage = ex is HttpRequestException ? ex.Message : "Không thể xóa khóa TikTok."; }
+        finally { connectorBusy = false; }
+    }
+
+    private sealed class ConnectorSettings
+    {
+        public bool HasBraveApiKey { get; set; }
+        public bool HasTikTokResearchClientKey { get; set; }
+        public bool HasTikTokResearchClientSecret { get; set; }
+        public bool IsStoredInWorkspace { get; set; }
+    }
+    private sealed record ConnectorSettingsWrite(string? BraveApiKey, string? TikTokResearchClientKey,
+        string? TikTokResearchClientSecret, bool ClearBraveApiKey = false, bool ClearTikTokResearchCredentials = false);
+
     private async Task CheckAsync()
     {
         if (!Api.IsConfigured) { status = "Chưa cấu hình"; message = "Thiếu CreatorFlowApi:BaseUrl."; return; }
