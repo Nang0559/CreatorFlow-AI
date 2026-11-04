@@ -1,7 +1,7 @@
 -- 026: tenant-scope durable discovery schedules and run history.
 -- Backfill tenant ownership from ContentTopics, then enforce composite tenant FKs.
--- DDL and DML that reference newly-added columns are executed dynamically so SQL
--- Server binds those column names only after the ALTER TABLE statements have run.
+-- Keep every schema-changing DDL operation in a completed dynamic batch before
+-- compiling any statement that references the newly-added TenantId columns.
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
 
@@ -17,6 +17,7 @@ IF COL_LENGTH(N'dbo.DiscoveryTopicProfiles',N'TenantId') IS NULL
 IF COL_LENGTH(N'dbo.DiscoveryTopicRunHistory',N'TenantId') IS NULL
     EXEC sys.sp_executesql N'ALTER TABLE dbo.DiscoveryTopicRunHistory ADD TenantId uniqueidentifier NULL;';
 
+-- This is a separate compilation unit, after both ADD COLUMN statements completed.
 EXEC sys.sp_executesql N'
 UPDATE p
    SET TenantId=t.TenantId
@@ -34,7 +35,10 @@ IF EXISTS(SELECT 1 FROM dbo.DiscoveryTopicProfiles WHERE TenantId IS NULL)
     THROW 52604, ''026 could not resolve tenant ownership for every topic profile.'', 1;
 IF EXISTS(SELECT 1 FROM dbo.DiscoveryTopicRunHistory WHERE TenantId IS NULL)
     THROW 52605, ''026 could not resolve tenant ownership for every run history row.'', 1;
+';
 
+-- Separate compilation unit after the backfill has completed.
+EXEC sys.sp_executesql N'
 ALTER TABLE dbo.DiscoveryTopicProfiles ALTER COLUMN TenantId uniqueidentifier NOT NULL;
 ALTER TABLE dbo.DiscoveryTopicRunHistory ALTER COLUMN TenantId uniqueidentifier NOT NULL;
 
