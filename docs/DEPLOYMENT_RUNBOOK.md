@@ -72,7 +72,7 @@ Python AI:
 - `CREATORFLOW_LLM_GEMINI_API_KEY`, `CREATORFLOW_LLM_OPENAI_API_KEY`, and/or local Ollama endpoint/model according to the selected providers.
 
 Current local-pilot discovery connectors (API runs as a Windows process):
-- `BraveSearch__ApiKey` for Brave Search Web API; alternatively configure it in the workspace Settings UI after migration 029.
+- `BraveSearch__ApiKey` for Brave Search Web API; alternatively configure it in the workspace Settings UI after migration 028.
 - `TikTokResearch__ClientKey` and `TikTokResearch__ClientSecret` only for a TikTok Research API project that has actually been approved and is eligible for the applicant. Do not assume ordinary TikTok developer access grants Research API.
 
 The current local `.env.example` also includes `Authentication__ApiKey` and `CreatorFlowApi__ApiKey`; these are the API/Web bootstrap shared secret pair and must have the same value. The Keycloak client secret, Keycloak admin password and one-time owner bootstrap token are separate credentials and are not provider API keys.
