@@ -34,6 +34,121 @@ jobs:
       - run: python -m pip install -e ./ai pytest httpx
       - run: pytest ai/tests -q
 
+
+  keycloak-live-contract:
+    name: Keycloak live OIDC and signed-token contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Keycloak with the checked-in realm export
+        shell: bash
+        run: |
+          docker run -d --name creatorflow-keycloak \
+            -p 8180:8180 -p 9000:9000 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=ci-admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD='ci-only-admin-password-12345' \
+            -e KC_HTTP_PORT=8180 \
+            -v "$PWD/docker/keycloak/realm-import:/opt/keycloak/data/import:ro" \
+            quay.io/keycloak/keycloak:26.8.1 start-dev --import-realm
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9000/health/ready >/dev/null; then
+              break
+            fi
+            sleep 5
+          done
+          curl -fsS http://127.0.0.1:9000/health/ready >/dev/null
+          curl -fsS http://127.0.0.1:8180/realms/creatorflow/.well-known/openid-configuration >/tmp/creatorflow-oidc.json
+          python - <<'PY'
+          import json
+          metadata = json.load(open('/tmp/creatorflow-oidc.json', encoding='utf-8'))
+          expected = 'http://localhost:8180/realms/creatorflow'
+          assert metadata['issuer'] == expected, metadata.get('issuer')
+          for key in ('authorization_endpoint', 'token_endpoint', 'jwks_uri'):
+              assert metadata.get(key), key
+          print('PASS imported realm OIDC discovery:', metadata['issuer'])
+          PY
+      - name: Issue and cryptographically validate a real signed access token
+        shell: bash
+        run: |
+          python -m pip install --quiet 'PyJWT[crypto]'
+          python - <<'PY'
+          import json, time, urllib.parse, urllib.request
+          import jwt
+
+          base = 'http://127.0.0.1:8180'
+          issuer = 'http://localhost:8180/realms/creatorflow'
+
+          def request(method, path, data=None, token=None):
+              headers = {}
+              body = None
+              if data is not None:
+                  body = json.dumps(data).encode() if isinstance(data, dict) else urllib.parse.urlencode(data).encode()
+                  headers['Content-Type'] = 'application/json' if isinstance(data, dict) else 'application/x-www-form-urlencoded'
+              if token:
+                  headers['Authorization'] = 'Bearer ' + token
+              req = urllib.request.Request(base + path, data=body, headers=headers, method=method)
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as response:
+                      raw = response.read()
+                      return json.loads(raw) if raw else None
+              except urllib.error.HTTPError as error:
+                  raise RuntimeError(f'{method} {path}: {error.code} {error.read().decode()}') from error
+
+          admin = request('POST', '/realms/master/protocol/openid-connect/token', {
+              'client_id': 'admin-cli', 'grant_type': 'password',
+              'username': 'ci-admin', 'password': 'ci-only-admin-password-12345'
+          })['access_token']
+
+          client = {
+              'clientId': 'creatorflow-ci-contract',
+              'name': 'Ephemeral CI OIDC contract client',
+              'enabled': True,
+              'protocol': 'openid-connect',
+              'publicClient': False,
+              'secret': 'ci-only-contract-client-secret-123456',
+              'standardFlowEnabled': False,
+              'implicitFlowEnabled': False,
+              'directAccessGrantsEnabled': True,
+              'serviceAccountsEnabled': False,
+              'optionalClientScopes': ['creatorflow-api']
+          }
+          request('POST', '/admin/realms/creatorflow/clients', client, admin)
+          users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
+          if not users:
+              request('POST', '/admin/realms/creatorflow/users', {
+                  'username': 'ci-oidc-contract', 'enabled': True,
+                  'email': 'ci-oidc-contract@example.invalid', 'emailVerified': False
+              }, admin)
+              users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
+          user_id = users[0]['id']
+          request('PUT', f'/admin/realms/creatorflow/users/{user_id}/reset-password', {
+              'type': 'password', 'value': 'ci-only-user-password-123456', 'temporary': False
+          }, admin)
+
+          token_response = request('POST', '/realms/creatorflow/protocol/openid-connect/token', {
+              'client_id': 'creatorflow-ci-contract',
+              'client_secret': 'ci-only-contract-client-secret-123456',
+              'grant_type': 'password',
+              'username': 'ci-oidc-contract',
+              'password': 'ci-only-user-password-123456',
+              'scope': 'openid creatorflow-api'
+          })
+          access_token = token_response['access_token']
+          metadata = request('GET', '/realms/creatorflow/.well-known/openid-configuration')
+          signing_key = jwt.PyJWKClient(metadata['jwks_uri']).get_signing_key_from_jwt(access_token)
+          claims = jwt.decode(
+              access_token, signing_key.key, algorithms=['RS256'],
+              audience='creatorflow-api', issuer=issuer
+          )
+          assert claims.get('sub'), 'subject claim missing'
+          assert 'creatorflow-api' in claims.get('aud', []), claims.get('aud')
+          print('PASS real Keycloak signed access token:', claims['iss'], 'aud=creatorflow-api')
+          PY
+      - name: Stop Keycloak
+        if: always()
+        run: docker rm -f creatorflow-keycloak || true
+
   powershell:
     name: PowerShell script validation
     runs-on: windows-latest
