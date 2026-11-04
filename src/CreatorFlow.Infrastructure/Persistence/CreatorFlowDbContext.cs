@@ -31,6 +31,7 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
     public DbSet<StyleLearningProposal> StyleLearningProposals => Set<StyleLearningProposal>();
     public DbSet<CreatorStyleProfileVersion> CreatorStyleProfileVersions => Set<CreatorStyleProfileVersion>();
     public DbSet<AIProviderConfiguration> AIProviderConfigurations => Set<AIProviderConfiguration>();
+    public DbSet<DiscoveryConnectorConfiguration> DiscoveryConnectorConfigurations => Set<DiscoveryConnectorConfiguration>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -80,10 +81,20 @@ public sealed class CreatorFlowDbContext(DbContextOptions<CreatorFlowDbContext> 
             typeof(StyleExperiment), typeof(StyleExperimentVariant),
             typeof(CreatorStyleProfile), typeof(CreatorStyleEvidence),
             typeof(StyleVariantMetricObservation), typeof(StyleLearningProposal),
-            typeof(CreatorStyleProfileVersion), typeof(AIProviderConfiguration)
+            typeof(CreatorStyleProfileVersion), typeof(AIProviderConfiguration), typeof(DiscoveryConnectorConfiguration)
         };
         foreach (var tenantOwnedType in tenantOwnedTypes)
             modelBuilder.Entity(tenantOwnedType).Property<Guid>("TenantId").IsRequired();
+        modelBuilder.Entity<DiscoveryConnectorConfiguration>(entity =>
+        {
+            entity.ToTable("DiscoveryConnectorConfigurations");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.EncryptedBraveApiKey);
+            entity.Property(x => x.EncryptedTikTokResearchClientKey);
+            entity.Property(x => x.EncryptedTikTokResearchClientSecret);
+            entity.HasIndex(x => x.TenantId).IsUnique();
+        });
+
         modelBuilder.Entity<AIProviderConfiguration>(entity =>
         {
             entity.ToTable("AIProviders");
