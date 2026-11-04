@@ -77,11 +77,17 @@ builder.Services.AddSingleton<PartitionedRateLimiter<HttpContext>>(_ =>
     {
         if (httpContext.Request.Path.StartsWithSegments("/health"))
             return RateLimitPartition.GetNoLimiter("health");
+        var issuer = httpContext.User.FindFirst("iss")?.Value;
         var subject = httpContext.User.FindFirst("sub")?.Value;
         var tenantId = httpContext.RequestServices.GetService<ITenantContext>()?.TenantId;
         var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var identityPartition = !string.IsNullOrWhiteSpace(subject) ? subject :
-            tenantId.HasValue && tenantId.Value != Guid.Empty ? tenantId.Value.ToString("N") : remoteAddress;
+        // OIDC subject identifiers are scoped to an issuer; never merge two IdPs'
+        // subjects into the same quota bucket.
+        var identityPartition = !string.IsNullOrWhiteSpace(issuer) && !string.IsNullOrWhiteSpace(subject)
+            ? "oidc:" + issuer + ":" + subject
+            : tenantId.HasValue && tenantId.Value != Guid.Empty
+                ? "tenant:" + tenantId.Value.ToString("N")
+                : "ip:" + remoteAddress;
         var routePartition = httpContext.Request.Path.StartsWithSegments("/api/v1/video") ? "video" : "api";
         var partition = identityPartition + ":" + routePartition;
         return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
