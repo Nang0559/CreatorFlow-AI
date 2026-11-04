@@ -37,10 +37,8 @@ builder.Services.AddRateLimiter(options =>
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
     {
         var subject = httpContext.User.FindFirst("sub")?.Value;
-        var tenantSelector = httpContext.Request.Headers["X-CreatorFlow-Tenant"].ToString();
         var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var partition = !string.IsNullOrWhiteSpace(subject) ? subject :
-            !string.IsNullOrWhiteSpace(tenantSelector) ? $"local:{tenantSelector}" : remoteAddress;
+        var partition = !string.IsNullOrWhiteSpace(subject) ? subject : remoteAddress;
         return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 120,
