@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using CreatorFlow.Domain.Content;
+using CreatorFlow.Domain.Identity;
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -37,6 +38,32 @@ public sealed class StyleLearningProfileEndpointTests
         Assert.Equal(1, document.RootElement.GetProperty("eligibleExperiments").GetInt32());
         Assert.Equal(2, document.RootElement.GetProperty("eligibleVariants").GetInt32());
         Assert.DoesNotContain("UNRELATED_TENANT_HOOK", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Learning_analysis_returns_not_found_for_profile_owned_by_another_tenant()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        var foreignTenantId = Guid.NewGuid();
+        var foreignProfile = CreatorStyleProfile.Create("foreign-profile", "Foreign profile", "Other workspace", Now);
+
+        await factory.SeedAsync(async (db, tenantContext) =>
+        {
+            var foreignTenant = Tenant.Create("Foreign workspace", "foreign-workspace", Now);
+            db.Entry(foreignTenant).Property(x => x.Id).CurrentValue = foreignTenantId;
+            db.Tenants.Add(foreignTenant);
+            await db.SaveChangesAsync();
+
+            tenantContext.Set(foreignTenantId, "Owner");
+            db.CreatorStyleProfiles.Add(foreignProfile);
+            await db.SaveChangesAsync();
+        });
+
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-CreatorFlow-Api-Key", CreatorFlowApiFactory.ApiKey);
+        var response = await client.GetAsync($"/api/v1/style-profiles/{foreignProfile.Id}/learning-analysis");
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
     }
 
     private static StyleExperiment CreateEvaluatedExperiment(string name, string hook)
