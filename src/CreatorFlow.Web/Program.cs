@@ -20,7 +20,7 @@ builder.Services.AddHttpClient<CreatorFlow.Web.Services.CreatorFlowApiClient>(cl
     var apiKey = builder.Configuration["CreatorFlowApi:ApiKey"];
     if (builder.Environment.IsDevelopment() && !string.IsNullOrWhiteSpace(apiKey))
         client.DefaultRequestHeaders.Add("X-CreatorFlow-Api-Key", apiKey);
-});
+}).AddHttpMessageHandler<CreatorFlow.Web.Services.OidcAccessTokenHandler>();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 var oidc = builder.Configuration.GetSection("Authentication:Oidc");
