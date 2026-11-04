@@ -111,3 +111,12 @@ The development Compose stack imports `docker/keycloak/realm-import/creatorflow-
 ## Reverse-proxy and health rate-limit correction (2026-11-04)
 
 Forwarded headers are processed for one hop only and only from IPs configured in `ForwardedHeaders:KnownProxies`; an empty list trusts no external proxy. `/health` is excluded from the global fixed-window limiter. The default baseline is 300 requests/minute per authenticated subject or fallback remote IP. Route-specific upload/polling quotas and production edge/WAF tuning remain open.
+
+
+## Security and Discovery tenant-scope update (2026-11-04)
+
+- Learning proposal approve/reject actions are Owner/Admin-only; Editor can no longer change active profile guidance through the Style Profiles mutation prefix. Sensitive administrative GET routes (identity, AI provider registry, connector credentials and billing) are also Owner/Admin-only. Integration tests exercise the real API pipeline for Editor denials; the unit role matrix covers the broader route policy.
+- API rate limiting now runs after tenant resolution, partitions by authenticated subject or resolved tenant (falling back to forwarded remote IP), isolates video API traffic from general API traffic, and exempts `/health`. Forwarded headers are trusted only from configured `ForwardedHeaders:KnownProxies` addresses. Route-specific quotas and production edge tuning remain open.
+- Migration 029 adds tenant ownership and trusted tenant FKs to the Discovery 014/015 tables, replaces global unique keys with tenant-scoped keys and converts candidate/source/run/feedback relationships to tenant-composite FKs. `Verify-Database.ps1 -RequireTenantMigrations` now checks the legacy Discovery tenant columns and composite relationship constraints. This is repository implementation only; SQL Server execution and legacy data backfill remain unverified until the Z240 QC workflow succeeds.
+- The profile learning-analysis test now calls the actual HTTP endpoint through `WebApplicationFactory` with an InMemory test provider. It verifies response counts and that an unrelated experiment does not enter the response. This is an API integration test, not SQL Server provider parity; SQL Server behavior still requires QC.
+- `scripts/Initialize-KeycloakLocal.ps1` provisions a local user with a temporary password, retrieves the generated confidential client secret into ignored `.env`, and explains the separate CreatorFlow Owner bootstrap. Live signed-token acceptance remains unverified.
