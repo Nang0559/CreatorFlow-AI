@@ -135,6 +135,39 @@
     }
 </section>
 
+<section class="panel topic-schedule-panel">
+  <div class="panel-heading"><div><p class="eyebrow">TỰ ĐỘNG THEO DÕI</p><h2>Lịch khám phá chủ đề</h2>
+    <p class="muted">Bật lịch để worker kiểm tra chủ đề định kỳ, không cần nhấn tìm kiếm thủ công.</p></div></div>
+  <div class="trend-form">
+    <label>Chủ đề<select @bind="selectedScheduleTopicId" @bind:after="LoadScheduleAsync"><option value="">Chọn chủ đề</option>
+      @foreach (var item in topicItems.Where(x => x.IsActive)) { <option value="@item.Id">@item.Name</option> }
+    </select></label>
+    <label>Chu kỳ (phút)<input type="number" min="5" max="1440" @bind="scheduleRefreshMinutes" /></label>
+    <label><input type="checkbox" @bind="scheduleEnabled" /> Bật tự động theo dõi</label>
+  </div>
+  <div class="form-actions">
+    <button class="primary" disabled="@(busy || !Api.IsConfigured || !Guid.TryParse(selectedScheduleTopicId, out _))" @onclick="SaveScheduleAsync">Lưu lịch theo dõi</button>
+    <button class="secondary" disabled="@(busy || !Guid.TryParse(selectedScheduleTopicId, out _))" @onclick="LoadScheduleAsync">Làm mới trạng thái</button>
+  </div>
+  @if (!string.IsNullOrWhiteSpace(scheduleMessage)) { <p class="muted" role="status">@scheduleMessage</p> }
+  @if (scheduleInfo is not null) {
+    <article class="trend-item"><div><span class="status">@(scheduleInfo.IsEnabled ? "Đã bật lịch" : "Đã tắt lịch") · @(scheduleInfo.LastRunStatus ?? "Chưa chạy")</span>
+      <p class="muted">Lần chạy gần nhất: @(scheduleInfo.LastRunAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa có")</p>
+      <p class="muted">Lần chạy tiếp theo: @(scheduleInfo.NextRunAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa xếp lịch")</p>
+      <p class="muted">Kết quả: @scheduleInfo.CandidateCount ứng viên · @scheduleInfo.ChannelCount kênh</p>
+      @if (!string.IsNullOrWhiteSpace(scheduleInfo.LastErrorCode)) { <p class="muted">Mã trạng thái: @scheduleInfo.LastErrorCode</p> }
+    </div></article>
+  }
+  <h3>Lịch sử thực thi</h3>
+  @if (scheduleHistory.Count == 0) { <p class="muted">Chưa có lần chạy nào.</p> }
+  @foreach (var run in scheduleHistory) {
+    <article class="share-item"><div><strong>@run.Status</strong><p class="muted">@run.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @run.CandidateCount ứng viên · @run.ChannelCount kênh</p>
+      @if (!string.IsNullOrWhiteSpace(run.ErrorCode)) { <small class="muted">@run.ErrorCode</small> }
+    </div></article>
+  }
+  <p class="muted">Khi chưa có connector nguồn được phê duyệt, worker ghi trạng thái bỏ qua thay vì tạo dữ liệu xu hướng giả.</p>
+</section>
+
 <section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">GHI NHẬN</p><h2>Ghi nhận xu hướng mới</h2></div></div>
     <div class="trend-form">
@@ -183,6 +216,12 @@
     private Guid? editingTopicId;
     private DiscoveryPlanItem? discoveryPlan;
     private List<DiscoveryLogItem> discoveryLogs = [];
+    private string selectedScheduleTopicId = "";
+    private int scheduleRefreshMinutes = 30;
+    private bool scheduleEnabled = true;
+    private string scheduleMessage = "";
+    private TopicScheduleItem? scheduleInfo;
+    private List<TopicScheduleRunItem> scheduleHistory = [];
 
     [Parameter, SupplyParameterFromQuery(Name = "sharedUrl")] public string? IncomingSharedUrl { get; set; }
     private string? lastAutoSubmittedLink;
@@ -216,7 +255,7 @@
     private async Task LoadTopicsAsync()
     {
         if (!Api.IsConfigured) return;
-        try { topicItems = await Api.GetAsync<List<TopicItem>>("/api/v1/topics?take=100") ?? []; }
+        try { topicItems = await Api.GetAsync<List<TopicItem>>("/api/v1/topics?take=100") ?? []; if (string.IsNullOrWhiteSpace(selectedScheduleTopicId)) selectedScheduleTopicId = topicItems.FirstOrDefault(x => x.IsActive)?.Id.ToString() ?? ""; if (!string.IsNullOrWhiteSpace(selectedScheduleTopicId)) await LoadScheduleAsync(); }
         catch (Exception ex) { error = "Không tải được danh sách chủ đề: " + ex.Message; }
     }
 
@@ -235,6 +274,32 @@
         topicName = topicKeywords = "";
     }
 
+    private async Task LoadScheduleAsync()
+    {
+        if (!Guid.TryParse(selectedScheduleTopicId, out var topicId) || !Api.IsConfigured) { scheduleInfo = null; scheduleHistory = []; return; }
+        try {
+            scheduleMessage = "";
+            scheduleInfo = await Api.GetAsync<TopicScheduleItem>($"/api/v1/topics/{topicId}/schedule");
+            if (scheduleInfo is not null) { scheduleEnabled = scheduleInfo.IsEnabled; scheduleRefreshMinutes = scheduleInfo.RefreshMinutes; }
+            scheduleHistory = await Api.GetAsync<List<TopicScheduleRunItem>>($"/api/v1/topics/{topicId}/schedule/history?take=20") ?? [];
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { scheduleInfo = null; scheduleHistory = []; scheduleEnabled = true; scheduleRefreshMinutes = 30; scheduleMessage = "Chủ đề chưa có lịch. Lưu cấu hình để tạo lịch đầu tiên."; }
+        catch (Exception ex) { scheduleMessage = "Không tải được lịch: " + ex.Message; }
+    }
+
+    private async Task SaveScheduleAsync()
+    {
+        if (!Guid.TryParse(selectedScheduleTopicId, out var topicId)) return;
+        if (scheduleRefreshMinutes is < 5 or > 1440) { scheduleMessage = "Chu kỳ phải từ 5 đến 1.440 phút."; return; }
+        try {
+            busy = true; scheduleMessage = "";
+            await Api.PutAsync<object, object>($"/api/v1/topics/{topicId}/schedule", new { isEnabled = scheduleEnabled, refreshMinutes = scheduleRefreshMinutes, platforms = new[] { "TikTokVietnam" } });
+            await LoadScheduleAsync();
+            scheduleMessage = scheduleEnabled ? "Đã lưu lịch. Worker sẽ tự kiểm tra chủ đề đến hạn." : "Đã tắt lịch. Lịch sử cũ vẫn được giữ nguyên.";
+        }
+        catch (Exception ex) { scheduleMessage = "Không lưu được lịch: " + ex.Message; }
+        finally { busy = false; }
+    }
     private async Task SaveTopicAsync()
     {
         if (string.IsNullOrWhiteSpace(topicName))
@@ -386,6 +451,8 @@
     private static string ShareStatusLabel(string value) => value switch { "Pending" => "Chờ xem xét", "Reviewed" => "Đã xem xét", "Linked" => "Đã liên kết", "Ignored" => "Đã bỏ qua", _ => "Chưa xác định" };
 
     private sealed record TopicItem(Guid Id, string Name, string Keywords, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    private sealed record TopicScheduleItem(Guid Id, bool IsEnabled, int RefreshMinutes, string PlatformsJson, DateTimeOffset? NextRunAt, DateTimeOffset? LastRunAt, string? LastRunStatus, string? LastErrorCode, DateTimeOffset? LeaseUntil, int CandidateCount, int ChannelCount);
+    private sealed record TopicScheduleRunItem(Guid Id, string TriggerKind, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, int CandidateCount, int ChannelCount, string? ErrorCode);
     private sealed record DiscoveryPlanItem(string Topic, string[] Queries, string[] RelatedTopics, string[] IntentSignals, string[] Exclusions, bool RequiresHumanReview);
 
     private sealed record SharedLinkItem(Guid Id, string Platform, string SharedUrl,
