@@ -121,7 +121,9 @@ jobs:
           scopes = request('GET', '/admin/realms/creatorflow/client-scopes', token=admin)
           basic_scope = next((scope for scope in scopes if scope['name'] == 'basic'), None)
           assert basic_scope, 'Keycloak basic client scope is missing'
-          request('PUT', f"/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes/{basic_scope['id']}", token=admin)
+          default_scopes = request('GET', f'/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes', token=admin)
+          if not any(scope['id'] == basic_scope['id'] for scope in default_scopes):
+              request('PUT', f"/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes/{basic_scope['id']}", token=admin)
 
           users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
           if not users:
