@@ -93,3 +93,33 @@ TikTok Shop Affiliate API is approval-gated; Seller Analytics APIs are scoped to
 - Rank commercial potential only from verified sales evidence; expose public-content traction as a separate score.
 - Add scheduled worker execution, bounded retries, rate limiting, idempotency and a human review queue.
 - Verify API/Web builds, tenant isolation, migration checksums and connector contract tests before enabling automatic collection.
+
+
+## Public discovery connectors — current implementation (migration 028)
+
+The topic-driven Trends flow now has a bounded, on-demand connector path in addition to the AI query planner:
+
+1. The authenticated Web UI requests an AI query plan from the Python service through the .NET API.
+2. After the plan is returned, the Web flow calls `POST /api/v1/discovery/search` automatically.
+3. The .NET API resolves connector credentials for the active workspace and calls enabled providers server-side.
+4. Results are returned with provider status, source attribution and validated canonical TikTok links. Only provider-supplied metrics are shown; the AI plan is never treated as evidence that a channel/video exists.
+
+Current providers:
+- **Brave Search Web API** searches indexed public web pages with Vietnam-oriented query hints and accepts only validated HTTPS TikTok profile paths. Coverage depends on Brave's index and is not a complete TikTok directory.
+- **TikTok Research API** can query public video metadata for Vietnam only when the project has the required Research API approval and valid client credentials. A normal developer app or Display API access is not equivalent approval.
+
+### Workspace credential model
+
+Migration `028_discovery_connector_configuration.sql` adds one `dbo.DiscoveryConnectorConfigurations` row per tenant. Brave API key and TikTok Research Client Key/Secret are encrypted with ASP.NET Core Data Protection before persistence. The settings API exposes presence flags only, never plaintext or ciphertext. Only workspace Owner/Admin can manage the credentials. Blank update fields preserve existing values; explicit clear flags remove the corresponding credential. TikTok client key and secret must be configured or cleared as a pair. Environment configuration remains a server-side fallback when a workspace credential is absent.
+
+The Data Protection key ring is operationally critical: it must persist across API restarts and be protected/backed up by the host operator. Losing or changing the key ring can make stored credentials undecryptable. Do not store the key ring in Git, a browser, or a container image. Confirm the actual host key-ring persistence and backup policy before production use.
+
+### Explicit scope and non-goals
+
+- Connector execution is currently on demand from the Trends UI. The topic scheduler and calendar schedules do not yet execute connector searches on a recurring basis.
+- This implementation returns search results; it does not persist discovered channels/videos into the candidate tables, download media, follow accounts, or interact with TikTok.
+- No scraping, browser automation, QR/session extraction, cookies, likes, comments, follows, or publishing are used.
+- Empty results and provider-unavailable states must remain visible; never synthesize placeholder channel cards or metrics.
+- Brave indexed results are discovery leads, not proof of creator location, account ownership, current availability, rights, or commercial performance.
+
+Operational setup and provider limitations: [Discovery connector runbook](../operations/DISCOVERY_CONNECTORS.md). The design deliberately separates AI inference from external data retrieval: the LLM proposes bounded queries; a permitted provider supplies actual links and metadata.
