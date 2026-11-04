@@ -12,10 +12,9 @@ public static class DiscoveryConnectorSettingsEndpoints
 
     public static IEndpointRouteBuilder MapDiscoveryConnectorSettings(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/v1/discovery/connectors").RequireAuthorization();
+        var group = app.MapGroup("/api/v1/discovery/connectors").RequireAuthorization("TenantOwnerOrAdmin");
         group.MapGet("/settings", async (CreatorFlowDbContext? db, ITenantContext tenant, IConfiguration config, CancellationToken ct) =>
         {
-            if (!CanManage(tenant)) return Results.Forbid();
             if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
             var row = await db.DiscoveryConnectorConfigurations.AsNoTracking()
                 .SingleOrDefaultAsync(x => x.TenantId == tenant.TenantId, ct);
@@ -84,8 +83,6 @@ public static class DiscoveryConnectorSettingsEndpoints
             Unprotect(row?.EncryptedTikTokResearchClientSecret, TikTokSecretPurpose) ?? config["TikTokResearch:ClientSecret"]);
     }
 
-    private static bool CanManage(ITenantContext tenant) => tenant.IsResolved &&
-        (string.Equals(tenant.Role, "Owner", StringComparison.Ordinal) || string.Equals(tenant.Role, "Admin", StringComparison.Ordinal));
 }
 
 public sealed record DiscoveryConnectorSettingsWriteRequest(string? BraveApiKey, string? TikTokResearchClientKey,
