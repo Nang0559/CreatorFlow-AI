@@ -9,6 +9,15 @@ namespace CreatorFlow.Api.Identity;
 /// </summary>
 public sealed class TenantRoleGuardMiddleware(RequestDelegate next)
 {
+    private static readonly PathString[] OwnerAdminReadPrefixes =
+    [
+        "/api/v1/identity",
+        "/api/v1/ai/providers",
+        "/api/v1/discovery/connectors/settings",
+        "/api/v1/billing",
+        "/api/v1/tenant"
+    ];
+
     private static readonly PathString[] EditorMutationPrefixes =
     [
         "/api/v1/content-projects",
@@ -31,13 +40,31 @@ public sealed class TenantRoleGuardMiddleware(RequestDelegate next)
                          HttpMethods.IsPut(context.Request.Method) ||
                          HttpMethods.IsPatch(context.Request.Method) ||
                          HttpMethods.IsDelete(context.Request.Method);
-        if (!tenantContext.IsResolved || !isMutation)
+        if (!tenantContext.IsResolved)
         {
             await next(context);
             return;
         }
 
         var role = tenantContext.Role;
+        if (!isMutation && HttpMethods.IsGet(context.Request.Method) &&
+            OwnerAdminReadPrefixes.Any(prefix => context.Request.Path.StartsWithSegments(prefix)) &&
+            role is not ("Owner" or "Admin"))
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "This workspace role cannot read administrative or credential settings.",
+                role
+            });
+            return;
+        }
+
+        if (!isMutation)
+        {
+            await next(context);
+            return;
+        }
         // Learning proposal approval/rejection changes the active creator profile.
         // Until a dedicated Reviewer membership role and audit workflow exist,
         // only workspace Owner/Admin may perform this sensitive review action.
