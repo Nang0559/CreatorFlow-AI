@@ -11,13 +11,13 @@ The endpoint returns provider status independently, actual channel/video URLs, a
 
 ## Important TikTok access boundary
 
-Research API access is restricted to approved research projects and approved purposes. A normal TikTok developer app or Display API approval does not automatically grant public-wide discovery. Display API is for a creator-authorized user's profile and videos; it is not a general creator search endpoint.
+Research API access is restricted to approved research projects and approved purposes. TikTok's published eligibility is limited to qualifying researchers/organizations in specified regions; its current eligibility information lists the U.S., EEA, UK, Canada and Switzerland for academic institutions, and qualifying non-profit/independent research bodies in the EU. TikTok also states that creators, advertisers and commercial users are not eligible for Research Tools. A Vietnam-based commercial CreatorFlow project should therefore treat this connector as **unavailable unless TikTok confirms eligibility in writing**. A normal TikTok developer app or Display API approval does not grant public-wide discovery. Display API is for a creator-authorized user's profile and videos; it is not a general creator search endpoint. Check the current official eligibility and Research API application pages before planning to obtain credentials.
 
-If the Research API project is not approved, leave the credentials blank. Brave public web search can still return indexed public TikTok pages, but it is not complete coverage and results can be stale or unavailable. Do not replace this with scraping, browser automation, cookies, QR login, or undocumented endpoints.
+If the applicant is not eligible or the Research API project is not approved, leave the credentials blank. Do not spend time trying to create these credentials through a standard developer app. Brave public web search can still return indexed public TikTok pages, but it is not complete coverage and results can be stale or unavailable. Do not replace this with scraping, browser automation, cookies, QR login, or undocumented endpoints.
 
 ## Configure in the workspace
 
-Open **Cấu hình hệ thống** (`/settings`) and enter the Brave Search API key in **Khóa kết nối khám phá**. TikTok Research Client Key and Client Secret are optional and should only be entered after the project is approved. The API encrypts these values with ASP.NET Core Data Protection and stores them per workspace in SQL Server. Only workspace Owner/Admin can read credential-presence status, replace keys, or clear them; the raw secrets are never returned to the browser. The API's Data Protection key ring must remain persistent and protected on the server.
+Open **Cấu hình hệ thống** (`/settings`) and enter the Brave Search API key in **Khóa kết nối khám phá**. TikTok Research Client Key and Client Secret are optional and should only be entered after TikTok confirms that the applicant/project is eligible and approves it. For an ordinary Vietnam-based commercial use case, do not expect these credentials to be available. The API encrypts these values with ASP.NET Core Data Protection and stores them per workspace in SQL Server. Only workspace Owner/Admin can read credential-presence status, replace keys, or clear them; the raw secrets are never returned to the browser. The API's Data Protection key ring must remain persistent and protected on the server.
 
 Environment variables remain supported as a server-level fallback for existing deployments. Do not put real keys in Git or browser-side configuration.
 
@@ -55,3 +55,10 @@ An empty result is a valid result. It means no matching, parseable TikTok pages 
 - TikTok Research API's date window is limited to the recent 30 days in this first implementation.
 - No media is downloaded. Metadata visibility is not media-download permission.
 - API keys remain server-side. Never send them to the Web UI or commit them.
+
+
+## Official eligibility references
+
+- [TikTok Research API eligibility and application](https://developers.tiktok.com/products/research-api/)
+- [TikTok Research API FAQ](https://developers.tiktok.com/docs/en/research-api-faq)
+- [TikTok Research API credential setup](https://developers.tiktok.com/docs/en/research-api-get-started)
