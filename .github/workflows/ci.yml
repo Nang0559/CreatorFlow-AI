@@ -121,7 +121,8 @@ jobs:
           if not users:
               request('POST', '/admin/realms/creatorflow/users', {
                   'username': 'ci-oidc-contract', 'enabled': True,
-                  'email': 'ci-oidc-contract@example.invalid', 'emailVerified': False
+                  'email': 'ci-oidc-contract@example.invalid', 'emailVerified': True,
+                  'firstName': 'CI', 'lastName': 'Contract', 'requiredActions': []
               }, admin)
               users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
           user_id = users[0]['id']
