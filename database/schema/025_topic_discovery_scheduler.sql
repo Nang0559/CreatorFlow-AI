@@ -18,6 +18,9 @@ IF COL_LENGTH(N'dbo.DiscoveryTopicProfiles',N'LastErrorCode') IS NULL
     ALTER TABLE dbo.DiscoveryTopicProfiles ADD LastErrorCode nvarchar(80) NULL;
 IF COL_LENGTH(N'dbo.DiscoveryTopicProfiles',N'LeaseUntil') IS NULL
     ALTER TABLE dbo.DiscoveryTopicProfiles ADD LeaseUntil datetimeoffset(7) NULL;
+
+-- End the column-add batch before constraints/indexes reference the new columns.
+GO
 IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE name=N'CK_DiscoveryTopicProfiles_PlatformsJson')
     ALTER TABLE dbo.DiscoveryTopicProfiles ADD CONSTRAINT CK_DiscoveryTopicProfiles_PlatformsJson
         CHECK(ISJSON(PlatformsJson)=1);
