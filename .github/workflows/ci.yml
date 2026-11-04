@@ -51,6 +51,7 @@ jobs:
             'tools/sql-qc/Invoke-SqlServerQc.ps1',
             'tools/sql-qc/Protect-QcDatabase.ps1',
             'tools/sql-qc/Test-SqlQcPreflight.ps1',
+            'scripts/Test-KeycloakRealmContract.ps1',
             'scripts/docker/Import-LocalPilotEnv.ps1'
           )
           foreach ($file in $files) {
@@ -65,3 +66,4 @@ jobs:
             }
             Write-Host "PASS $file"
           }
+          ./scripts/Test-KeycloakRealmContract.ps1
