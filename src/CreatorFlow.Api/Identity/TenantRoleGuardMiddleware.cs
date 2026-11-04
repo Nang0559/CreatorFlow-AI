@@ -9,14 +9,6 @@ namespace CreatorFlow.Api.Identity;
 /// </summary>
 public sealed class TenantRoleGuardMiddleware(RequestDelegate next)
 {
-    private static readonly PathString[] OwnerAdminReadPrefixes =
-    [
-        "/api/v1/identity",
-        "/api/v1/ai/providers",
-        "/api/v1/billing",
-        "/api/v1/tenant"
-    ];
-
     private static readonly PathString[] EditorMutationPrefixes =
     [
         "/api/v1/content-projects",
@@ -46,19 +38,6 @@ public sealed class TenantRoleGuardMiddleware(RequestDelegate next)
         }
 
         var role = tenantContext.Role;
-        if (!isMutation && HttpMethods.IsGet(context.Request.Method) &&
-            OwnerAdminReadPrefixes.Any(prefix => context.Request.Path.StartsWithSegments(prefix)) &&
-            role is not ("Owner" or "Admin"))
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsJsonAsync(new
-            {
-                error = "This workspace role cannot read administrative or credential settings.",
-                role
-            });
-            return;
-        }
-
         if (!isMutation)
         {
             await next(context);
