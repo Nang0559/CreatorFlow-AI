@@ -37,7 +37,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Product catalog, product matching, cart attachment and order attribution.
 - TikTok OAuth, official publishing, scheduling and post reconciliation.
 - Durable discovery/provider connector jobs, outbox/inbox, retries and connector observability. Video render jobs are durable but do not constitute connector orchestration.
-- Production OIDC provider configuration and contract tests; MFA enforcement is delegated to the provider.
+- Production OIDC provider configuration and signed-token contract tests; the local Keycloak realm export and static/live discovery contract check are implemented. MFA enforcement is delegated to the provider.
 - Invitation and membership administration APIs exist; invitation delivery is manual until SMTP/provider integration.
 - Central mutation authorization now uses a deny-by-default role matrix: Owner/Admin, content-workflow Editor allowlist, read-only Analyst and publishing-only Publisher. Publisher still has no writable route because `/api/v1/publishing` is not implemented; endpoint/resource-specific checks and exhaustive negative tests remain release gates.
 - SQL Server Row-Level Security is not yet configured. Composite same-tenant foreign keys are added for the currently mapped business relationships by migrations 018–019; migration 020 changes channel/video/trend/profile uniqueness to workspace scope. Remaining unmapped Discovery SQL tables still need explicit tenant ownership before those tables can be used by a multi-tenant runtime.
@@ -100,3 +100,8 @@ The `GET /api/v1/style-profiles/{id}/learning-analysis` endpoint now loads the s
 ## SQL CI evidence correction (2026-11-04)
 
 SQL Server QC is a separate self-hosted workflow, not a job inside the GitHub-hosted `.github/workflows/ci.yml`. It is intentionally not triggered by pull requests because it executes repository code on the local SQL host. The QC script applies migrations 001–028 only to a clean database or one whose tenant foundation 011–013 is already complete, then verifies checksums and tenant/composite constraints. It refuses to infer ownership for a populated legacy database. The current run must be observed to completion on the Z240 runner. Pending, queued or cancelled runs are not SQL acceptance evidence.
+
+
+## Local Keycloak reproducibility (2026-11-04)
+
+The development Compose stack imports `docker/keycloak/realm-import/creatorflow-realm.json` on first startup. The checked-in realm contract defines confidential Authorization Code + PKCE S256, local Web redirect URIs, optional `creatorflow-api` scope and access-token audience mapper. `scripts/Test-KeycloakRealmContract.ps1` validates the static import contract in CI and can additionally verify live OIDC discovery with `-CheckLive`. The import intentionally contains no users or client secret. It does not overwrite an already-existing realm in a persisted Keycloak volume. Full signed access-token validation against a live Keycloak instance and first-start import acceptance on the Z240 remain pending.
