@@ -126,10 +126,10 @@
             <h3>Bộ truy vấn đề xuất cho: @discoveryPlan.Topic</h3>
             <p class="muted">Thị trường: Việt Nam · Cần người duyệt: @((discoveryPlan.RequiresHumanReview) ? "Có" : "Không")</p>
             <strong>Từ khóa tìm kiếm</strong>
-            <ul>@foreach (var query in discoveryPlan.Queries) { <li>@query</li> }</ul>
-            @if (discoveryPlan.RelatedTopics.Length > 0) { <strong>Chủ đề liên quan</strong><p>@string.Join(" · ", discoveryPlan.RelatedTopics)</p> }
-            @if (discoveryPlan.IntentSignals.Length > 0) { <strong>Tín hiệu ý định mua hàng</strong><p>@string.Join(" · ", discoveryPlan.IntentSignals)</p> }
-            @if (discoveryPlan.Exclusions.Length > 0) { <strong>Loại trừ</strong><p>@string.Join(" · ", discoveryPlan.Exclusions)</p> }
+            <ul>@foreach (var query in (discoveryPlan.Queries ?? [])) { <li>@query</li> }</ul>
+            @if (discoveryPlan.RelatedTopics is { Length: > 0 }) { <strong>Chủ đề liên quan</strong><p>@string.Join(" · ", discoveryPlan.RelatedTopics)</p> }
+            @if (discoveryPlan.IntentSignals is { Length: > 0 }) { <strong>Tín hiệu ý định mua hàng</strong><p>@string.Join(" · ", discoveryPlan.IntentSignals)</p> }
+            @if (discoveryPlan.Exclusions is { Length: > 0 }) { <strong>Loại trừ</strong><p>@string.Join(" · ", discoveryPlan.Exclusions)</p> }
             <p class="muted">Bước thu thập kết quả và xác minh hiệu suất thương mại chỉ hoạt động khi connector được cấp quyền và cấu hình. Không coi kế hoạch truy vấn là danh sách kênh đã tìm thấy.</p>
         </div>
     }
