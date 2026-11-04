@@ -20,7 +20,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 | Immutable Style Lab metric history | Migration 008, EF mapping, capture on every measure, history API and domain tests | Implemented foundation for ML datasets; no predictor yet |
 | Creator style profile | Profile API, UI, domain and SQL | Implemented |
 | Winner evidence import | Learn endpoint, evidence snapshot and unique profile/experiment index | Implemented with duplicate protection |
-| Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; not ML |
+| Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; analysis input is now restricted to experiments explicitly imported as profile evidence; not ML |
 | Video source library and rights confirmation | Tenant-scoped asset upload, SHA-256 provenance, size/format checks, SQL metadata | Implemented foundation; codec/duration validation occurs in render worker |
 | Automated video render | Durable SQL jobs, Windows FFmpeg H.264/AAC MP4 worker, preview/download proxy | FFmpeg-only pilot pipeline; no After Effects JSX/AE render adapter is part of the current branch; hardware/visual acceptance on HP Z240 still required |
 | LLM runtime | Provider adapter, structured contracts, authenticated FastAPI endpoints, tests, .NET proxy, Style Lab generation UI and profile-scoped learning synthesis UI | Implemented first LLM workflow; provider credentials required; synthesis output is a draft and must be submitted to Learning Memory for review |
@@ -41,10 +41,10 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Invitation and membership administration APIs exist; invitation delivery is manual until SMTP/provider integration.
 - Analyst writes are blocked centrally and Publisher writes are blocked outside future publishing routes; full endpoint-specific role policies remain incomplete.
 - SQL Server Row-Level Security is not yet configured. Composite same-tenant foreign keys are added for the currently mapped business relationships by migrations 018–019; migration 020 changes channel/video/trend/profile uniqueness to workspace scope. Remaining unmapped Discovery SQL tables still need explicit tenant ownership before those tables can be used by a multi-tenant runtime.
-- SQL Server execution of the current migration manifest through 020 has not been verified on the user's HP Z240 in this review. Migration 012's legacy-workspace backfill assumes all listed existing business rows belong to one workspace; review ownership before applying it.
+- SQL Server execution of the current migration manifest through 028 has not yet been evidenced as successful on the user's HP Z240. The dedicated self-hosted SQL QC workflow exists, but its latest run must complete successfully before claiming SQL acceptance. Migration 012's legacy-workspace backfill assumes all listed existing business rows belong to one workspace; review ownership before applying it.
 - Background workers that access tenant-owned business data must scope each operation by TenantId; the video worker processes durable jobs globally but each job/output is tenant-keyed.
 
-- Profile-scoped deterministic style learning analysis; current deterministic analysis reads the global evaluated experiment pool. LLM synthesis is scoped to imported profile evidence.
+- Profile-scoped deterministic analysis is now filtered by the profile's imported CreatorStyleEvidence. A regression test verifies unrelated evaluated experiments are excluded. LLM synthesis remains scoped to imported profile evidence.
 - Trained ML prediction, durable model registry/retraining and KPI/retention-aware optimization.
 - Prompt registry/version history and production prompt-evaluation datasets. Learning proposals and immutable approved profile versions are implemented through Learning Memory.
 - Production evaluation datasets and end-to-end connector tests.
@@ -91,3 +91,12 @@ At commit `e2524f3d570460b9fd9f1462d2cfea046b74efe4`, GitHub CI run `41823809975
 ## Render implementation correction (2026-11-04)
 
 The active branch `feature/keycloak-oidc-local` uses an FFmpeg-only local render worker. References in earlier audit snapshots to After Effects JSX generation and image-sequence rendering describe a different historical implementation/branch and must not be used as current release evidence. After Effects remains a possible future adapter only. A successful build does not constitute a Z240 render acceptance test.
+
+
+## Profile-scoped deterministic analysis correction (2026-11-04)
+
+The `GET /api/v1/style-profiles/{id}/learning-analysis` endpoint now loads the selected profile's audited evidence links first and analyzes only evaluated experiments whose IDs occur in that profile's evidence. A profile with no imported evidence returns an empty analysis rather than learning from the tenant-wide experiment pool. The API test suite includes a regression test with an unrelated evaluated experiment.
+
+## SQL CI evidence correction (2026-11-04)
+
+SQL Server QC is a separate self-hosted workflow, not a job inside the GitHub-hosted `.github/workflows/ci.yml`. It is intentionally not triggered by pull requests because it executes repository code on the local SQL host. The current run must be observed to completion on the Z240 runner. Pending, queued or cancelled runs are not SQL acceptance evidence.
