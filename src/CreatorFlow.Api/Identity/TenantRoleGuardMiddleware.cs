@@ -38,7 +38,18 @@ public sealed class TenantRoleGuardMiddleware(RequestDelegate next)
         }
 
         var role = tenantContext.Role;
-        var allowed = role switch
+        // Learning proposal approval/rejection changes the active creator profile.
+        // Until a dedicated Reviewer membership role and audit workflow exist,
+        // only workspace Owner/Admin may perform this sensitive review action.
+        var isLearningProposalReview = context.Request.Path.StartsWithSegments(
+            "/api/v1/style-profiles", out var remaining) &&
+            (remaining.Value?.Contains("/learning-proposals/", StringComparison.OrdinalIgnoreCase) == true) &&
+            (remaining.Value?.EndsWith("/approve", StringComparison.OrdinalIgnoreCase) == true ||
+             remaining.Value?.EndsWith("/reject", StringComparison.OrdinalIgnoreCase) == true);
+
+        var allowed = isLearningProposalReview
+            ? role is "Owner" or "Admin"
+            : role switch
         {
             "Owner" or "Admin" => true,
             "Editor" => EditorMutationPrefixes.Any(prefix => context.Request.Path.StartsWithSegments(prefix)),
