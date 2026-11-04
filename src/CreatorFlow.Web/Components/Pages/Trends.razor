@@ -137,14 +137,38 @@
 
 <section class="panel topic-schedule-panel">
   <div class="panel-heading"><div><p class="eyebrow">TỰ ĐỘNG THEO DÕI</p><h2>Lịch khám phá chủ đề</h2>
-    <p class="muted">Bật lịch để worker kiểm tra chủ đề định kỳ, không cần nhấn tìm kiếm thủ công.</p></div></div>
+    <p class="muted">Tạo lịch riêng cho từng chủ đề. Có thể chạy theo chu kỳ, hằng ngày hoặc các ngày cố định trong tuần. Múi giờ mặc định: Việt Nam (UTC+7).</p></div></div>
   <div class="trend-form">
     <label>Chủ đề<select @bind="selectedScheduleTopicId" @bind:after="LoadScheduleAsync"><option value="">Chọn chủ đề</option>
       @foreach (var item in topicItems.Where(x => x.IsActive)) { <option value="@item.Id">@item.Name</option> }
     </select></label>
-    <label>Chu kỳ (phút)<input type="number" min="5" max="1440" @bind="scheduleRefreshMinutes" /></label>
-    <label><input type="checkbox" @bind="scheduleEnabled" /> Bật tự động theo dõi</label>
+    <label>Kiểu lịch<select @bind="scheduleMode">
+      <option value="Interval">Lặp theo chu kỳ</option><option value="Daily">Hằng ngày</option><option value="Weekly">Theo ngày trong tuần</option>
+    </select></label>
+    @if (scheduleMode == "Interval")
+    {
+      <label>Chu kỳ (phút)<input type="number" min="5" max="1440" @bind="scheduleRefreshMinutes" /></label>
+    }
+    else
+    {
+      <label>Giờ chạy (giờ Việt Nam)<input type="time" @bind="scheduleLocalTime" /></label>
+    }
+    <label class="schedule-toggle"><input type="checkbox" @bind="scheduleEnabled" /> Bật tự động theo dõi</label>
   </div>
+  @if (scheduleMode == "Weekly")
+  {
+    <div class="schedule-options"><strong>Ngày chạy</strong><div class="schedule-checks">
+      @foreach (var day in ScheduleDays)
+      {
+        <label><input type="checkbox" checked="@scheduleDays.Contains(day.Value)" @onchange="e => ToggleScheduleDay(day.Value, e)" /> @day.Label</label>
+      }
+    </div></div>
+  }
+  <div class="schedule-options"><strong>Nền tảng theo dõi</strong><div class="schedule-checks">
+    <label><input type="checkbox" checked="@schedulePlatforms.Contains("TikTokVietnam")" @onchange="e => ToggleSchedulePlatform("TikTokVietnam", e)" /> TikTok Việt Nam</label>
+    <label><input type="checkbox" checked="@schedulePlatforms.Contains("YouTubeShortsVietnam")" @onchange="e => ToggleSchedulePlatform("YouTubeShortsVietnam", e)" /> YouTube Shorts Việt Nam</label>
+    <label><input type="checkbox" checked="@schedulePlatforms.Contains("FacebookReelsVietnam")" @onchange="e => ToggleSchedulePlatform("FacebookReelsVietnam", e)" /> Facebook Reels Việt Nam</label>
+  </div></div>
   <div class="form-actions">
     <button class="primary" disabled="@(busy || !Api.IsConfigured || !Guid.TryParse(selectedScheduleTopicId, out _))" @onclick="SaveScheduleAsync">Lưu lịch theo dõi</button>
     <button class="secondary" disabled="@(busy || !Guid.TryParse(selectedScheduleTopicId, out _))" @onclick="LoadScheduleAsync">Làm mới trạng thái</button>
@@ -152,6 +176,7 @@
   @if (!string.IsNullOrWhiteSpace(scheduleMessage)) { <p class="muted" role="status">@scheduleMessage</p> }
   @if (scheduleInfo is not null) {
     <article class="trend-item"><div><span class="status">@(scheduleInfo.IsEnabled ? "Đã bật lịch" : "Đã tắt lịch") · @(scheduleInfo.LastRunStatus ?? "Chưa chạy")</span>
+      <p class="muted">Kiểu lịch: @ScheduleModeLabel(scheduleInfo.ScheduleMode) · Giờ địa phương: @scheduleInfo.LocalTime</p>
       <p class="muted">Lần chạy gần nhất: @(scheduleInfo.LastRunAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa có")</p>
       <p class="muted">Lần chạy tiếp theo: @(scheduleInfo.NextRunAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa xếp lịch")</p>
       <p class="muted">Kết quả: @scheduleInfo.CandidateCount ứng viên · @scheduleInfo.ChannelCount kênh</p>
@@ -218,6 +243,11 @@
     private List<DiscoveryLogItem> discoveryLogs = [];
     private string selectedScheduleTopicId = "";
     private int scheduleRefreshMinutes = 30;
+    private string scheduleMode = "Interval";
+    private string scheduleLocalTime = "09:00";
+    private string scheduleTimeZoneId = "Asia/Ho_Chi_Minh";
+    private HashSet<string> scheduleDays = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> schedulePlatforms = new(StringComparer.OrdinalIgnoreCase) { "TikTokVietnam" };
     private bool scheduleEnabled = true;
     private string scheduleMessage = "";
     private TopicScheduleItem? scheduleInfo;
@@ -280,26 +310,52 @@
         try {
             scheduleMessage = "";
             scheduleInfo = await Api.GetAsync<TopicScheduleItem>($"/api/v1/topics/{topicId}/schedule");
-            if (scheduleInfo is not null) { scheduleEnabled = scheduleInfo.IsEnabled; scheduleRefreshMinutes = scheduleInfo.RefreshMinutes; }
+            if (scheduleInfo is not null) { scheduleEnabled = scheduleInfo.IsEnabled; scheduleRefreshMinutes = scheduleInfo.RefreshMinutes; scheduleMode = scheduleInfo.ScheduleMode; scheduleLocalTime = scheduleInfo.LocalTime; scheduleDays = new HashSet<string>(scheduleInfo.DaysOfWeek ?? [], StringComparer.OrdinalIgnoreCase); schedulePlatforms = JsonSerializer.Deserialize<HashSet<string>>(scheduleInfo.PlatformsJson) ?? new(StringComparer.OrdinalIgnoreCase); scheduleTimeZoneId = scheduleInfo.TimeZoneId; }
             scheduleHistory = await Api.GetAsync<List<TopicScheduleRunItem>>($"/api/v1/topics/{topicId}/schedule/history?take=20") ?? [];
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { scheduleInfo = null; scheduleHistory = []; scheduleEnabled = true; scheduleRefreshMinutes = 30; scheduleMessage = "Chủ đề chưa có lịch. Lưu cấu hình để tạo lịch đầu tiên."; }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { scheduleInfo = null; scheduleHistory = []; scheduleEnabled = true; scheduleRefreshMinutes = 30; scheduleMode = "Interval"; scheduleLocalTime = "09:00"; scheduleDays = new(StringComparer.OrdinalIgnoreCase); schedulePlatforms = new(StringComparer.OrdinalIgnoreCase) { "TikTokVietnam" }; scheduleMessage = "Chủ đề chưa có lịch. Lưu cấu hình để tạo lịch đầu tiên."; }
         catch (Exception ex) { scheduleMessage = "Không tải được lịch: " + ex.Message; }
     }
 
     private async Task SaveScheduleAsync()
     {
         if (!Guid.TryParse(selectedScheduleTopicId, out var topicId)) return;
-        if (scheduleRefreshMinutes is < 5 or > 1440) { scheduleMessage = "Chu kỳ phải từ 5 đến 1.440 phút."; return; }
+        if (scheduleMode == "Interval" && scheduleRefreshMinutes is < 5 or > 1440) { scheduleMessage = "Chu kỳ phải từ 5 đến 1.440 phút."; return; }
+        if (scheduleMode == "Weekly" && scheduleDays.Count == 0) { scheduleMessage = "Hãy chọn ít nhất một ngày trong tuần."; return; }
+        if (schedulePlatforms.Count == 0) { scheduleMessage = "Hãy chọn ít nhất một nền tảng."; return; }
         try {
             busy = true; scheduleMessage = "";
-            await Api.PutAsync<object, object>($"/api/v1/topics/{topicId}/schedule", new { isEnabled = scheduleEnabled, refreshMinutes = scheduleRefreshMinutes, platforms = new[] { "TikTokVietnam" } });
+            await Api.PutAsync<object, object>($"/api/v1/topics/{topicId}/schedule", new { isEnabled = scheduleEnabled, refreshMinutes = scheduleRefreshMinutes, platforms = schedulePlatforms.ToArray(), scheduleMode, localTime = scheduleLocalTime, daysOfWeek = scheduleDays.ToArray(), timeZoneId = scheduleTimeZoneId });
             await LoadScheduleAsync();
             scheduleMessage = scheduleEnabled ? "Đã lưu lịch. Worker sẽ tự kiểm tra chủ đề đến hạn." : "Đã tắt lịch. Lịch sử cũ vẫn được giữ nguyên.";
         }
         catch (Exception ex) { scheduleMessage = "Không lưu được lịch: " + ex.Message; }
         finally { busy = false; }
     }
+
+    private static readonly (string Label, string Value)[] ScheduleDays =
+    [
+        ("Thứ 2", "Monday"), ("Thứ 3", "Tuesday"), ("Thứ 4", "Wednesday"),
+        ("Thứ 5", "Thursday"), ("Thứ 6", "Friday"), ("Thứ 7", "Saturday"), ("Chủ nhật", "Sunday")
+    ];
+
+    private void ToggleScheduleDay(string day, ChangeEventArgs args)
+    {
+        if (args.Value is bool enabled && enabled) scheduleDays.Add(day);
+        else scheduleDays.Remove(day);
+    }
+
+    private void ToggleSchedulePlatform(string platformName, ChangeEventArgs args)
+    {
+        if (args.Value is bool enabled && enabled) schedulePlatforms.Add(platformName);
+        else schedulePlatforms.Remove(platformName);
+    }
+
+    private static string ScheduleModeLabel(string mode) => mode switch
+    {
+        "Daily" => "Hằng ngày", "Weekly" => "Theo ngày trong tuần", _ => "Lặp theo chu kỳ"
+    };
+
     private async Task SaveTopicAsync()
     {
         if (string.IsNullOrWhiteSpace(topicName))
@@ -451,7 +507,7 @@
     private static string ShareStatusLabel(string value) => value switch { "Pending" => "Chờ xem xét", "Reviewed" => "Đã xem xét", "Linked" => "Đã liên kết", "Ignored" => "Đã bỏ qua", _ => "Chưa xác định" };
 
     private sealed record TopicItem(Guid Id, string Name, string Keywords, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
-    private sealed record TopicScheduleItem(Guid Id, bool IsEnabled, int RefreshMinutes, string PlatformsJson, DateTimeOffset? NextRunAt, DateTimeOffset? LastRunAt, string? LastRunStatus, string? LastErrorCode, DateTimeOffset? LeaseUntil, int CandidateCount, int ChannelCount);
+    private sealed record TopicScheduleItem(Guid Id, bool IsEnabled, int RefreshMinutes, string PlatformsJson, DateTimeOffset? NextRunAt, DateTimeOffset? LastRunAt, string? LastRunStatus, string? LastErrorCode, DateTimeOffset? LeaseUntil, int CandidateCount, int ChannelCount, string ScheduleMode, string LocalTime, string[] DaysOfWeek, string TimeZoneId);
     private sealed record TopicScheduleRunItem(Guid Id, string TriggerKind, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, int CandidateCount, int ChannelCount, string? ErrorCode);
     private sealed record DiscoveryPlanItem(string Topic, string[] Queries, string[] RelatedTopics, string[] IntentSignals, string[] Exclusions, bool RequiresHumanReview);
 
