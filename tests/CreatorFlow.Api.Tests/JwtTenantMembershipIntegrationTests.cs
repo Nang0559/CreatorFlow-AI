@@ -115,6 +115,12 @@ public sealed class JwtTenantMembershipIntegrationTests
         var foreignTenantId = Guid.NewGuid();
         await factory.SeedAsync(async (db, tenantContext) =>
         {
+            db.TenantMemberships.Add(TenantMembership.Create(
+                CreatorFlowApiFactory.LegacyTenantId,
+                CreatorFlowApiFactory.TestJwtIssuer,
+                Subject,
+                TenantRole.Owner,
+                DateTimeOffset.UtcNow));
             var foreignTenant = Tenant.Create("Foreign workspace", $"foreign-{foreignTenantId:N}", DateTimeOffset.UtcNow);
             db.Entry(foreignTenant).Property(x => x.Id).CurrentValue = foreignTenantId;
             db.Tenants.Add(foreignTenant);
@@ -166,6 +172,12 @@ public sealed class JwtTenantMembershipIntegrationTests
         var foreignTenantId = Guid.NewGuid();
         await factory.SeedAsync(async (db, tenantContext) =>
         {
+            db.TenantMemberships.Add(TenantMembership.Create(
+                CreatorFlowApiFactory.LegacyTenantId,
+                CreatorFlowApiFactory.TestJwtIssuer,
+                Subject,
+                TenantRole.Owner,
+                DateTimeOffset.UtcNow));
             var foreignTenant = Tenant.Create("Foreign workspace", $"foreign-{foreignTenantId:N}", DateTimeOffset.UtcNow);
             db.Entry(foreignTenant).Property(x => x.Id).CurrentValue = foreignTenantId;
             db.Tenants.Add(foreignTenant);
