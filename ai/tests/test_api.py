@@ -130,6 +130,24 @@ def test_analyze_rejects_empty_text(monkeypatch) -> None:
     response = client.post("/v1/analyze", headers={"X-CreatorFlow-AI-Key": "test-service-key-0123456789abcdef"}, json={"text": ""})
     assert response.status_code == 422
 
+def test_analyze_reports_missing_provider_after_validating_request(monkeypatch) -> None:
+    monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key-0123456789abcdef")
+    for name in (
+        "CREATORFLOW_LLM_API_KEY", "CREATORFLOW_LLM_MODEL", "CREATORFLOW_LLM_BASE_URL",
+        "CREATORFLOW_LLM_GEMINI_API_KEY", "CREATORFLOW_LLM_GEMINI_MODEL",
+        "CREATORFLOW_LLM_OPENAI_API_KEY", "CREATORFLOW_LLM_OPENAI_MODEL",
+        "CREATORFLOW_LLM_OLLAMA_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    response = client.post(
+        "/v1/analyze",
+        headers={"X-CreatorFlow-AI-Key": "test-service-key-0123456789abcdef"},
+        json={"text": "Nội dung hợp lệ"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "AI provider configuration is invalid or unavailable."
+
 
 def test_discovery_rank_works_without_shared_link_and_priority_is_bounded(monkeypatch) -> None:
     headers = auth(monkeypatch)
