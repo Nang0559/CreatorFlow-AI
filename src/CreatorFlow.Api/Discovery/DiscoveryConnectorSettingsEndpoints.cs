@@ -27,7 +27,6 @@ public static class DiscoveryConnectorSettingsEndpoints
         group.MapPut("/settings", async (DiscoveryConnectorSettingsWriteRequest request, CreatorFlowDbContext? db,
             ITenantContext tenant, IDataProtectionProvider protection, CancellationToken ct) =>
         {
-            if (!CanManage(tenant)) return Results.Forbid();
             if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
             if (request.BraveApiKey?.Length > 500 || request.TikTokResearchClientKey?.Length > 500 ||
                 request.TikTokResearchClientSecret?.Length > 1000)
