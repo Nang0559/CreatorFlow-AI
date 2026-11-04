@@ -99,7 +99,7 @@ public static class DiscoverySearchEndpoints
                         g.Max(x => x.Followers),
                         g.Select(x => x.Url).Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToArray(),
                         g.Any(x => x.Source == "TikTok Research API") ? "TikTok Research API" : "Brave Search",
-                        g.Select(x => x.VerifiedAt).Max());
+                        g.Select(x => x.RetrievedAt).Max());
                 })
                 .OrderByDescending(x => x.Followers ?? 0)
                 .ThenByDescending(x => x.VideoCount)
@@ -285,8 +285,8 @@ public sealed record DiscoverySearchResponse(
 public sealed record DiscoveryProviderState(string Provider, string Status, int ResultCount, string? Error);
 public sealed record DiscoveryChannelResult(
     string Username, string DisplayName, string ProfileUrl, int VideoCount,
-    long MaxObservedViews, long? Followers, string[] VideoUrls, string Source, DateTimeOffset VerifiedAt);
+    long MaxObservedViews, long? Followers, string[] VideoUrls, string Source, DateTimeOffset RetrievedAt);
 public sealed record DiscoverySearchResult(
     string Url, string Title, string? Description, string? Username,
     long? Views, long? Likes, long? Comments, long? Shares,
-    string Kind, string Source, DateTimeOffset VerifiedAt, DateTimeOffset? PublishedAt = null, long? Followers = null, string? DisplayName = null);
+    string Kind, string Source, DateTimeOffset RetrievedAt, DateTimeOffset? PublishedAt = null, long? Followers = null, string? DisplayName = null);
