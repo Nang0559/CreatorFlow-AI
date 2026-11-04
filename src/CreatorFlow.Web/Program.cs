@@ -11,6 +11,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
+builder.Services.AddTransient<CreatorFlow.Web.Services.OidcAccessTokenHandler>();
+builder.Services.AddHttpClient("OidcBackchannel");
 builder.Services.AddHttpClient<CreatorFlow.Web.Services.CreatorFlowApiClient>(client =>
 {
     var baseUrl = builder.Configuration["CreatorFlowApi:BaseUrl"];
@@ -18,7 +20,7 @@ builder.Services.AddHttpClient<CreatorFlow.Web.Services.CreatorFlowApiClient>(cl
     var apiKey = builder.Configuration["CreatorFlowApi:ApiKey"];
     if (builder.Environment.IsDevelopment() && !string.IsNullOrWhiteSpace(apiKey))
         client.DefaultRequestHeaders.Add("X-CreatorFlow-Api-Key", apiKey);
-});
+}).AddHttpMessageHandler<CreatorFlow.Web.Services.OidcAccessTokenHandler>();
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 
 var oidc = builder.Configuration.GetSection("Authentication:Oidc");
@@ -85,9 +87,12 @@ if (oidcEnabled)
         };
         options.Events.OnTicketReceived = context =>
         {
-            var accessToken = context.Properties?.GetTokenValue("access_token");
-            if (!string.IsNullOrWhiteSpace(accessToken) && context.Principal?.Identity is ClaimsIdentity identity)
-                identity.AddClaim(new Claim("creatorflow_access_token", accessToken));
+            if (context.Properties is not null && context.Principal?.Identity is ClaimsIdentity identity)
+            {
+                AddOrReplaceClaim(identity, "creatorflow_access_token", context.Properties.GetTokenValue("access_token"));
+                AddOrReplaceClaim(identity, "creatorflow_refresh_token", context.Properties.GetTokenValue("refresh_token"));
+                AddOrReplaceClaim(identity, "creatorflow_access_token_expires_at", context.Properties.GetTokenValue("expires_at"));
+            }
             return Task.CompletedTask;
         };
     });
@@ -190,5 +195,13 @@ else
         statusCode: StatusCodes.Status503ServiceUnavailable)).AllowAnonymous();
 }
 app.Run();
+
+static void AddOrReplaceClaim(ClaimsIdentity identity, string type, string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return;
+    foreach (var claim in identity.FindAll(type).ToArray())
+        identity.RemoveClaim(claim);
+    identity.AddClaim(new Claim(type, value));
+}
 
 public sealed record WorkspaceSelectionItem(Guid Id, string Name, string Slug, string Role);
