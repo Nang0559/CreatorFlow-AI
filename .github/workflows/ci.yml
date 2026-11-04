@@ -85,8 +85,9 @@ jobs:
               headers = {}
               body = None
               if data is not None:
-                  body = json.dumps(data).encode() if isinstance(data, dict) else urllib.parse.urlencode(data).encode()
-                  headers['Content-Type'] = 'application/json' if isinstance(data, dict) else 'application/x-www-form-urlencoded'
+                  form_encoded = path.endswith('/protocol/openid-connect/token')
+                  body = urllib.parse.urlencode(data).encode() if form_encoded else json.dumps(data).encode()
+                  headers['Content-Type'] = 'application/x-www-form-urlencoded' if form_encoded else 'application/json'
               if token:
                   headers['Authorization'] = 'Bearer ' + token
               req = urllib.request.Request(base + path, data=body, headers=headers, method=method)
