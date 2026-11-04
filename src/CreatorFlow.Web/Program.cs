@@ -100,7 +100,7 @@ if (oidcEnabled)
         options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
 }
 
-static void AddOrReplaceClaim(ClaimsIdentity identity, string type, string? value)\n{\n    if (string.IsNullOrWhiteSpace(value)) return;\n    foreach (var claim in identity.FindAll(type).ToArray()) identity.RemoveClaim(claim);\n    identity.AddClaim(new Claim(type, value));\n}\n\nvar app = builder.Build();
+var app = builder.Build();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -135,7 +135,9 @@ if (oidcEnabled)
         {
             authenticated,
             subject = authenticated ? context.User.FindFirst("sub")?.Value : null,
+            issuer = authenticated ? context.User.FindFirst("iss")?.Value : null,
             selectedTenantId = authenticated ? context.User.FindFirst("creatorflow_tenant")?.Value : null,
+            hasRefreshToken = authenticated && !string.IsNullOrWhiteSpace(await context.GetTokenAsync("refresh_token")),
             accessTokenExpiresAt = authenticated ? await context.GetTokenAsync("expires_at") : null
         });
     }).AllowAnonymous();
@@ -195,5 +197,13 @@ else
         statusCode: StatusCodes.Status503ServiceUnavailable)).AllowAnonymous();
 }
 app.Run();
+
+static void AddOrReplaceClaim(ClaimsIdentity identity, string type, string? value)
+{
+    if (string.IsNullOrWhiteSpace(value)) return;
+    foreach (var claim in identity.FindAll(type).ToArray())
+        identity.RemoveClaim(claim);
+    identity.AddClaim(new Claim(type, value));
+}
 
 public sealed record WorkspaceSelectionItem(Guid Id, string Name, string Slug, string Role);
