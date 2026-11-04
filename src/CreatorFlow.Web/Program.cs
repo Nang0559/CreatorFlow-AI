@@ -135,7 +135,9 @@ if (oidcEnabled)
         {
             authenticated,
             subject = authenticated ? context.User.FindFirst("sub")?.Value : null,
+            issuer = authenticated ? context.User.FindFirst("iss")?.Value : null,
             selectedTenantId = authenticated ? context.User.FindFirst("creatorflow_tenant")?.Value : null,
+            hasRefreshToken = authenticated && !string.IsNullOrWhiteSpace(await context.GetTokenAsync("refresh_token")),
             accessTokenExpiresAt = authenticated ? await context.GetTokenAsync("expires_at") : null
         });
     }).AllowAnonymous();
