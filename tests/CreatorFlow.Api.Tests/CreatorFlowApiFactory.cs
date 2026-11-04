@@ -25,6 +25,7 @@ internal sealed class CreatorFlowApiFactory : WebApplicationFactory<Program>
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["ConnectionStrings:CreatorFlow"] = "Server=localhost;Database=CreatorFlow_QC;Integrated Security=True;TrustServerCertificate=True",
                 ["Authentication:ApiKey"] = ApiKey,
                 ["Tenant:AllowApiKeyBootstrap"] = "true",
                 ["Tenant:BootstrapTenantId"] = LegacyTenantId.ToString(),
