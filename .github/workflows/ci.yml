@@ -50,6 +50,7 @@ jobs:
             -e KC_BOOTSTRAP_ADMIN_PASSWORD='ci-only-admin-password-12345' \
             -e KC_HTTP_PORT=8180 \
             -e KC_HOSTNAME=http://localhost:8180 \
+            -e KC_HEALTH_ENABLED=true \
             -v "$PWD/docker/keycloak/realm-import:/opt/keycloak/data/import:ro" \
             quay.io/keycloak/keycloak:26.8.1 start-dev --import-realm
           for attempt in $(seq 1 60); do
