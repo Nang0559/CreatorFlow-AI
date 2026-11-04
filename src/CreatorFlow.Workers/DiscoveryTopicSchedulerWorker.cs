@@ -60,6 +60,13 @@ internal sealed class DiscoveryTopicSchedulerWorker(
         {
             claim.Transaction = transaction;
             claim.CommandText = """
+                UPDATE h
+                   SET Status=N'Failed',CompletedAt=SYSUTCDATETIME(),ErrorCode=N'LeaseExpired'
+                  FROM dbo.DiscoveryTopicRunHistory h
+                  INNER JOIN dbo.DiscoveryTopicProfiles p
+                    ON p.Id=h.TopicProfileId AND p.TenantId=h.TenantId
+                 WHERE h.Status=N'Running' AND p.LeaseUntil < SYSUTCDATETIME();
+
                 ;WITH due AS
                 (
                     SELECT TOP (1) p.Id
@@ -140,7 +147,7 @@ internal sealed class DiscoveryTopicSchedulerWorker(
             UPDATE dbo.DiscoveryTopicProfiles
                SET LastRunAt=SYSUTCDATETIME(),LastRunStatus=N'Skipped',
                    LastErrorCode=@ErrorCode,LeaseUntil=NULL,
-                   NextRunAt=DATEADD(minute,RefreshMinutes,SYSUTCDATETIME()),
+                   NextRunAt=CASE WHEN IsEnabled=1 THEN DATEADD(minute,RefreshMinutes,SYSUTCDATETIME()) ELSE NULL END,
                    UpdatedAt=SYSUTCDATETIME()
              WHERE Id=@ProfileId AND TenantId=@TenantId;
             COMMIT TRANSACTION;
