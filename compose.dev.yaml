@@ -1,7 +1,7 @@
 services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.1
-    command: ["start-dev"]
+    command: ["start-dev", "--import-realm"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Set KEYCLOAK_ADMIN_USERNAME in .env}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
@@ -12,7 +12,9 @@ services:
     networks:
       default:
         aliases: [creatorflow-id.test]
-    volumes: [keycloak_data:/opt/keycloak/data]
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./docker/keycloak/realm-import:/opt/keycloak/data/import:ro
     restart: unless-stopped
   ai:
     build:
