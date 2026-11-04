@@ -287,4 +287,4 @@ public sealed record DiscoveryChannelResult(
 public sealed record DiscoverySearchResult(
     string Url, string Title, string? Description, string? Username,
     long? Views, long? Likes, long? Comments, long? Shares,
-    string Kind, string Source, DateTimeOffset VerifiedAt, DateTimeOffset? PublishedAt = null);
+    string Kind, string Source, DateTimeOffset VerifiedAt, DateTimeOffset? PublishedAt = null, long? Followers = null, string? DisplayName = null);
