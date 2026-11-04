@@ -740,14 +740,23 @@ var styleProfiles = app.MapGroup("/api/v1/style-profiles").RequireAuthorization(
 styleProfiles.MapGet("/{id:guid}/learning-analysis", async (Guid id, string? topic, long? minimumViewsPerVariant, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
-    if (!await db.CreatorStyleProfiles.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+    var profile = await db.CreatorStyleProfiles.AsNoTracking().Include(x => x.Evidence)
+        .SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (profile is null) return Results.NotFound();
     var minimumViews = minimumViewsPerVariant ?? 100;
     if (minimumViews < 0 || minimumViews > 1000000000)
         return Results.ValidationProblem(new Dictionary<string, string[]> { ["minimumViewsPerVariant"] = ["Must be between 0 and 1,000,000,000."] });
     if (topic?.Trim().Length > 200)
         return Results.ValidationProblem(new Dictionary<string, string[]> { ["topic"] = ["Topic cannot exceed 200 characters."] });
+
+    // Analysis is profile-scoped: only experiments explicitly linked through this
+    // profile's audited CreatorStyleEvidence may influence its recommendations.
+    var evidenceExperimentIds = profile.Evidence.Select(x => x.StyleExperimentId).Distinct().ToArray();
+    if (evidenceExperimentIds.Length == 0) return Results.Ok(StyleLearningEngine.Analyze([], topic, minimumViews));
+
     var experiments = await db.StyleExperiments.AsNoTracking().Include(x => x.Variants)
-        .Where(x => x.Status == StyleExperimentStatus.Evaluated).ToArrayAsync(ct);
+        .Where(x => evidenceExperimentIds.Contains(x.Id) && x.Status == StyleExperimentStatus.Evaluated)
+        .ToArrayAsync(ct);
     return Results.Ok(StyleLearningEngine.Analyze(experiments, topic, minimumViews));
 });
 styleProfiles.MapGet("/", async (int? skip, int? take, CreatorFlowDbContext? db, CancellationToken ct) =>
