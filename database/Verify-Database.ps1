@@ -40,11 +40,11 @@ $requiredTables = @(
     'TrendSelectionFeedback', 'TrendCandidateOutcomeObservations',
     'DiscoveryRuns', 'DiscoveryTopicProfiles', 'DiscoverySources', 'DiscoveryCandidates',
     'DiscoveryMetricSnapshots', 'DiscoveryRankings', 'DiscoveryPriorityLinks',
-    'DiscoveryFeedback', 'DiscoveryModelEvaluations', 'DiscoveryTopicRunHistory', 'DiscoveryChannelSyncStates', 'DiscoveryVideoDownloadJobs', 'AIProviders', 'CreatorFlowPlans', 'TenantSubscriptions', 'TenantUsageEvents', 'TenantStorageObjects', 'DiscoveryFeedbackEvents',
+    'DiscoveryFeedback', 'DiscoveryModelEvaluations', 'DiscoveryFeedbackEvents',
     'DiscoveryCandidateFeatureSnapshots', 'DiscoveryLearningInsights',
     'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions'
 )
-if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs') }
+if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs', 'DiscoveryTopicRunHistory', 'DiscoveryChannelSyncStates', 'DiscoveryVideoDownloadJobs', 'AIProviders', 'CreatorFlowPlans', 'TenantSubscriptions', 'TenantUsageEvents', 'TenantStorageObjects') }
 $tableValues = ($requiredTables | ForEach-Object { "(N'$_')" }) -join ','
 $missingTables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
 DECLARE @Required TABLE (TableName sysname NOT NULL);
