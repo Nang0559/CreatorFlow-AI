@@ -60,7 +60,7 @@ The provider test calls the OpenAI-compatible `/models` endpoint. A successful t
 
 ## Apply on the Z240
 
-1. Pull the latest `feature/topic-driven-channel-discovery` branch.
+1. Pull the latest `feature/keycloak-oidc-local` branch.
 2. Apply tenant migration `024_ai_provider_registry.sql` with the existing migration runner and its tenant-migration confirmation safeguards. Do not use `down -v`.
 3. Start the API using the same Windows account each time so the persistent Data Protection key ring remains accessible. If you choose a custom key-ring directory, set `CREATORFLOW_DATA_PROTECTION_KEYS_PATH` before starting the API and restrict its NTFS permissions to that account.
 4. Rebuild the Web and AI containers after pulling. The API runs natively on Windows and must be restarted to load the new code.
