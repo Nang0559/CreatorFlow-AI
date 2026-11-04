@@ -73,6 +73,12 @@ public sealed class LiveKeycloakJwtAcceptanceTests
             });
             builder.ConfigureServices(services =>
             {
+                services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+                {
+                    options.Authority = "http://localhost:8180/realms/creatorflow";
+                    options.Audience = "creatorflow-api";
+                    options.RequireHttpsMetadata = false;
+                });
                 services.RemoveAll<DbContextOptions<CreatorFlowDbContext>>();
                 services.RemoveAll<CreatorFlowDbContext>();
                 services.AddDbContext<CreatorFlowDbContext>(options =>
