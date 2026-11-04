@@ -14,6 +14,9 @@ internal sealed class CreatorFlowApiFactory : WebApplicationFactory<Program>
     internal const string ApiKey = "integration-test-api-key-creatorflow-000000000000";
     internal static readonly Guid LegacyTenantId = Guid.Parse("00000000-0000-4000-8000-000000000001");
     private readonly string _databaseName = $"creatorflow-api-integration-{Guid.NewGuid():N}";
+    private readonly string _bootstrapRole;
+
+    internal CreatorFlowApiFactory(string bootstrapRole = "Owner") => _bootstrapRole = bootstrapRole;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -25,6 +28,7 @@ internal sealed class CreatorFlowApiFactory : WebApplicationFactory<Program>
                 ["Authentication:ApiKey"] = ApiKey,
                 ["Tenant:AllowApiKeyBootstrap"] = "true",
                 ["Tenant:BootstrapTenantId"] = LegacyTenantId.ToString(),
+                ["Tenant:BootstrapRole"] = _bootstrapRole,
                 ["RateLimiting:Enabled"] = "false"
             });
         });
