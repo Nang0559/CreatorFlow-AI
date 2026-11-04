@@ -108,19 +108,6 @@ jobs:
               'GET', f'/admin/realms/creatorflow/clients/{client_uuid}/client-secret', token=admin_token
           )['value']
 
-          scopes = admin_request('GET', '/admin/realms/creatorflow/client-scopes', token=admin_token)
-          api_scope = next((scope for scope in scopes if scope['name'] == 'creatorflow-api'), None)
-          assert api_scope, 'creatorflow-api client scope is missing from imported realm'
-          default_scopes = admin_request(
-              'GET', f'/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes',
-              token=admin_token
-          )
-          if not any(scope['id'] == api_scope['id'] for scope in default_scopes):
-              admin_request(
-                  'PUT', f'/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes/{api_scope["id"]}',
-                  token=admin_token
-              )
-
           mappers = admin_request(
               'GET', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models',
               token=admin_token
@@ -184,7 +171,7 @@ jobs:
                   'grant_type': 'password',
                   'username': 'ci-oidc-contract',
                   'password': 'ci-only-user-password-123456',
-                  'scope': 'openid'
+                  'scope': 'openid creatorflow-api'
               },
               timeout=20
           )
@@ -199,6 +186,7 @@ jobs:
               audience='creatorflow-api', issuer=issuer
           )
           assert claims.get('sub'), 'subject claim missing'
+          assert 'creatorflow-api' in claims.get('scope', '').split(), claims.get('scope')
           assert 'creatorflow-api' in claims.get('aud', []), claims.get('aud')
           print('::add-mask::' + access_token)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env_file:
