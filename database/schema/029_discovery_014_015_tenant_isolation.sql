@@ -168,9 +168,9 @@ END;
 
 -- Remove migration-only defaults after the one-time legacy backfill.
 -- TenantId remains NOT NULL and FK-constrained; future inserts must supply a real tenant.
-DECLARE @DefaultName sysname;
+DECLARE @DefaultName sysname, @DefaultTable sysname;
 DECLARE default_cursor CURSOR LOCAL FAST_FORWARD FOR
-    SELECT dc.name
+    SELECT OBJECT_NAME(dc.parent_object_id), dc.name
     FROM sys.default_constraints dc
     INNER JOIN sys.columns col
         ON col.object_id=dc.parent_object_id AND col.column_id=dc.parent_column_id
@@ -180,18 +180,12 @@ DECLARE default_cursor CURSOR LOCAL FAST_FORWARD FOR
     )
     AND col.name=N'TenantId';
 OPEN default_cursor;
-FETCH NEXT FROM default_cursor INTO @DefaultName;
+FETCH NEXT FROM default_cursor INTO @DefaultTable, @DefaultName;
 WHILE @@FETCH_STATUS=0
 BEGIN
-    DECLARE @DefaultTable sysname, @DefaultColumn sysname;
-    SELECT @DefaultTable=OBJECT_NAME(dc.parent_object_id), @DefaultColumn=col.name
-    FROM sys.default_constraints dc
-    INNER JOIN sys.columns col
-        ON col.object_id=dc.parent_object_id AND col.column_id=dc.parent_column_id
-    WHERE dc.name=@DefaultName;
     SET @Sql=N'ALTER TABLE dbo.'+QUOTENAME(@DefaultTable)+N' DROP CONSTRAINT '+QUOTENAME(@DefaultName)+N';';
     EXEC sys.sp_executesql @Sql;
-    FETCH NEXT FROM default_cursor INTO @DefaultName;
+    FETCH NEXT FROM default_cursor INTO @DefaultTable, @DefaultName;
 END;
 CLOSE default_cursor;
 DEALLOCATE default_cursor;
