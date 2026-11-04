@@ -18,7 +18,7 @@ public sealed class TenantRoleAuthorizationHandler(ITenantContext tenantContext)
     {
         if (context.User.Identity?.IsAuthenticated == true &&
             tenantContext.IsResolved &&
-            requirement.AllowedRoles.Contains(tenantContext.Role))
+            tenantContext.Role is { } role && requirement.AllowedRoles.Contains(role))
         {
             context.Succeed(requirement);
         }
