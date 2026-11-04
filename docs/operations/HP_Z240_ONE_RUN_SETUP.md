@@ -48,7 +48,7 @@ The setup preserves the phone-only Douyin rule. It does not log in to Douyin/Tik
 Review `docs/operations/GO_LIVE_READINESS.md` before calling this a production release. A successful local setup is still a Local Pilot / Pre-Go-live until every applicable acceptance gate has evidence.
 
 ## Important boundary
-A successful local setup proves database migrations, builds, container startup and health endpoints. It does not prove that live Douyin/TikTok discovery providers are connected or that feedback is already persisted end-to-end; those require their own integration and acceptance tests.
+A successful local setup proves database migrations, builds, container startup and health endpoints. It does not prove that workspace discovery credentials are configured, Brave returns live indexed results, TikTok Research API approval is active, connector results are persisted, or feedback is already learned end-to-end. Brave/TikTok Research currently run on demand only; verify them separately after setup.
 
 ## Share links from iPhone
 The Trends page accepts pasted links. For one-action share-sheet handoff, create the iOS Shortcut described in `docs/operations/IOS_SHARE_TO_CREATORFLOW.md`; iOS Safari does not support PWA share-target registration. The shortcut opens the HP's LAN URL with the shared link, which the page stores in Share Inbox.
@@ -78,4 +78,4 @@ Khởi động worker bằng cùng tài khoản Windows có quyền truy cập S
 .\scripts\Start-VideoRenderWorker.ps1
 ```
 
-Sau đó mở Thư viện video trong CreatorFlow, tải MP4/MOV/M4V lên, xác nhận quyền sử dụng, tạo tác vụ và chờ video hoàn tất. Trang sẽ tự cập nhật tiến độ, phát video và cung cấp liên kết tải MP4. Nghiệm thu render thật 15–30 giây trước khi sử dụng nội dung kinh doanh; CI chỉ kiểm tra biên dịch, không chứng minh After Effects đã render thành công trên máy.
+Sau đó mở Thư viện video trong CreatorFlow, tải MP4/MOV/M4V lên, xác nhận quyền sử dụng, tạo tác vụ và chờ video hoàn tất. Trang sẽ tự cập nhật tiến độ, phát video và cung cấp liên kết tải MP4. Nghiệm thu render thật 15–30 giây trước khi sử dụng nội dung kinh doanh; CI chỉ kiểm tra biên dịch, không chứng minh FFmpeg đã tạo MP4 phát được trên máy.
