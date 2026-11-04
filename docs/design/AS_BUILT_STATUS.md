@@ -4,6 +4,8 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 ## Implemented in the repository
 
+> Status is for `feature/keycloak-oidc-local` and must be refreshed against the current branch head before release. Historical audit documents are not evidence for this branch.
+
 | Capability | Evidence in repository | Status |
 |---|---|---|
 | SaaS tenant identity and row-isolation foundation | Tenant/Membership/Invitation entities; API JWT validation; Web OIDC Authorization Code + PKCE; issuer+subject membership; one-time Owner bootstrap; invitation acceptance and membership administration; EF tenant filters; migrations 011–013 and composite tenant/unique-key migrations 018–020 | Baseline implemented in code; real provider configuration, email delivery, full role matrix, SQL execution and cross-tenant security tests remain pending |
@@ -20,7 +22,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 | Winner evidence import | Learn endpoint, evidence snapshot and unique profile/experiment index | Implemented with duplicate protection |
 | Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; not ML |
 | Video source library and rights confirmation | Tenant-scoped asset upload, SHA-256 provenance, size/format checks, SQL metadata | Implemented foundation; codec/duration validation occurs in render worker |
-| Automated video render | Durable SQL jobs, After Effects JSX project generation, AE image-sequence render, FFmpeg H.264/AAC MP4, preview/download proxy | Implemented pipeline; hardware/visual acceptance on HP Z240 still required |
+| Automated video render | Durable SQL jobs, Windows FFmpeg H.264/AAC MP4 worker, preview/download proxy | FFmpeg-only pilot pipeline; no After Effects JSX/AE render adapter is part of the current branch; hardware/visual acceptance on HP Z240 still required |
 | LLM runtime | Provider adapter, structured contracts, authenticated FastAPI endpoints, tests, .NET proxy, Style Lab generation UI and profile-scoped learning synthesis UI | Implemented first LLM workflow; provider credentials required; synthesis output is a draft and must be submitted to Learning Memory for review |
 | Human review and Learning Memory | Persisted proposal create/list/approve/reject, reviewer from authenticated identity, immutable profile versions | Implemented foundation; production OIDC and profile-scoped analysis remain release gates |
 
@@ -84,3 +86,8 @@ Workspace connector keys are stored in `dbo.DiscoveryConnectorConfigurations` pe
 ### Release evidence boundary
 
 At commit `e2524f3d570460b9fd9f1462d2cfea046b74efe4`, GitHub CI run `41823809975` completed successfully for .NET build/tests, Python tests and PowerShell script validation. This does not prove SQL Server migration 028 was applied to the HP Z240, credentials were configured, a provider returned live results, or the Z240 runtime passed acceptance. Record those as separate host acceptance evidence.
+
+
+## Render implementation correction (2026-11-04)
+
+The active branch `feature/keycloak-oidc-local` uses an FFmpeg-only local render worker. References in earlier audit snapshots to After Effects JSX generation and image-sequence rendering describe a different historical implementation/branch and must not be used as current release evidence. After Effects remains a possible future adapter only. A successful build does not constitute a Z240 render acceptance test.
