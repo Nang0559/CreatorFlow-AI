@@ -40,7 +40,10 @@ public sealed class LiveKeycloakJwtAcceptanceTests
 
         var response = await client.GetAsync("/api/v1/topics/");
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var challenge = string.Join(" | ", response.Headers.WwwAuthenticate.Select(value => value.ToString()));
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.StatusCode == HttpStatusCode.OK,
+            $"API rejected the live Keycloak token: {(int)response.StatusCode}; challenge={challenge}; body={body}");
     }
 
     private sealed class LiveKeycloakApiFactory : WebApplicationFactory<Program>
