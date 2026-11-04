@@ -71,3 +71,16 @@ Creator-authored Select/Reject/Watch feedback is persisted as append-only histor
 Implemented in code: `Tenant` and `TenantMembership` domain entities; configurable OIDC JWT bearer validation; request tenant selection validated against exact issuer+subject membership; API default authorization requires a resolved active tenant; EF Core applies tenant filters to business entities and stamps/locks TenantId on writes. The local API-key path is restricted to a fixed legacy workspace in Development only. Migration 011 creates identity tables; migration 012 adds TenantId, tenant FK and index to all current business tables and backfills existing single-workspace data to `legacy-workspace`.
 
 Not yet release-complete: production OIDC provider configuration, MFA enforcement, invitation delivery, endpoint-specific role policies, SQL Server execution tests for the current migration manifest, RLS, tenant ownership for unmapped Discovery SQL tables, and cross-tenant negative tests. Migration 012 must not be applied to a database containing multiple customer workspaces until a reviewed row-ownership mapping is prepared.
+
+
+## Discovery connector milestone — migrations 025–028
+
+The current branch `feature/keycloak-oidc-local` includes topic scheduler foundations (025–027) and workspace-scoped connector credentials (028). The Trends UI can request an AI-generated query plan and automatically invoke the authenticated discovery search endpoint. The endpoint supports Brave Search public-web indexing and an optional TikTok Research API adapter that is usable only after the relevant TikTok Research project approval.
+
+Workspace connector keys are stored in `dbo.DiscoveryConnectorConfigurations` per tenant and encrypted using ASP.NET Core Data Protection. Settings endpoints expose credential-presence flags only and enforce Owner/Admin management. Environment variables remain a server-side fallback. Migration 028 is tenant-dependent and is included in the migration runner's tenant migration set.
+
+**Not yet complete:** discovered results are not persisted into the durable discovery candidate model; recurring topic/calendar schedules do not yet run connector searches; no media download, channel follow, TikTok account interaction, rights clearance or publishing is performed by these connectors. Brave results may be incomplete/stale. TikTok Research API access remains approval-gated. End-to-end validation with a real Brave key and, separately, an approved TikTok Research project on the Z240 is still required.
+
+### Release evidence boundary
+
+At commit `e2524f3d570460b9fd9f1462d2cfea046b74efe4`, GitHub CI run `41823809975` completed successfully for .NET build/tests, Python tests and PowerShell script validation. This does not prove SQL Server migration 028 was applied to the HP Z240, credentials were configured, a provider returned live results, or the Z240 runtime passed acceptance. Record those as separate host acceptance evidence.
