@@ -11,6 +11,8 @@ IF NOT EXISTS (SELECT 1 FROM dbo.Tenants WHERE Id=@LegacyTenantId AND Slug=N'leg
 
 DECLARE @Tables TABLE (TableName sysname NOT NULL PRIMARY KEY);
 INSERT @Tables VALUES
+(N'DiscoveryTopicProfiles'),
+(N'DiscoveryTopicRunHistory'),
 (N'DiscoveryRuns'),
 (N'DiscoverySources'),
 (N'DiscoveryCandidates'),
