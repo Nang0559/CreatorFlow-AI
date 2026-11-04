@@ -5,6 +5,8 @@ using CreatorFlow.Api.Identity;
 using CreatorFlow.Domain.Identity;
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -32,6 +34,11 @@ public sealed class LiveKeycloakJwtAcceptanceTests
         Assert.Contains("creatorflow-api", jwt.Audiences);
 
         using var factory = new LiveKeycloakApiFactory();
+        var bearerOptions = factory.Services.GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
+            .Get(JwtBearerDefaults.AuthenticationScheme);
+        Assert.Equal(jwt.Issuer, bearerOptions.Authority);
+        var discovery = await bearerOptions.ConfigurationManager!.GetConfigurationAsync(CancellationToken.None);
+        Assert.Equal(jwt.Issuer, discovery.Issuer);
         await factory.SeedMembershipAsync(jwt.Issuer, subject!);
 
         using var client = factory.CreateClient();
