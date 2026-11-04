@@ -55,7 +55,7 @@
           "protocolMapper": "oidc-audience-mapper",
           "consentRequired": false,
           "config": {
-            "included.client.audience": "creatorflow-api",
+            "included.custom.audience": "creatorflow-api",
             "id.token.claim": "false",
             "access.token.claim": "true",
             "introspection.token.claim": "true"
