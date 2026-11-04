@@ -169,7 +169,7 @@
                         <span class="status">Video · @video.Source</span>
                         <h3>@video.Title</h3>
                         <a href="@video.Url" target="_blank" rel="noopener noreferrer">Mở video TikTok ↗</a>
-                        <p class="muted">@(video.Username is null ? "Không xác định username" : "@" + video.Username) · Xác minh URL: @video.VerifiedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</p>
+                        <p class="muted">@(video.Username is null ? "Không xác định username" : "@" + video.Username) · Nhận từ nguồn: @video.RetrievedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</p>
                         @if (!string.IsNullOrWhiteSpace(video.Description)) { <p>@video.Description</p> }
                         @if (video.Views.HasValue || video.Likes.HasValue || video.Comments.HasValue || video.Shares.HasValue)
                         {
@@ -558,10 +558,10 @@
     private sealed record DiscoverySearchResponse(string Topic, DateTimeOffset SearchedAt, string Status,
         DiscoveryChannelResult[] Channels, DiscoverySearchResult[] Videos, DiscoveryProviderState[] Providers, string Notice);
     private sealed record DiscoveryChannelResult(string Username, string DisplayName, string ProfileUrl, int VideoCount,
-        long MaxObservedViews, long? Followers, string[] VideoUrls, string Source, DateTimeOffset VerifiedAt);
+        long MaxObservedViews, long? Followers, string[] VideoUrls, string Source, DateTimeOffset RetrievedAt);
     private sealed record DiscoverySearchResult(string Url, string Title, string? Description, string? Username,
         long? Views, long? Likes, long? Comments, long? Shares, string Kind, string Source,
-        DateTimeOffset VerifiedAt, DateTimeOffset? PublishedAt);
+        DateTimeOffset RetrievedAt, DateTimeOffset? PublishedAt);
     private sealed record DiscoveryProviderState(string Provider, string Status, int ResultCount, string? Error);
 
     private async Task<string> GetConfiguredPrimaryProviderAsync()
