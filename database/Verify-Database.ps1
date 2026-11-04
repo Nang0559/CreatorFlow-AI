@@ -13,7 +13,7 @@ if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { 
 Import-Module SqlServer -ErrorAction Stop
 
 $prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_')
-if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_') }
+if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_', '021_', '022_', '023_', '024_', '025_') }
 $schemaPath = Join-Path $PSScriptRoot 'schema'
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
     $name = $_.Name
@@ -44,7 +44,7 @@ $requiredTables = @(
     'DiscoveryCandidateFeatureSnapshots', 'DiscoveryLearningInsights',
     'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions'
 )
-if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs') }
+if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs', 'DiscoveryTopicRunHistory', 'DiscoveryChannelSyncStates', 'DiscoveryVideoDownloadJobs', 'AIProviders', 'CreatorFlowPlans', 'TenantSubscriptions', 'TenantUsageEvents', 'TenantStorageObjects') }
 $tableValues = ($requiredTables | ForEach-Object { "(N'$_')" }) -join ','
 $missingTables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
 DECLARE @Required TABLE (TableName sysname NOT NULL);

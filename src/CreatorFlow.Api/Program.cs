@@ -1,4 +1,5 @@
 using CreatorFlow.Api.Identity;
+using CreatorFlow.Api.Discovery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -89,6 +90,7 @@ app.MapHealthChecks("/health").AllowAnonymous();
 app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" })).AllowAnonymous();
 app.MapVideoRenderEndpoints();
 app.MapAIProviderRegistry();
+app.MapTopicDiscoveryScheduleEndpoints();
 
 app.MapGet("/api/v1/content-projects", async (int? skip, int? take, HttpContext context, CancellationToken cancellationToken) =>
 {
