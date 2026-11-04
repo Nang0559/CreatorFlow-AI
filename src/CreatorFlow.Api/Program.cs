@@ -92,6 +92,7 @@ app.MapVideoRenderEndpoints();
 app.MapAIProviderRegistry();
 app.MapDiscoveryTopicSchedulerEndpoints();
 app.MapDiscoverySearchEndpoints();
+app.MapDiscoveryConnectorSettings();
 
 app.MapGet("/api/v1/content-projects", async (int? skip, int? take, HttpContext context, CancellationToken cancellationToken) =>
 {
