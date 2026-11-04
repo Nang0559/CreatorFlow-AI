@@ -139,6 +139,27 @@ public sealed class JwtTenantMembershipIntegrationTests
     }
 
     [Fact]
+    public async Task Owner_membership_satisfies_endpoint_scoped_connector_settings_policy()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        await factory.SeedAsync((db, _) =>
+        {
+            db.TenantMemberships.Add(TenantMembership.Create(
+                CreatorFlowApiFactory.LegacyTenantId,
+                CreatorFlowApiFactory.TestJwtIssuer,
+                Subject,
+                TenantRole.Owner,
+                DateTimeOffset.UtcNow));
+            return Task.CompletedTask;
+        });
+
+        using var client = CreateAuthenticatedClient(factory, Subject);
+        var response = await client.GetAsync("/api/v1/discovery/connectors/settings");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Jwt_membership_does_not_read_foreign_workspace_connector_credentials()
     {
         using var factory = new CreatorFlowApiFactory();
