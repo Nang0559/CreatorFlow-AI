@@ -41,7 +41,7 @@
     @if (!string.IsNullOrWhiteSpace(connectorMessage)) { <p class="muted">@connectorMessage</p> }
     <p class="muted">Khóa không được trả về trình duyệt sau khi lưu. Để trống trường khóa khi cập nhật để giữ giá trị đã lưu. Brave Search dùng để tìm trang TikTok công khai; TikTok Research API yêu cầu phê duyệt riêng.</p>
 </section>
-<section class="notice"><strong>Bảo mật</strong><p>API key và connection string chỉ được cấu hình ở server qua biến môi trường hoặc file .env. Trang này không đọc, hiển thị hoặc cho phép chỉnh sửa bí mật. Không công khai các cổng API, AI hoặc SQL Server ra Internet.</p></section>
+<section class="notice"><strong>Bảo mật</strong><p>Khóa kết nối tìm kiếm được nhập tại workspace và mã hóa phía API; các bí mật runtime khác và connection string vẫn chỉ cấu hình trên máy chủ. Giao diện không bao giờ đọc lại hoặc hiển thị giá trị khóa đã lưu. Không công khai các cổng API, AI hoặc SQL Server ra Internet.</p></section>
 @code {
     private string status = "Chưa kiểm tra";
     private string message = "Bấm “Kiểm tra kết nối” để xác nhận API đang phản hồi.";
