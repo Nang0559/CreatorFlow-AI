@@ -124,3 +124,26 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 .validation-summary{border-left-color:#c45b70;background:#fffafb}
 .success-notice{margin:0 0 16px;padding:13px 16px;border:1px solid #d8eadf;border-left:4px solid #55a477;border-radius:12px;background:#f7fcf8;color:#285d3e;font-size:13px}
 button:disabled{opacity:.55;cursor:not-allowed}
+
+/* Per-topic schedule controls */
+.topic-schedule-panel .schedule-options {
+    display: grid;
+    gap: 10px;
+    margin: 14px 0;
+}
+.topic-schedule-panel .schedule-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 18px;
+}
+.topic-schedule-panel .schedule-checks label,
+.topic-schedule-panel .schedule-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.topic-schedule-panel .schedule-checks input,
+.topic-schedule-panel .schedule-toggle input {
+    width: auto;
+    min-width: 16px;
+}
