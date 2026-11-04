@@ -20,7 +20,7 @@ function Invoke-KeycloakAdmin([string]$Method, [string]$Path, $Body = $null) {
     $params = @{ Method = $Method; Uri = "$script:Base/admin/$Path"; Headers = @{ Authorization = "Bearer $script:Token" }; ErrorAction = 'Stop' }
     if ($null -ne $Body) {
         $params.ContentType = 'application/json'
-        $params.Body = ($Body | ConvertTo-Json -Depth 12)
+        $params.Body = ConvertTo-Json -InputObject $Body -Depth 12
     }
     Invoke-RestMethod @params
 }
