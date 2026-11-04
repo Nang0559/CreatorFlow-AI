@@ -171,7 +171,7 @@ def test_discovery_rank_rejects_out_of_range_features(monkeypatch) -> None:
 def test_discovery_query_plan_normalizes_provider_variants_and_missing_fields(monkeypatch) -> None:
     headers = auth(monkeypatch)
     fake = FakeLLM({
-        "queries": "máy hút bụi mini\nreview máy hút bụi cầm tay",
+        "queries": ["máy hút bụi mini", "review máy hút bụi cầm tay"],
         "purchaseIntents": ["so sánh giá", "đánh giá thực tế"],
     })
     app.dependency_overrides[get_llm_client] = lambda: fake
