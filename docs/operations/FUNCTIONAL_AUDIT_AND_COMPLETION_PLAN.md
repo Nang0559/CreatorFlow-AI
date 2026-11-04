@@ -141,3 +141,16 @@ No generic yt-dlp fallback is approved for arbitrary Douyin/TikTok URLs. A downl
 Source masters must remain byte-for-byte immutable with provenance and rights evidence. Derivatives are separate files with separate hashes and must preserve legally/contractually required attribution. A clean master is accepted only when supplied by the rights holder or an authorized source.
 
 This is a documented engineering decision, **not an implemented downloader**. Migration 021 still supplies only queue/schedule storage. Connector, rights-review API/UI, acquisition worker, FFprobe/hash validation, asset linkage and end-to-end tests remain open.
+
+
+## Update — November 4, 2026: on-demand topic search connector
+
+The earlier findings above about missing automatic channel polling and media acquisition remain valid. A limited discovery-search capability has since been implemented and must not be confused with automatic followed-channel sync:
+
+- AI query planning can now be followed by an authenticated .NET API call to the discovery search connector.
+- Brave Search Web API searches indexed public pages and returns validated TikTok profile/video links where available.
+- TikTok Research API can return public Vietnam video metadata only when the Research API project is approved and credentials are configured.
+- Workspace Owner/Admin can manage connector keys at /settings; credentials are encrypted server-side and stored per workspace by migration 028. The browser receives presence flags only.
+- The connector is on-demand. It does not persist returned results as discovery candidates, run from recurring topic schedules, follow accounts, download media, or interact with TikTok.
+
+Therefore the original audit's statements that followed-channel polling and automatic media downloads are not implemented remain accurate. Update acceptance gates to test both the new on-demand search path and the still-open scheduled/persisted ingestion path separately. See docs/operations/DISCOVERY_CONNECTORS.md, docs/design/TREND_SELECTION_INTELLIGENCE.md and docs/design/AS_BUILT_STATUS.md.
