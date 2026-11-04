@@ -70,99 +70,140 @@ jobs:
               assert metadata.get(key), key
           print('PASS imported realm OIDC discovery:', metadata['issuer'])
           PY
-      - name: Issue and cryptographically validate a real creatorflow-web access token
+      - name: Complete creatorflow-web authorization code and PKCE flow
         shell: bash
         run: |
-          python -m pip install --quiet 'PyJWT[crypto]'
+          python -m pip install --quiet 'PyJWT[crypto]' requests beautifulsoup4
           python - <<'PY'
-          import json, urllib.parse, urllib.request
+          import base64, hashlib, json, secrets
+          from urllib.parse import urlencode, urljoin, urlparse, parse_qs
+          import requests
+          from bs4 import BeautifulSoup
           import jwt
 
           base = 'http://127.0.0.1:8180'
           issuer = 'http://localhost:8180/realms/creatorflow'
+          redirect_uri = 'http://127.0.0.1:8765/callback'
 
-          def request(method, path, data=None, token=None):
-              headers = {}
-              body = None
-              if data is not None:
-                  form_encoded = path.endswith('/protocol/openid-connect/token')
-                  body = urllib.parse.urlencode(data).encode() if form_encoded else json.dumps(data).encode()
-                  headers['Content-Type'] = 'application/x-www-form-urlencoded' if form_encoded else 'application/json'
-              if token:
-                  headers['Authorization'] = 'Bearer ' + token
-              req = urllib.request.Request(base + path, data=body, headers=headers, method=method)
-              try:
-                  with urllib.request.urlopen(req, timeout=20) as response:
-                      raw = response.read()
-                      return json.loads(raw) if raw else None
-              except urllib.error.HTTPError as error:
-                  raise RuntimeError(f'{method} {path}: {error.code} {error.read().decode()}') from error
+          def admin_request(method, path, data=None, token=None):
+              headers = {'Authorization': 'Bearer ' + token} if token else {}
+              response = requests.request(method, base + path, json=data, headers=headers, timeout=20)
+              response.raise_for_status()
+              return response.json() if response.content else None
 
-          admin = request('POST', '/realms/master/protocol/openid-connect/token', {
+          admin = requests.post(base + '/realms/master/protocol/openid-connect/token', data={
               'client_id': 'admin-cli', 'grant_type': 'password',
               'username': 'ci-admin', 'password': 'ci-only-admin-password-12345'
-          })['access_token']
+          }, timeout=20)
+          admin.raise_for_status()
+          admin_token = admin.json()['access_token']
 
-          clients = request('GET', '/admin/realms/creatorflow/clients?clientId=creatorflow-web', token=admin)
+          clients = admin_request('GET', '/admin/realms/creatorflow/clients?clientId=creatorflow-web', token=admin_token)
           assert clients, 'checked-in creatorflow-web client is missing'
           web_client = clients[0]
           client_uuid = web_client['id']
-          assert web_client.get('standardFlowEnabled') is True, 'creatorflow-web authorization-code flow is disabled'
+          assert web_client.get('standardFlowEnabled') is True, 'authorization-code flow is disabled'
+          assert web_client.get('directAccessGrantsEnabled') is False, 'password grant must stay disabled'
           assert web_client.get('publicClient') is False, 'creatorflow-web must remain confidential'
           attributes = web_client.get('attributes') or {}
-          assert attributes.get('pkce.code.challenge.method') == 'S256', 'creatorflow-web PKCE S256 is not configured'
+          assert attributes.get('pkce.code.challenge.method') == 'S256', 'PKCE S256 is not configured'
+          redirect_uris = web_client.get('redirectUris') or []
+          if redirect_uri not in redirect_uris:
+              redirect_uris.append(redirect_uri)
+              web_client['redirectUris'] = redirect_uris
+              admin_request('PUT', f'/admin/realms/creatorflow/clients/{client_uuid}', web_client, admin_token)
+          client_secret = admin_request(
+              'GET', f'/admin/realms/creatorflow/clients/{client_uuid}/client-secret', token=admin_token
+          )['value']
 
-          # Enable password grant only inside this disposable CI realm so the test can
-          # obtain a token without a browser. The checked-in realm export stays disabled.
-          web_client['directAccessGrantsEnabled'] = True
-          request('PUT', f'/admin/realms/creatorflow/clients/{client_uuid}', web_client, admin)
-          secret = request('GET', f'/admin/realms/creatorflow/clients/{client_uuid}/client-secret', token=admin)['value']
-
-          mappers = request('GET', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', token=admin)
-          if not any(item.get('protocolMapper') == 'oidc-sub-mapper' for item in mappers):
-              request('POST', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', {
-                  'name': 'creatorflow-access-token-subject',
-                  'protocol': 'openid-connect',
-                  'protocolMapper': 'oidc-sub-mapper',
-                  'consentRequired': False,
-                  'config': {
-                      'access.token.claim': 'true',
-                      'id.token.claim': 'true',
-                      'introspection.token.claim': 'true'
-                  }
-              }, admin)
-
-          users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
+          users = admin_request(
+              'GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin_token
+          )
           if not users:
-              request('POST', '/admin/realms/creatorflow/users', {
+              admin_request('POST', '/admin/realms/creatorflow/users', {
                   'username': 'ci-oidc-contract', 'enabled': True,
                   'email': 'ci-oidc-contract@example.invalid', 'emailVerified': True,
                   'firstName': 'CI', 'lastName': 'Contract', 'requiredActions': []
-              }, admin)
-              users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
+              }, admin_token)
+              users = admin_request(
+                  'GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin_token
+              )
           user_id = users[0]['id']
-          request('PUT', f'/admin/realms/creatorflow/users/{user_id}/reset-password', {
+          admin_request('PUT', f'/admin/realms/creatorflow/users/{user_id}/reset-password', {
               'type': 'password', 'value': 'ci-only-user-password-123456', 'temporary': False
-          }, admin)
+          }, admin_token)
 
-          token_response = request('POST', '/realms/creatorflow/protocol/openid-connect/token', {
+          verifier = secrets.token_urlsafe(64)
+          challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
+          state = secrets.token_urlsafe(24)
+          nonce = secrets.token_urlsafe(24)
+          params = {
               'client_id': 'creatorflow-web',
-              'client_secret': secret,
-              'grant_type': 'password',
-              'username': 'ci-oidc-contract',
-              'password': 'ci-only-user-password-123456',
-              'scope': 'openid creatorflow-api'
-          })
-          access_token = token_response['access_token']
-          metadata = request('GET', '/realms/creatorflow/.well-known/openid-configuration')
+              'response_type': 'code',
+              'redirect_uri': redirect_uri,
+              'scope': 'openid profile email creatorflow-api',
+              'state': state,
+              'nonce': nonce,
+              'code_challenge': challenge,
+              'code_challenge_method': 'S256'
+          }
+
+          session = requests.Session()
+          login_page = session.get(
+              base + '/realms/creatorflow/protocol/openid-connect/auth?' + urlencode(params),
+              timeout=20
+          )
+          login_page.raise_for_status()
+          soup = BeautifulSoup(login_page.text, 'html.parser')
+          form = next(
+              (candidate for candidate in soup.find_all('form')
+               if candidate.find('input', {'name': 'password'})),
+              None
+          )
+          assert form is not None, 'Keycloak did not render the expected login form'
+          form_data = {}
+          for field in form.find_all('input'):
+              name = field.get('name')
+              if name and field.get('type', '').lower() == 'hidden':
+                  form_data[name] = field.get('value', '')
+          form_data['username'] = 'ci-oidc-contract'
+          form_data['password'] = 'ci-only-user-password-123456'
+          login_action = urljoin(login_page.url, form.get('action') or login_page.url)
+          login_response = session.post(login_action, data=form_data, allow_redirects=False, timeout=20)
+          assert login_response.status_code in (302, 303), (
+              f'Keycloak login did not redirect after credentials: {login_response.status_code}'
+          )
+          callback = login_response.headers.get('Location', '')
+          callback_query = parse_qs(urlparse(callback).query)
+          assert callback_query.get('state', [None])[0] == state, 'OIDC state did not round-trip'
+          code = callback_query.get('code', [None])[0]
+          assert code, f'authorization code missing from callback: {callback}'
+
+          token_response = requests.post(
+              base + '/realms/creatorflow/protocol/openid-connect/token',
+              data={
+                  'grant_type': 'authorization_code',
+                  'client_id': 'creatorflow-web',
+                  'client_secret': client_secret,
+                  'redirect_uri': redirect_uri,
+                  'code': code,
+                  'code_verifier': verifier
+              },
+              timeout=20
+          )
+          token_response.raise_for_status()
+          access_token = token_response.json()['access_token']
+          metadata = requests.get(
+              base + '/realms/creatorflow/.well-known/openid-configuration', timeout=20
+          ).json()
           signing_key = jwt.PyJWKClient(metadata['jwks_uri']).get_signing_key_from_jwt(access_token)
           claims = jwt.decode(
               access_token, signing_key.key, algorithms=['RS256'],
               audience='creatorflow-api', issuer=issuer
           )
-          assert claims.get('sub'), 'subject claim missing from creatorflow-web access token'
+          assert claims.get('sub'), 'subject claim missing'
           assert 'creatorflow-api' in claims.get('aud', []), claims.get('aud')
-          print('PASS signed access token from checked-in creatorflow-web client:', claims['iss'], 'aud=creatorflow-api')
+          print('PASS creatorflow-web authorization code + PKCE:', claims['iss'], 'aud=creatorflow-api')
           PY
       - name: Stop Keycloak
         if: always()
