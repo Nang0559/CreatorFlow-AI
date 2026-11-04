@@ -13,7 +13,6 @@ public sealed class TenantRoleGuardMiddleware(RequestDelegate next)
     [
         "/api/v1/identity",
         "/api/v1/ai/providers",
-        "/api/v1/discovery/connectors/settings",
         "/api/v1/billing",
         "/api/v1/tenant"
     ];
