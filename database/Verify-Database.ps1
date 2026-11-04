@@ -42,7 +42,7 @@ $requiredTables = @(
     'DiscoveryMetricSnapshots', 'DiscoveryRankings', 'DiscoveryPriorityLinks',
     'DiscoveryFeedback', 'DiscoveryModelEvaluations', 'DiscoveryFeedbackEvents',
     'DiscoveryCandidateFeatureSnapshots', 'DiscoveryLearningInsights',
-    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions', 'TenantSubscriptions', 'TenantUsageEvents', 'TenantStorageObjects', 'AIProviders', 'DiscoveryChannelSyncStates', 'DiscoveryVideoDownloadJobs', 'DiscoveryTopicRunHistory', 'DiscoveryConnectorConfigurations'
+    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions'
 )
 if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs', 'CreatorFlowPlans') }
 $tableValues = ($requiredTables | ForEach-Object { "(N'$_')" }) -join ','
@@ -70,7 +70,7 @@ if ($RequireTenantMigrations) {
         'StyleExperimentVariants', 'CreatorStyleProfiles', 'CreatorStyleEvidence',
         'StyleVariantMetricObservations', 'StyleLearningProposals',
         'TrendSelectionFeedback', 'TrendCandidateOutcomeObservations',
-        'CreatorStyleProfileVersions', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs', 'TenantSubscriptions', 'TenantUsageEvents', 'TenantStorageObjects', 'AIProviders', 'DiscoveryChannelSyncStates', 'DiscoveryVideoDownloadJobs', 'DiscoveryTopicProfiles', 'DiscoveryTopicRunHistory', 'DiscoveryConnectorConfigurations'
+        'CreatorStyleProfileVersions', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs'
     )
     $tenantValues = ($tenantTables | ForEach-Object { "(N'$_')" }) -join ','
     $tenantCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
@@ -226,6 +226,8 @@ INSERT @NewTenantTables(TableName) VALUES $newTenantValues;
 SELECT t.TableName
 FROM @NewTenantTables t
 WHERE COL_LENGTH(N'dbo.' + t.TableName, N'TenantId') IS NULL
+   OR NOT EXISTS
+      (SELECT 1 FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id WHERE i.object_id=OBJECT_ID(N'dbo.'+QUOTENAME(t.TableName)) AND c.name=N'TenantId' AND ic.key_ordinal=1 AND i.is_disabled=0)
    OR NOT EXISTS
       (SELECT 1 FROM sys.foreign_key_columns fkc
        JOIN sys.foreign_keys fk ON fk.object_id=fkc.constraint_object_id
