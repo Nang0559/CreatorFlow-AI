@@ -42,7 +42,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Central mutation authorization now uses a deny-by-default role matrix: Owner/Admin, content-workflow Editor allowlist, read-only Analyst and publishing-only Publisher. Publisher still has no writable route because `/api/v1/publishing` is not implemented; endpoint/resource-specific checks and exhaustive negative tests remain release gates.
 - API has a global fixed-window rate limit (300 requests/minute per authenticated subject or fallback partition) and an explicit CORS origin allowlist; per-route quotas, proxy-aware client identity and production tuning remain open.
 - SQL Server Row-Level Security is not yet configured. Composite same-tenant foreign keys are added for the currently mapped business relationships by migrations 018–019; migration 020 changes channel/video/trend/profile uniqueness to workspace scope. Remaining unmapped Discovery SQL tables still need explicit tenant ownership before those tables can be used by a multi-tenant runtime.
-- SQL Server execution of the current migration manifest through 028 has not yet been evidenced as successful on the user's HP Z240. The dedicated self-hosted SQL QC workflow exists, but its latest run must complete successfully before claiming SQL acceptance. Migration 012's legacy-workspace backfill assumes all listed existing business rows belong to one workspace; review ownership before applying it.
+- SQL Server execution of the current migration manifest through 029 has not yet been evidenced as successful on the user's HP Z240. The dedicated self-hosted SQL QC workflow exists, but its latest run must complete successfully before claiming SQL acceptance. Migration 012's legacy-workspace backfill assumes all listed existing business rows belong to one workspace; review ownership before applying it.
 - Background workers that access tenant-owned business data must scope each operation by TenantId; the video worker processes durable jobs globally but each job/output is tenant-keyed.
 
 - Profile-scoped deterministic analysis is now filtered by the profile's imported CreatorStyleEvidence. A regression test verifies unrelated evaluated experiments are excluded. LLM synthesis remains scoped to imported profile evidence.
@@ -76,7 +76,7 @@ Implemented in code: `Tenant` and `TenantMembership` domain entities; configurab
 Not yet release-complete: production OIDC provider configuration, MFA enforcement, invitation delivery, endpoint-specific role policies, SQL Server execution tests for the current migration manifest, RLS, tenant ownership for unmapped Discovery SQL tables, and cross-tenant negative tests. Migration 012 must not be applied to a database containing multiple customer workspaces until a reviewed row-ownership mapping is prepared.
 
 
-## Discovery connector milestone — migrations 025–028
+## Discovery connector milestone — migrations 025–029
 
 The current branch `feature/keycloak-oidc-local` includes topic scheduler foundations (025–027) and workspace-scoped connector credentials (028). The Trends UI can request an AI-generated query plan and automatically invoke the authenticated discovery search endpoint. The endpoint supports Brave Search public-web indexing and an optional TikTok Research API adapter that is usable only after the relevant TikTok Research project approval.
 
