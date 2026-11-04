@@ -56,6 +56,8 @@ Use separate secret sets per environment. The current repository's bootstrap set
 
 .NET API (current keys; verify exact configuration binding in the deployed build):
 - `ConnectionStrings__CreatorFlow`
+- `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`, ... (optional explicit browser-origin allowlist; unset means no cross-origin browser origin is trusted).
+- API global rate limiting is enabled by default at 120 requests/minute per authenticated subject, or a fallback tenant/IP partition for local API-key/anonymous traffic. Tune at the edge and per expensive route before public SaaS; do not disable it as a workaround.
 - `Authentication__ApiKey` (bootstrap only; do not use as the public SaaS user identity)
 - `CREATORFLOW_AI_BASE_URL`
 - `CREATORFLOW_AI_API_KEY`
