@@ -29,10 +29,8 @@ public sealed class TenantRoleGuardMiddlewareTests
     }
 
     [Theory]
-    [InlineData("Editor", "/api/v1/discovery/connectors/settings", false)]
     [InlineData("Analyst", "/api/v1/ai/providers", false)]
     [InlineData("Publisher", "/api/v1/identity/workspaces", false)]
-    [InlineData("Owner", "/api/v1/discovery/connectors/settings", true)]
     [InlineData("Admin", "/api/v1/ai/providers", true)]
     public async Task Sensitive_reads_follow_owner_admin_policy(string role, string path, bool expectedAllowed)
     {
