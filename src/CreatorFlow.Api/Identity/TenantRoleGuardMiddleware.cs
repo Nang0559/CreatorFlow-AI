@@ -2,24 +2,62 @@ using CreatorFlow.Infrastructure.Persistence;
 
 namespace CreatorFlow.Api.Identity;
 
-/// <summary>Enforces baseline role boundaries for all tenant-scoped API mutations.</summary>
+/// <summary>
+/// Applies a conservative tenant-role matrix to mutations. Endpoint handlers may
+/// impose stricter checks; this middleware is the common baseline, not a substitute
+/// for resource-level authorization.
+/// </summary>
 public sealed class TenantRoleGuardMiddleware(RequestDelegate next)
 {
+    private static readonly PathString[] EditorMutationPrefixes =
+    [
+        "/api/v1/content-projects",
+        "/api/v1/topics",
+        "/api/v1/douyin/channels",
+        "/api/v1/douyin/videos",
+        "/api/v1/share-inbox",
+        "/api/v1/vietnam-trends",
+        "/api/v1/style-experiments",
+        "/api/v1/style-profiles",
+        "/api/v1/ai",
+        "/api/v1/video-assets",
+        "/api/v1/video-render",
+        "/api/v1/discovery/search"
+    ];
+
     public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext)
     {
         var isMutation = HttpMethods.IsPost(context.Request.Method) ||
                          HttpMethods.IsPut(context.Request.Method) ||
                          HttpMethods.IsPatch(context.Request.Method) ||
                          HttpMethods.IsDelete(context.Request.Method);
-        if (tenantContext.IsResolved && isMutation &&
-            (string.Equals(tenantContext.Role, "Analyst", StringComparison.Ordinal) ||
-             (string.Equals(tenantContext.Role, "Publisher", StringComparison.Ordinal) &&
-              !context.Request.Path.StartsWithSegments("/api/v1/publishing"))))
+        if (!tenantContext.IsResolved || !isMutation)
         {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsJsonAsync(new { error = "This workspace role does not permit this operation." });
+            await next(context);
             return;
         }
+
+        var role = tenantContext.Role;
+        var allowed = role switch
+        {
+            "Owner" or "Admin" => true,
+            "Editor" => EditorMutationPrefixes.Any(prefix => context.Request.Path.StartsWithSegments(prefix)),
+            "Publisher" => context.Request.Path.StartsWithSegments("/api/v1/publishing"),
+            "Analyst" => false,
+            _ => false
+        };
+
+        if (!allowed)
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                error = "This workspace role does not permit this operation.",
+                role
+            });
+            return;
+        }
+
         await next(context);
     }
 }
