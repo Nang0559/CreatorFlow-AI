@@ -84,6 +84,7 @@ public static class DiscoverySearchEndpoints
                 .Take(100)
                 .ToArray();
 
+            var videosOnly = unique.Where(x => x.Kind == "Video").ToArray();
             var channels = unique
                 .Where(x => !string.IsNullOrWhiteSpace(x.Username))
                 .GroupBy(x => x.Username!, StringComparer.OrdinalIgnoreCase)
@@ -94,10 +95,10 @@ public static class DiscoverySearchEndpoints
                         first.Username!,
                         first.DisplayName ?? first.Username!,
                         $"https://www.tiktok.com/@{Uri.EscapeDataString(first.Username!)}",
-                        g.Count(),
+                        g.Count(x => x.Kind == "Video"),
                         g.Max(x => x.Views ?? 0),
                         g.Max(x => x.Followers),
-                        g.Select(x => x.Url).Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToArray(),
+                        g.Where(x => x.Kind == "Video").Select(x => x.Url).Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToArray(),
                         g.Any(x => x.Source == "TikTok Research API") ? "TikTok Research API" : "Brave Search",
                         g.Select(x => x.RetrievedAt).Max());
                 })
@@ -114,7 +115,7 @@ public static class DiscoverySearchEndpoints
                 DateTimeOffset.UtcNow,
                 overallStatus,
                 channels,
-                unique,
+                videosOnly,
                 providerStates.ToArray(),
                 "Kết quả chỉ gồm URL TikTok HTTPS trả về từ nguồn tìm kiếm. Kết quả web là trang được lập chỉ mục, không đảm bảo còn tồn tại hoặc mở được; chỉ số chỉ xuất hiện khi API nguồn trả về."));
         }).RequireAuthorization();
