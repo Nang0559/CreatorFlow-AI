@@ -128,6 +128,23 @@ jobs:
               }]
           }
           request('POST', '/admin/realms/creatorflow/clients', client, admin)
+          clients = request('GET', '/admin/realms/creatorflow/clients?clientId=creatorflow-ci-contract', token=admin)
+          assert clients, 'ephemeral client was not created'
+          client_uuid = clients[0]['id']
+          mappers = request('GET', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', token=admin)
+          if not any(item.get('name') == 'creatorflow-api-audience' for item in mappers):
+              request('POST', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', {
+                  'name': 'creatorflow-api-audience',
+                  'protocol': 'openid-connect',
+                  'protocolMapper': 'oidc-audience-mapper',
+                  'consentRequired': False,
+                  'config': {
+                      'included.client.audience': 'creatorflow-api',
+                      'id.token.claim': 'false',
+                      'access.token.claim': 'true',
+                      'introspection.token.claim': 'true'
+                  }
+              }, admin)
           users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
           if not users:
               request('POST', '/admin/realms/creatorflow/users', {
