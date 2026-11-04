@@ -524,6 +524,11 @@
                 discoveryLogs[0] = discoveryLogs[0] with { Status = "THẤT BẠI", Detail = error };
         }
         finally { busy = false; }
+
+        // AI chỉ lập kế hoạch truy vấn; tự động gọi connector để lấy URL thật,
+        // tránh khiến người dùng hiểu nhầm rằng Ollama tự sinh ra link kênh/video.
+        if (discoveryPlan?.Queries is { Length: > 0 })
+            await SearchDiscoverySourcesAsync();
     }
 
     private async Task SearchDiscoverySourcesAsync()
