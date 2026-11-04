@@ -115,7 +115,7 @@ public static class DiscoverySearchEndpoints
                 overallStatus,
                 channels,
                 unique,
-                providerStates,
+                providerStates.ToArray(),
                 "Kết quả chỉ gồm URL TikTok HTTPS trả về từ nguồn tìm kiếm. Kết quả web là trang được lập chỉ mục, không đảm bảo còn tồn tại hoặc mở được; chỉ số chỉ xuất hiện khi API nguồn trả về."));
         }).RequireAuthorization();
 
