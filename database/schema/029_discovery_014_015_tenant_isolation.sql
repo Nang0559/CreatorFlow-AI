@@ -112,17 +112,17 @@ DECLARE @Relationships TABLE
     DeleteAction nvarchar(20) NOT NULL
 );
 INSERT @Relationships VALUES
-(N'DiscoveryCandidates',N'FK_DiscoveryCandidates_Source',N'FK_DiscoveryCandidates_Tenant_Source',N'SourceId',N'DiscoverySources',N'Id',N'SET_NULL'),
+(N'DiscoveryCandidates',N'FK_DiscoveryCandidates_Source',N'FK_DiscoveryCandidates_Tenant_Source',N'SourceId',N'DiscoverySources',N'Id',N'NO ACTION'),
 (N'DiscoveryMetricSnapshots',N'FK_DiscoveryMetricSnapshots_Candidate',N'FK_DiscoveryMetricSnapshots_Tenant_Candidate',N'CandidateId',N'DiscoveryCandidates',N'Id',N'CASCADE'),
-(N'DiscoveryMetricSnapshots',N'FK_DiscoveryMetricSnapshots_Run',N'FK_DiscoveryMetricSnapshots_Tenant_Run',N'RunId',N'DiscoveryRuns',N'Id',N'SET_NULL'),
+(N'DiscoveryMetricSnapshots',N'FK_DiscoveryMetricSnapshots_Run',N'FK_DiscoveryMetricSnapshots_Tenant_Run',N'RunId',N'DiscoveryRuns',N'Id',N'NO ACTION'),
 (N'DiscoveryRankings',N'FK_DiscoveryRankings_Candidate',N'FK_DiscoveryRankings_Tenant_Candidate',N'CandidateId',N'DiscoveryCandidates',N'Id',N'CASCADE'),
-(N'DiscoveryRankings',N'FK_DiscoveryRankings_Run',N'FK_DiscoveryRankings_Tenant_Run',N'RunId',N'DiscoveryRuns',N'Id',N'SET_NULL'),
-(N'DiscoveryPriorityLinks',N'FK_DiscoveryPriorityLinks_Candidate',N'FK_DiscoveryPriorityLinks_Tenant_Candidate',N'CandidateId',N'DiscoveryCandidates',N'Id',N'SET_NULL'),
-(N'DiscoveryFeedback',N'FK_DiscoveryFeedback_Candidate',N'FK_DiscoveryFeedback_Tenant_Candidate',N'CandidateId',N'DiscoveryCandidates',N'Id',N'NO_ACTION'),
-(N'DiscoveryFeedbackEvents',N'FK_DiscoveryFeedbackEvents_Candidate',N'FK_DiscoveryFeedbackEvents_Tenant_Candidate',N'CandidateId',N'DiscoveryCandidates',N'Id',N'NO_ACTION'),
+(N'DiscoveryRankings',N'FK_DiscoveryRankings_Run',N'FK_DiscoveryRankings_Tenant_Run',N'RunId',N'DiscoveryRuns',N'Id',N'NO ACTION'),
+(N'DiscoveryPriorityLinks',N'FK_DiscoveryPriorityLinks_Candidate',N'FK_DiscoveryPriorityLinks_Tenant_Candidate',N'CandidateId',N'DiscoveryCandidates',N'Id',N'NO ACTION'),
+(N'DiscoveryFeedback',N'FK_DiscoveryFeedback_Candidate',N'FK_DiscoveryFeedback_Tenant_Candidate',N'CandidateId',N'DiscoveryCandidates',N'Id',N'NO ACTION'),
+(N'DiscoveryFeedbackEvents',N'FK_DiscoveryFeedbackEvents_Candidate',N'FK_DiscoveryFeedbackEvents_Tenant_Candidate',N'CandidateId',N'DiscoveryCandidates',N'Id',N'NO ACTION'),
 (N'DiscoveryCandidateFeatureSnapshots',N'FK_DiscoveryCandidateFeatureSnapshots_Candidate',N'FK_DiscoveryCandidateFeatureSnapshots_Tenant_Candidate',N'CandidateId',N'DiscoveryCandidates',N'Id',N'CASCADE'),
 (N'DiscoveryLearningInsights',N'FK_DiscoveryLearningInsights_Feedback',N'FK_DiscoveryLearningInsights_Tenant_Feedback',N'FeedbackEventId',N'DiscoveryFeedbackEvents',N'Id',N'CASCADE'),
-(N'DiscoveryPreferenceRules',N'FK_DiscoveryPreferenceRules_Insight',N'FK_DiscoveryPreferenceRules_Tenant_Insight',N'SourceInsightId',N'DiscoveryLearningInsights',N'Id',N'SET_NULL');
+(N'DiscoveryPreferenceRules',N'FK_DiscoveryPreferenceRules_Insight',N'FK_DiscoveryPreferenceRules_Tenant_Insight',N'SourceInsightId',N'DiscoveryLearningInsights',N'Id',N'NO ACTION');
 
 DECLARE @Child sysname,@Old sysname,@New sysname,@ChildCol sysname,@Parent sysname,@ParentCol sysname,@Action nvarchar(20);
 DECLARE relationship_cursor CURSOR LOCAL FAST_FORWARD FOR
