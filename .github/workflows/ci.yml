@@ -115,6 +115,18 @@ jobs:
           client_secret = admin_request(
               'GET', f'/admin/realms/creatorflow/clients/{client_uuid}/client-secret', token=admin_token
           )['value']
+          scopes = admin_request('GET', '/admin/realms/creatorflow/client-scopes', token=admin_token)
+          api_scope = next((scope for scope in scopes if scope['name'] == 'creatorflow-api'), None)
+          assert api_scope, 'creatorflow-api client scope is missing from imported realm'
+          default_scopes = admin_request(
+              'GET', f'/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes',
+              token=admin_token
+          )
+          if not any(scope['id'] == api_scope['id'] for scope in default_scopes):
+              admin_request(
+                  'PUT', f'/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes/{api_scope["id"]}',
+                  token=admin_token
+              )
 
           users = admin_request(
               'GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin_token
@@ -141,7 +153,7 @@ jobs:
               'client_id': 'creatorflow-web',
               'response_type': 'code',
               'redirect_uri': redirect_uri,
-              'scope': 'openid profile email creatorflow-api',
+              'scope': 'openid',
               'state': state,
               'nonce': nonce,
               'code_challenge': challenge,
@@ -151,8 +163,16 @@ jobs:
           session = requests.Session()
           login_page = session.get(
               base + '/realms/creatorflow/protocol/openid-connect/auth?' + urlencode(params),
-              timeout=20
+              allow_redirects=False, timeout=20
           )
+          for _ in range(5):
+              if login_page.is_redirect:
+                  next_url = urljoin(login_page.url, login_page.headers['Location'])
+                  if next_url.startswith(redirect_uri):
+                      raise AssertionError(f'Keycloak rejected the authorization request: {next_url}')
+                  login_page = session.get(next_url, allow_redirects=False, timeout=20)
+                  continue
+              break
           login_page.raise_for_status()
           soup = BeautifulSoup(login_page.text, 'html.parser')
           form = next(
