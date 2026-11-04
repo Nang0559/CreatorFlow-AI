@@ -1,50 +1,46 @@
-# Dựng video tự động bằng After Effects và FFmpeg
+# Dựng video tự động bằng FFmpeg (renderer hiện tại)
 
-## Luồng đã được tích hợp
-1. Người dùng tải MP4/MOV/M4V lên Thư viện video (tối đa 500 MB) và xác nhận quyền sử dụng.
-2. API lưu file ngoài SQL Server, ghi metadata, SHA-256 và tenant sở hữu.
-3. API tạo tác vụ bền vững trong SQL Server.
-4. Worker Windows trên HP Z240 kiểm tra video nguồn bằng FFprobe (1 giây–10 phút), dựng composition dọc 1080×1920 bằng After Effects, xuất chuỗi PNG `frame_[#####].png` bằng aerender, sau đó FFmpeg đọc chuỗi bằng mẫu `frame_%05d.png`, ghép âm thanh nguồn và mã hóa MP4 H.264/AAC theo thời lượng video nguồn.
-5. Trang Thư viện video tự cập nhật tiến độ; video hoàn tất được phát trong CreatorFlow và tải MP4.
-6. API kiểm tra tenant khi xem trạng thái, phát hoặc tải video; phát hỗ trợ HTTP Range.
+## Phạm vi
 
-## Phạm vi bộ dựng ban đầu
-Bản đầu crop video nguồn để lấp đầy khung dọc, thêm tiêu đề, câu mở đầu và lời kêu gọi hành động. Chưa có thư viện hiệu ứng cao cấp, B-roll AI, phụ đề tự nhận dạng, giọng đọc AI hoặc đồng bộ nhạc theo nhịp. Những nội dung này cần template và dịch vụ AI tiếp theo; không được coi là đã hoàn thành trong bản đầu.
+Renderer local hiện tại của CreatorFlow là **FFmpeg-only**. After Effects không phải dependency và không được gọi trong luồng render này; có thể bổ sung adapter After Effects trong tương lai nhưng không nằm trong nghiệm thu hiện tại.
 
-## Cấu hình bắt buộc trên HP Z240
-API và Worker phải dùng cùng một thư mục VideoRendering:StorageRoot trên máy chủ Windows. Worker cần ConnectionStrings:CreatorFlow, VideoRendering:AfterEffectsExe, VideoRendering:AerenderExe, VideoRendering:FFmpegExe và VideoRendering:FFprobeExe (bắt buộc; có thể tự dò nếu đặt cạnh FFmpeg).
+Worker chạy như tiến trình Windows riêng trên HP Z240, ngoài Docker Web/AI. API tạo durable render jobs trong SQL Server; worker nhận job, kiểm tra đầu vào, gọi FFprobe/FFmpeg, cập nhật trạng thái và lưu MP4 trong vùng lưu trữ riêng ngoài web root. API cung cấp trạng thái, preview và download có xác thực.
 
-Ví dụ đường dẫn (điều chỉnh theo phiên bản Adobe đã cài):
-- C:\\Program Files\\Adobe\\Adobe After Effects 2026\\Support Files\\AfterFX.exe
-- C:\\Program Files\\Adobe\\Adobe After Effects 2026\\Support Files\\aerender.exe
+## Thành phần
 
-Không đưa connection string, API key hoặc thông tin giấy phép vào Git. Worker cần quyền đọc/ghi thư mục video và quyền SQL tối thiểu trên hai bảng VideoAssets, VideoRenderJobs. Chạy worker dưới tài khoản Windows có quyền truy cập SQL; không mở cổng mạng cho worker.
+- FFmpeg: encode video dọc H.264/AAC MP4.
+- FFprobe: đọc metadata và xác minh video stream/duration.
+- SQL Server: lưu asset metadata, render jobs và trạng thái.
+- Storage root: thư mục Windows riêng, dùng chung cấu hình giữa API và worker.
+- Worker: `scripts/Start-VideoRenderWorker.ps1`.
 
-## Database
-Migration 017 tạo bảng tài sản/video job. Migration 018 bổ sung khóa ngoại ghép TenantId để SQL Server không cho job tham chiếu video nguồn của workspace khác và inbox không thể liên kết kênh của workspace khác. Migration 019 bổ sung khóa ngoại cùng tenant cho các quan hệ dự án, thử nghiệm phong cách, phản hồi và dữ liệu xu hướng. Migration 020 cho phép cùng một kênh/video/hồ sơ tồn tại độc lập trong nhiều workspace. Cả hai migration được đưa vào database/Apply-Migrations.ps1. Chạy sau khi xác nhận đúng database CreatorFlow_QC:
-pwsh -File database/Apply-Migrations.ps1 -SqlInstance localhost -Database CreatorFlow_QC
+## Cấu hình trên Windows
 
-## Chạy worker
-Từ thư mục gốc repo: dotnet run --project src/CreatorFlow.Workers/CreatorFlow.Workers.csproj
-Worker xử lý tuần tự, có timeout cho từng tiến trình và giới hạn tối đa ba lần thử. Nên nghiệm thu chạy foreground trước khi đăng ký Windows Service.
+Đặt các biến `VideoRendering__*` trong `.env` theo `.env.example`, tối thiểu xác định đường dẫn FFmpeg, FFprobe và storage root. Trên máy Z240 hiện tại, FFmpeg đã được cài tại `C:\Tools\ffmpeg\bin\ffmpeg.exe`; kiểm tra lại đường dẫn thực tế trước khi chạy. API và worker phải dùng cùng một `VideoRendering__StorageRoot`.
 
-## API
-- POST /api/v1/video/assets: multipart form gồm file, confirmRights=true, tùy chọn rightsNote.
-- GET /api/v1/video/assets: danh sách video nguồn trong workspace.
-- POST /api/v1/video/render-jobs: tạo một phương án đơn lẻ. JSON gồm assetId, title, hook, callToAction, styleKey.
-- POST /api/v1/video/render-jobs/batch: tạo nguyên tử 2–3 phương án khác nhau; nếu một lần ghi thất bại, toàn bộ nhóm được rollback. JSON gồm assetId, title, hook, callToAction, styleKeys.
-- GET /api/v1/video/render-jobs: lịch sử 100 tác vụ gần nhất.
-- GET /api/v1/video/render-jobs/{id}: trạng thái.
-- GET /api/v1/video/render-jobs/{id}/preview: stream MP4.
-- GET /api/v1/video/render-jobs/{id}/download: tải MP4.
+Không đưa `.env`, khóa API hoặc dữ liệu người dùng vào Git. Worker cần chạy dưới tài khoản Windows có quyền truy cập SQL Server và thư mục storage.
 
-## Nghiệm thu trên máy thật
-1. Kiểm tra After Effects có license, font Arial và mở được; kiểm tra đường dẫn aerender.
-2. Chạy scripts/Test-VideoRenderer.ps1 với bốn đường dẫn công cụ.
-3. Dựng video 15–30 giây có âm thanh; kiểm tra crop, chữ tiếng Việt, tiếng, thời lượng và phát trên iPhone.
-4. Tải lên cùng file hai lần; API phải trả về cùng asset theo SHA-256 trong workspace, không tạo bản sao.
-5. Tạo hai tác vụ; xác minh worker không nhận trùng job.
-6. Kiểm tra tài khoản tenant khác không xem/tải được video.
-7. Đo thời gian dựng, CPU/RAM và dung lượng. Z240 nên chạy một tác vụ tại một thời điểm.
+## Cơ sở dữ liệu
 
-CI build không thay thế nghiệm thu After Effects/FFmpeg thật trên HP Z240. Không tuyên bố sẵn sàng sản xuất trước khi kiểm tra phần cứng, quyền truy cập file và tenant isolation.
+Migrations 017–020 tạo nền tảng asset/render job, quan hệ cùng tenant và ràng buộc workspace-scoped. Chạy migration runner theo hướng dẫn Z240 và xác nhận ledger/checksum trước khi khởi động worker. Không sửa migration đã áp dụng; nếu cần thay đổi schema, tạo migration mới.
+
+## Khởi động và nghiệm thu
+
+```powershell
+. .\scripts\docker\Import-LocalPilotEnv.ps1
+Import-LocalPilotEnv
+.\scripts\Test-VideoRenderer.ps1
+.\scripts\Start-VideoRenderWorker.ps1
+```
+
+Sau đó mở Thư viện video, tải lên một video mà workspace có quyền sử dụng, tạo render job, chờ hoàn tất, xem preview và tải MP4. Nghiệm thu tối thiểu một video dọc 15–30 giây: file phải tồn tại, FFprobe đọc được stream/duration, phát được và có âm thanh đúng kỳ vọng. Kiểm tra log worker nếu job thất bại; không coi trạng thái API/HTTP 200 là bằng chứng render thành công.
+
+## Giới hạn hiện tại
+
+- Không có STT/TTS, phân tích nhạc, beat-sync, B-roll hay hiệu ứng nâng cao.
+- Không tự động đăng tải lên TikTok hoặc nền tảng khác.
+- Không tự động xóa watermark hoặc xử lý nhằm né chính sách nền tảng.
+- Render job queue không đồng nghĩa với connector discovery queue.
+- CI build/test không thay thế nghiệm thu FFmpeg thật trên HP Z240.
+
+Style Lab có thể tạo gói handoff cho quy trình biên tập ngoài hệ thống; gói handoff hoặc composition After Effects tương lai không làm thay đổi engine render FFmpeg-only hiện tại.
