@@ -99,4 +99,4 @@ The `GET /api/v1/style-profiles/{id}/learning-analysis` endpoint now loads the s
 
 ## SQL CI evidence correction (2026-11-04)
 
-SQL Server QC is a separate self-hosted workflow, not a job inside the GitHub-hosted `.github/workflows/ci.yml`. It is intentionally not triggered by pull requests because it executes repository code on the local SQL host. The current run must be observed to completion on the Z240 runner. Pending, queued or cancelled runs are not SQL acceptance evidence.
+SQL Server QC is a separate self-hosted workflow, not a job inside the GitHub-hosted `.github/workflows/ci.yml`. It is intentionally not triggered by pull requests because it executes repository code on the local SQL host. The QC script applies migrations 001–028 only to a clean database or one whose tenant foundation 011–013 is already complete, then verifies checksums and tenant/composite constraints. It refuses to infer ownership for a populated legacy database. The current run must be observed to completion on the Z240 runner. Pending, queued or cancelled runs are not SQL acceptance evidence.
