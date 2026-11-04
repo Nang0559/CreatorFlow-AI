@@ -70,12 +70,12 @@ jobs:
               assert metadata.get(key), key
           print('PASS imported realm OIDC discovery:', metadata['issuer'])
           PY
-      - name: Issue and cryptographically validate a real signed access token
+      - name: Issue and cryptographically validate a real creatorflow-web access token
         shell: bash
         run: |
           python -m pip install --quiet 'PyJWT[crypto]'
           python - <<'PY'
-          import json, time, urllib.parse, urllib.request
+          import json, urllib.parse, urllib.request
           import jwt
 
           base = 'http://127.0.0.1:8180'
@@ -103,48 +103,26 @@ jobs:
               'username': 'ci-admin', 'password': 'ci-only-admin-password-12345'
           })['access_token']
 
-          client = {
-              'clientId': 'creatorflow-ci-contract',
-              'name': 'Ephemeral CI OIDC contract client',
-              'enabled': True,
-              'protocol': 'openid-connect',
-              'publicClient': False,
-              'secret': 'ci-only-contract-client-secret-123456',
-              'standardFlowEnabled': False,
-              'implicitFlowEnabled': False,
-              'directAccessGrantsEnabled': True,
-              'serviceAccountsEnabled': False,
-              'protocolMappers': [{
-                  'name': 'creatorflow-api-audience',
-                  'protocol': 'openid-connect',
-                  'protocolMapper': 'oidc-audience-mapper',
-                  'consentRequired': False,
-                  'config': {
-                      'included.custom.audience': 'creatorflow-api',
-                      'id.token.claim': 'false',
-                      'access.token.claim': 'true',
-                      'introspection.token.claim': 'true'
-                  }
-              }]
-          }
-          request('POST', '/admin/realms/creatorflow/clients', client, admin)
-          clients = request('GET', '/admin/realms/creatorflow/clients?clientId=creatorflow-ci-contract', token=admin)
-          assert clients, 'ephemeral client was not created'
-          client_uuid = clients[0]['id']
-          mappers = request('GET', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', token=admin)
-          if not any(item.get('name') == 'creatorflow-api-audience' for item in mappers):
-              request('POST', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', {
-                  'name': 'creatorflow-api-audience',
-                  'protocol': 'openid-connect',
-                  'protocolMapper': 'oidc-audience-mapper',
-                  'consentRequired': False,
-                  'config': {
-                      'included.custom.audience': 'creatorflow-api',
-                      'id.token.claim': 'false',
-                      'access.token.claim': 'true',
-                      'introspection.token.claim': 'true'
-                  }
-              }, admin)
+          clients = request('GET', '/admin/realms/creatorflow/clients?clientId=creatorflow-web', token=admin)
+          assert clients, 'checked-in creatorflow-web client is missing'
+          web_client = clients[0]
+          client_uuid = web_client['id']
+          assert web_client.get('standardFlowEnabled') is True, 'creatorflow-web authorization-code flow is disabled'
+          assert web_client.get('publicClient') is False, 'creatorflow-web must remain confidential'
+          attributes = web_client.get('attributes') or {}
+          assert attributes.get('pkce.code.challenge.method') == 'S256', 'creatorflow-web PKCE S256 is not configured'
+
+          # Enable password grant only inside this disposable CI realm so the test can
+          # obtain a token without a browser. The checked-in realm export stays disabled.
+          web_client['directAccessGrantsEnabled'] = True
+          request('PUT', f'/admin/realms/creatorflow/clients/{client_uuid}', web_client, admin)
+          secret = request('GET', f'/admin/realms/creatorflow/clients/{client_uuid}/client-secret', token=admin)['value']
+
+          scopes = request('GET', '/admin/realms/creatorflow/client-scopes', token=admin)
+          basic_scope = next((scope for scope in scopes if scope['name'] == 'basic'), None)
+          assert basic_scope, 'Keycloak basic client scope is missing'
+          request('PUT', f"/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes/{basic_scope['id']}", token=admin)
+
           users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
           if not users:
               request('POST', '/admin/realms/creatorflow/users', {
@@ -159,12 +137,12 @@ jobs:
           }, admin)
 
           token_response = request('POST', '/realms/creatorflow/protocol/openid-connect/token', {
-              'client_id': 'creatorflow-ci-contract',
-              'client_secret': 'ci-only-contract-client-secret-123456',
+              'client_id': 'creatorflow-web',
+              'client_secret': secret,
               'grant_type': 'password',
               'username': 'ci-oidc-contract',
               'password': 'ci-only-user-password-123456',
-              'scope': 'openid'
+              'scope': 'openid creatorflow-api'
           })
           access_token = token_response['access_token']
           metadata = request('GET', '/realms/creatorflow/.well-known/openid-configuration')
@@ -173,10 +151,9 @@ jobs:
               access_token, signing_key.key, algorithms=['RS256'],
               audience='creatorflow-api', issuer=issuer
           )
-          print('Keycloak access-token claims:', sorted(claims.keys()))
-          assert claims.get('sub') or claims.get('preferred_username'), 'subject identity claim missing'
+          assert claims.get('sub'), 'subject claim missing from creatorflow-web access token'
           assert 'creatorflow-api' in claims.get('aud', []), claims.get('aud')
-          print('PASS real Keycloak signed access token:', claims['iss'], 'aud=creatorflow-api')
+          print('PASS signed access token from checked-in creatorflow-web client:', claims['iss'], 'aud=creatorflow-api')
           PY
       - name: Stop Keycloak
         if: always()
