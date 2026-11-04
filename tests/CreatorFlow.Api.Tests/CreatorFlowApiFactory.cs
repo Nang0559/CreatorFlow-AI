@@ -42,7 +42,10 @@ internal sealed class CreatorFlowApiFactory : WebApplicationFactory<Program>
         });
     }
 
-    internal async Task SeedAsync(Func<CreatorFlowDbContext, Task> seed)
+    internal Task SeedAsync(Func<CreatorFlowDbContext, Task> seed) =>
+        SeedAsync((db, _) => seed(db));
+
+    internal async Task SeedAsync(Func<CreatorFlowDbContext, TenantContext, Task> seed)
     {
         using var scope = Services.CreateScope();
         var tenantContext = scope.ServiceProvider.GetRequiredService<TenantContext>();
@@ -55,7 +58,7 @@ internal sealed class CreatorFlowApiFactory : WebApplicationFactory<Program>
             db.Tenants.Add(tenant);
             await db.SaveChangesAsync();
         }
-        await seed(db);
+        await seed(db, tenantContext);
         await db.SaveChangesAsync();
     }
 }
