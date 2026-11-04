@@ -54,23 +54,24 @@ builder.Services.AddRateLimiter(options =>
     options.GlobalLimiter = rateLimitingEnabled
         ? PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
         {
-        if (httpContext.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase) ||
-            httpContext.Request.Path.StartsWithSegments("/health"))
-            return RateLimitPartition.GetNoLimiter("health");
+            if (httpContext.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase) ||
+                httpContext.Request.Path.StartsWithSegments("/health"))
+                return RateLimitPartition.GetNoLimiter("health");
 
-        var subject = httpContext.User.FindFirst("sub")?.Value;
-        var tenantId = httpContext.RequestServices.GetService<ITenantContext>()?.TenantId;
-        var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var identityPartition = !string.IsNullOrWhiteSpace(subject) ? subject :
-            tenantId.HasValue && tenantId.Value != Guid.Empty ? tenantId.Value.ToString("N") : remoteAddress;
-        var routePartition = httpContext.Request.Path.StartsWithSegments("/api/v1/video") ? "video" : "api";
-        var partition = identityPartition + ":" + routePartition;
-        return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 300,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            AutoReplenishment = true
+            var subject = httpContext.User.FindFirst("sub")?.Value;
+            var tenantId = httpContext.RequestServices.GetService<ITenantContext>()?.TenantId;
+            var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var identityPartition = !string.IsNullOrWhiteSpace(subject) ? subject :
+                tenantId.HasValue && tenantId.Value != Guid.Empty ? tenantId.Value.ToString("N") : remoteAddress;
+            var routePartition = httpContext.Request.Path.StartsWithSegments("/api/v1/video") ? "video" : "api";
+            var partition = identityPartition + ":" + routePartition;
+            return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 300,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
         })
         : PartitionedRateLimiter.Create<HttpContext, string>(_ =>
             RateLimitPartition.GetNoLimiter("rate-limiting-disabled"));
