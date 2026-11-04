@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.Data.SqlClient;
 
 namespace CreatorFlow.Workers;
@@ -55,6 +57,10 @@ internal sealed class DiscoveryTopicSchedulerWorker(
         string topicName;
         string platformsJson;
         int refreshMinutes;
+        string scheduleMode;
+        string localTimeText;
+        string daysOfWeekJson;
+        string timeZoneId;
 
         await using (var claim = connection.CreateCommand())
         {
@@ -84,7 +90,8 @@ internal sealed class DiscoveryTopicSchedulerWorker(
                        LastErrorCode=NULL,
                        UpdatedAt=SYSUTCDATETIME()
                 OUTPUT inserted.Id,inserted.TenantId,inserted.ContentTopicId,
-                       inserted.PlatformsJson,inserted.RefreshMinutes
+                       inserted.PlatformsJson,inserted.RefreshMinutes,
+                       inserted.ScheduleMode,inserted.LocalTime,inserted.DaysOfWeekJson,inserted.TimeZoneId
                   FROM dbo.DiscoveryTopicProfiles p
                   INNER JOIN due ON due.Id=p.Id;
                 """;
@@ -102,6 +109,10 @@ internal sealed class DiscoveryTopicSchedulerWorker(
             topicId = reader.GetGuid(2);
             platformsJson = reader.GetString(3);
             refreshMinutes = reader.GetInt32(4);
+            scheduleMode = reader.GetString(5);
+            localTimeText = reader.GetString(6);
+            daysOfWeekJson = reader.GetString(7);
+            timeZoneId = reader.GetString(8);
         }
 
         await using (var topic = connection.CreateCommand())
@@ -147,11 +158,13 @@ internal sealed class DiscoveryTopicSchedulerWorker(
             UPDATE dbo.DiscoveryTopicProfiles
                SET LastRunAt=SYSUTCDATETIME(),LastRunStatus=N'Skipped',
                    LastErrorCode=@ErrorCode,LeaseUntil=NULL,
-                   NextRunAt=CASE WHEN IsEnabled=1 THEN DATEADD(minute,RefreshMinutes,SYSUTCDATETIME()) ELSE NULL END,
+                   NextRunAt=@NextRunAt,
                    UpdatedAt=SYSUTCDATETIME()
              WHERE Id=@ProfileId AND TenantId=@TenantId;
             COMMIT TRANSACTION;
             """;
+        var nextRunAt = CalculateNextRun(DateTimeOffset.UtcNow, scheduleMode, refreshMinutes, localTimeText, daysOfWeekJson, timeZoneId);
+        finish.Parameters.AddWithValue("@NextRunAt", nextRunAt);
         finish.Parameters.AddWithValue("@ErrorCode", connectorMissing);
         finish.Parameters.AddWithValue("@RunId", runId);
         finish.Parameters.AddWithValue("@ProfileId", profileId);
@@ -163,4 +176,31 @@ internal sealed class DiscoveryTopicSchedulerWorker(
             topicName, profileId, refreshMinutes);
         return true;
     }
+    private static DateTimeOffset CalculateNextRun(DateTimeOffset nowUtc, string mode, int refreshMinutes,
+        string localTimeText, string daysOfWeekJson, string timeZoneId)
+    {
+        if (mode == "Interval") return nowUtc.AddMinutes(refreshMinutes);
+        if (!TimeOnly.TryParseExact(localTimeText, "HH:mm", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var localTime))
+            throw new InvalidOperationException("Lịch chủ đề có giờ chạy không hợp lệ.");
+
+        TimeZoneInfo zone;
+        try { zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
+        catch (TimeZoneNotFoundException) when (timeZoneId == "Asia/Ho_Chi_Minh")
+        { zone = TimeZoneInfo.FindSystemTimeZoneById("SE Asia Standard Time"); }
+
+        var days = JsonSerializer.Deserialize<string[]>(daysOfWeekJson) ?? [];
+        var selectedDays = days.Select(x => Enum.Parse<DayOfWeek>(x, true)).ToHashSet();
+        var localNow = TimeZoneInfo.ConvertTime(nowUtc, zone).DateTime;
+        for (var offset = 0; offset <= 7; offset++)
+        {
+            var date = localNow.Date.AddDays(offset);
+            if (mode == "Weekly" && !selectedDays.Contains(date.DayOfWeek)) continue;
+            var candidate = DateTime.SpecifyKind(date.Add(localTime.ToTimeSpan()), DateTimeKind.Unspecified);
+            if (candidate <= localNow || zone.IsInvalidTime(candidate)) continue;
+            return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(candidate, zone), TimeSpan.Zero);
+        }
+        throw new InvalidOperationException("Không thể tính lịch chạy chủ đề tiếp theo.");
+    }
+
 }
