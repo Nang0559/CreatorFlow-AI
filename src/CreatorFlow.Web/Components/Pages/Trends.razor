@@ -151,7 +151,7 @@
     }
     else
     {
-      <label>Giờ chạy (giờ Việt Nam)<input type="time" @bind="scheduleLocalTime" /></label>
+      <label>Giờ chạy (giờ Việt Nam)<input type="time" value="@scheduleLocalTime" @onchange="OnScheduleTimeChanged" /></label>
     }
     <label class="schedule-toggle"><input type="checkbox" @bind="scheduleEnabled" /> Bật tự động theo dõi</label>
   </div>
@@ -340,6 +340,11 @@
         ("Thứ 2", "Monday"), ("Thứ 3", "Tuesday"), ("Thứ 4", "Wednesday"),
         ("Thứ 5", "Thursday"), ("Thứ 6", "Friday"), ("Thứ 7", "Saturday"), ("Chủ nhật", "Sunday")
     ];
+
+    private void OnScheduleTimeChanged(ChangeEventArgs args)
+    {
+        scheduleLocalTime = args.Value?.ToString() ?? "09:00";
+    }
 
     private void ToggleScheduleDay(string day, ChangeEventArgs args)
     {
