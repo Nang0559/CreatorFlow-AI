@@ -65,7 +65,6 @@ internal sealed class CreatorFlowApiFactory : WebApplicationFactory<Program>
                 // Keep the real JwtBearer handler and token validation path, but use a deterministic
                 // test issuer/signing key so the API does not depend on a live Keycloak service.
                 options.Authority = null;
-                options.MetadataAddress = null;
                 options.ConfigurationManager = null;
                 options.RequireHttpsMetadata = false;
                 options.TokenValidationParameters = new TokenValidationParameters
