@@ -31,7 +31,6 @@ internal sealed class CreatorFlowApiFactory : WebApplicationFactory<Program>
                 ["Tenant:AllowApiKeyBootstrap"] = "true",
                 ["Tenant:BootstrapTenantId"] = LegacyTenantId.ToString(),
                 ["Tenant:BootstrapRole"] = _bootstrapRole,
-                ["RateLimiting:Enabled"] = "false"
             });
         });
         builder.ConfigureServices(services =>
