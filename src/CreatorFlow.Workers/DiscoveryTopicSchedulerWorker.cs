@@ -158,7 +158,7 @@ internal sealed class DiscoveryTopicSchedulerWorker(
             UPDATE dbo.DiscoveryTopicProfiles
                SET LastRunAt=SYSUTCDATETIME(),LastRunStatus=N'Skipped',
                    LastErrorCode=@ErrorCode,LeaseUntil=NULL,
-                   NextRunAt=@NextRunAt,
+                   NextRunAt=CASE WHEN IsEnabled=1 THEN @NextRunAt ELSE NULL END,
                    UpdatedAt=SYSUTCDATETIME()
              WHERE Id=@ProfileId AND TenantId=@TenantId;
             COMMIT TRANSACTION;
@@ -172,8 +172,8 @@ internal sealed class DiscoveryTopicSchedulerWorker(
         await finish.ExecuteNonQueryAsync(ct);
 
         logger.LogWarning(
-            "Đã xử lý lịch chủ đề {TopicName} ({ProfileId}) nhưng bỏ qua thu thập: chưa có connector nguồn được phê duyệt. Chu kỳ tiếp theo {RefreshMinutes} phút.",
-            topicName, profileId, refreshMinutes);
+            "Đã xử lý lịch chủ đề {TopicName} ({ProfileId}) nhưng bỏ qua thu thập: chưa có connector nguồn được phê duyệt. Kiểu lịch {ScheduleMode}; chu kỳ {RefreshMinutes} phút.",
+            topicName, profileId, scheduleMode, refreshMinutes);
         return true;
     }
     private static DateTimeOffset CalculateNextRun(DateTimeOffset nowUtc, string mode, int refreshMinutes,
