@@ -30,6 +30,8 @@ This document prevents a green build or a healthy local URL from being mistaken 
 - [ ] Full .NET and Python test suites pass on the exact release commit.
 - [ ] Docker images build on the exact release commit; containers stay healthy after reboot.
 - [ ] Web/API/AI health, readiness, API authorization and tenant isolation verified against SQL.
+- [ ] Fresh local Keycloak volume imports the checked-in `creatorflow` realm; `scripts/Test-KeycloakRealmContract.ps1 -CheckLive` passes and a signed access token is accepted by the API with the expected issuer/audience.
+- [ ] Data Protection key ring path, Windows identity/DPAPI scope, ACLs and backup/restore are verified; multi-instance deployments use a shared key ring with a suitable shared at-rest protection strategy.
 - [ ] iPhone Shortcut receives a Douyin share and the Share Inbox stores it once; duplicate submission is idempotent.
 - [ ] Share links are not fetched server-side and unsupported URLs are rejected.
 - [ ] FFmpeg worker exports a valid MP4 on the HP Z240; verify preview/download and audio/video integrity.
