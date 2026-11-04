@@ -1,4 +1,5 @@
 using CreatorFlow.Api.Identity;
+using Microsoft.AspNetCore.Http;
 using Xunit;
 
 namespace CreatorFlow.Api.Tests;
