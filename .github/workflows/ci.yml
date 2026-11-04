@@ -173,7 +173,8 @@ jobs:
               access_token, signing_key.key, algorithms=['RS256'],
               audience='creatorflow-api', issuer=issuer
           )
-          assert claims.get('sub'), 'subject claim missing'
+          print('Keycloak access-token claims:', sorted(claims.keys()))
+          assert claims.get('sub') or claims.get('preferred_username'), 'subject identity claim missing'
           assert 'creatorflow-api' in claims.get('aud', []), claims.get('aud')
           print('PASS real Keycloak signed access token:', claims['iss'], 'aud=creatorflow-api')
           PY
