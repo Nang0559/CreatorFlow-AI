@@ -108,7 +108,7 @@ After configuring OIDC and completing the initial Owner bootstrap, open `/accoun
 - Invitee signs in / creates an account at the configured identity provider, verifies the invited email, then calls `POST /api/v1/identity/invitations/accept` with `{ "token": "..." }`.
 - Owner/Admin can list members and pending invitations and revoke invitations. Only Owner can change roles or suspend memberships. Owner cannot be granted through an invitation; the workspace must always retain at least one active Owner.
 
-Roles: Owner, Admin, Editor, Analyst, Publisher. Analyst is read-only. Publisher mutations are denied except future publishing endpoints; Editor/Admin/Owner can use current content workflows. Fine-grained per-feature authorization remains a release gate.
+Roles: Owner, Admin, Editor, Analyst, Publisher. The central mutation matrix is deny-by-default: Owner/Admin may mutate tenant workflows (with endpoint-specific Owner/Admin checks still applied); Editor may mutate content, topics, channel/video intake, Share Inbox, trend feedback, Style Lab/profile, AI content-generation, video render and discovery-search routes, but not identity administration, AI provider registry or connector credential management; Analyst is read-only; Publisher may mutate only `/api/v1/publishing`. No publishing endpoint exists yet, so Publisher currently has no write operation. GET requests pass the central mutation guard, while sensitive read endpoints still enforce their own Owner/Admin checks. Resource-level ownership and cross-tenant negative tests remain release gates.
 
 ## 8. Session and account protection
 
