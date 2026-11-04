@@ -63,7 +63,7 @@ Không gửi `.env`, access token, cookie, mật khẩu, mã OTP hoặc file log
 
 ## Cổng SQL
 
-Migration 021 tạo bảng lịch đồng bộ kênh và hàng đợi tải video có kiểm tra quyền sử dụng. Các migration 025–027 bổ sung lịch khám phá theo chủ đề; migration 028 lưu cấu hình khóa connector theo workspace. Script chỉ đọc ledger. Nếu migration 021 chưa có trong ledger, **không tự chạy migration**; cần kiểm tra trạng thái migration 011–013 và các migration 016–020 trên chính database QC trước. Không áp dụng tenant migration lên database đang có dữ liệu nếu chưa xác nhận cách gán quyền sở hữu workspace.
+Migration 021 tạo bảng lịch đồng bộ kênh và hàng đợi tải video có kiểm tra quyền sử dụng. Các migration 025–027 bổ sung lịch khám phá theo chủ đề; migration 028 lưu cấu hình khóa connector theo workspace. Script chỉ đọc ledger. Nếu migration 028 chưa có trong ledger, **không tự suy luận schema đã sẵn sàng**; cần kiểm tra trạng thái migration 011–013 và toàn bộ migration tenant 016–028 trên chính database QC trước. Migration 028 phụ thuộc bảng Tenants từ migration 011–013. Không áp dụng tenant migration lên database đang có dữ liệu nếu chưa xác nhận cách gán quyền sở hữu workspace.
 
 ## Diễn giải
 
@@ -88,4 +88,4 @@ Lệnh migration thông thường không bật tenant migrations. Sau khi đã s
 
 Lệnh này bao gồm các migration tenant 011–013 và các migration phụ thuộc 016–028. Migration 012 gán các bản ghi hiện hữu trong danh sách bảng của nó cho workspace `legacy-workspace`. Nếu database có dữ liệu của nhiều khách hàng hoặc chưa rõ chủ sở hữu, **không chạy lệnh này**; cần lập mapping TenantId theo dữ liệu đã được duyệt trước.
 
-Sau khi migration chạy, chạy lại script kiểm tra để xác nhận ledger ghi nhận các migration tenant cần thiết đến 028 (nếu nhánh hiện tại có các script tương ứng). Migration 022 hiện chỉ tạo cấu trúc gói/quota/usage; chưa bật thanh toán hoặc thực thi quota.
+Sau khi migration chạy, chạy lại script kiểm tra để xác nhận ledger ghi nhận 021–028 theo đúng các script hiện có trên nhánh. Không áp dụng lại hoặc chỉnh sửa nội dung migration đã ghi nhận checksum. Migration 022 hiện chỉ tạo cấu trúc gói/quota/usage; chưa bật thanh toán hoặc thực thi quota.
