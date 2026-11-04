@@ -1,4 +1,5 @@
 using CreatorFlow.Domain.Identity;
+using CreatorFlow.Api.Identity;
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
