@@ -17,9 +17,9 @@ public static class TopicDiscoveryScheduleEndpoints
         group.MapGet("/{topicId:guid}/schedule", async (
             Guid topicId, ITenantContext tenant, IConfiguration configuration, CancellationToken ct) =>
         {
-            if (!TryGetTenant(tenant, out var tenantId)) return Results.Forbid();
+            if (!TryGetTenant(tenant, out var tenantId)) return (IResult)Results.Forbid();
             var cs = configuration.GetConnectionString("CreatorFlow");
-            if (string.IsNullOrWhiteSpace(cs)) return Results.Problem("SQL Server is not configured.", statusCode: 503);
+            if (string.IsNullOrWhiteSpace(cs)) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
             await using var connection = new SqlConnection(cs);
             await connection.OpenAsync(ct);
             await using var command = connection.CreateCommand();
@@ -48,7 +48,7 @@ public static class TopicDiscoveryScheduleEndpoints
             Guid topicId, UpdateTopicScheduleRequest request, ITenantContext tenant,
             IConfiguration configuration, CancellationToken ct) =>
         {
-            if (!TryGetTenant(tenant, out var tenantId)) return Results.Forbid();
+            if (!TryGetTenant(tenant, out var tenantId)) return (IResult)Results.Forbid();
             if (!AllowedIntervals.Contains(request.RefreshMinutes.ToString()))
                 return Results.ValidationProblem(new Dictionary<string, string[]> {
                     ["refreshMinutes"] = ["Chọn chu kỳ 1, 3, 6, 12 hoặc 24 giờ."]
@@ -59,7 +59,7 @@ public static class TopicDiscoveryScheduleEndpoints
                     ["platforms"] = ["Chọn TikTok Việt Nam và/hoặc Douyin."]
                 });
             var cs = configuration.GetConnectionString("CreatorFlow");
-            if (string.IsNullOrWhiteSpace(cs)) return Results.Problem("SQL Server is not configured.", statusCode: 503);
+            if (string.IsNullOrWhiteSpace(cs)) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
             await using var connection = new SqlConnection(cs);
             await connection.OpenAsync(ct);
             await using var command = connection.CreateCommand();
@@ -91,16 +91,16 @@ public static class TopicDiscoveryScheduleEndpoints
             command.Parameters.AddWithValue("@refresh", request.RefreshMinutes);
             command.Parameters.AddWithValue("@platforms", JsonSerializer.Serialize(platforms));
             var found = (bool)(await command.ExecuteScalarAsync(ct) ?? false);
-            if (!found) return Results.NotFound();
+            if (!found) return (IResult)Results.NotFound();
             return Results.Ok(new { topicId, request.Enabled, request.RefreshMinutes, platforms });
         });
 
         group.MapPost("/{topicId:guid}/run-now", async (
             Guid topicId, ITenantContext tenant, IConfiguration configuration, CancellationToken ct) =>
         {
-            if (!TryGetTenant(tenant, out var tenantId)) return Results.Forbid();
+            if (!TryGetTenant(tenant, out var tenantId)) return (IResult)Results.Forbid();
             var cs = configuration.GetConnectionString("CreatorFlow");
-            if (string.IsNullOrWhiteSpace(cs)) return Results.Problem("SQL Server is not configured.", statusCode: 503);
+            if (string.IsNullOrWhiteSpace(cs)) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
             await using var connection = new SqlConnection(cs);
             await connection.OpenAsync(ct);
             await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(ct);
@@ -135,7 +135,7 @@ public static class TopicDiscoveryScheduleEndpoints
             command.Parameters.AddWithValue("@topicId", topicId);
             command.Parameters.AddWithValue("@tenantId", tenantId);
             var profileId = await command.ExecuteScalarAsync(ct);
-            if (profileId is null || profileId is DBNull) { await transaction.RollbackAsync(ct); return Results.NotFound(); }
+            if (profileId is null || profileId is DBNull) { await transaction.RollbackAsync(ct); return (IResult)Results.NotFound(); }
             await transaction.CommitAsync(ct);
             return Results.Accepted($"/api/v1/topics/{topicId}/runs", new { topicId, status = "Queued" });
         });
@@ -143,12 +143,12 @@ public static class TopicDiscoveryScheduleEndpoints
         group.MapGet("/{topicId:guid}/runs", async (
             Guid topicId, int? take, ITenantContext tenant, IConfiguration configuration, CancellationToken ct) =>
         {
-            if (!TryGetTenant(tenant, out var tenantId)) return Results.Forbid();
+            if (!TryGetTenant(tenant, out var tenantId)) return (IResult)Results.Forbid();
             var size = take ?? 20;
             if (size is < 1 or > 100)
-                return Results.ValidationProblem(new Dictionary<string, string[]> { ["take"] = ["Giá trị từ 1 đến 100."] });
+                return (IResult)Results.ValidationProblem(new Dictionary<string, string[]> { ["take"] = ["Giá trị từ 1 đến 100."] });
             var cs = configuration.GetConnectionString("CreatorFlow");
-            if (string.IsNullOrWhiteSpace(cs)) return Results.Problem("SQL Server is not configured.", statusCode: 503);
+            if (string.IsNullOrWhiteSpace(cs)) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
             await using var connection = new SqlConnection(cs);
             await connection.OpenAsync(ct);
             await using var command = connection.CreateCommand();
