@@ -25,7 +25,7 @@ jobs:
   sqlserver-qc:
     # No pull_request trigger: never execute untrusted fork code on a local SQL host.
     # Match the exact custom labels configured on the dedicated Z240 SQL runner.
-    runs-on: [self-hosted, windows, pctp-ui, sql-network]
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 45
     env:
       # The runner is local to the SQL Server host. The variable can override
