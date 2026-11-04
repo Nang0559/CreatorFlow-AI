@@ -26,19 +26,14 @@ The same issuer hostname must resolve to the local Keycloak service in three pla
    ```powershell
    docker compose --env-file .env -f compose.dev.yaml up -d keycloak
    Invoke-WebRequest http://localhost:9100/health/ready
+   .\scripts\Test-KeycloakRealmContract.ps1 -CheckLive
    ```
-   The management health endpoint is published only on Z240 loopback port `9100`. Open the Admin Console at `http://creatorflow-id.test:8180/admin/`.
-5. Sign in with the bootstrap admin credentials from `.env`. Create a realm named `creatorflow`.
-6. In that realm create an OpenID Connect client named `creatorflow-web`:
-   - Client authentication: **On** (confidential server-side client).
-   - Standard flow: **On**; Direct access grants: **Off**.
-   - Valid redirect URI: `http://localhost:8080/signin-oidc`.
-   - Valid post-logout redirect URI: `http://localhost:8080/signout-callback-oidc`.
-   - Web origin: `http://localhost:8080`.
-   - Use PKCE with method **S256**. Do not enable implicit flow or request `offline_access`.
-   - Copy the generated client secret into `Authentication__Oidc__ClientSecret`.
-7. Create an OpenID Connect client scope named `creatorflow-api`. Add an **Audience** protocol mapper with custom audience `creatorflow-api`, enabled for the access token. Assign this scope to `creatorflow-web` as an optional client scope so the requested `creatorflow-api` scope adds the audience to the access token. Set `Authentication__Oidc__ApiScope=creatorflow-api` and `Authentication__Oidc__Audience=creatorflow-api`.
-8. Assign the built-in `profile` and `email` client scopes. Ensure the ID token/UserInfo provides `email` and `email_verified=true`. Create a test user, set a password, and verify the email claim. Configure OTP/MFA for Owner/Admin before any public or shared deployment.
+   The management health endpoint is published only on Z240 loopback port `9100`. Open the Admin Console at `http://creatorflow-id.test:8180/admin/`. Compose mounts `docker/keycloak/realm-import/creatorflow-realm.json` and starts Keycloak with `--import-realm`, so a clean Keycloak data volume imports the `creatorflow` realm, confidential `creatorflow-web` client, PKCE S256 setting and `creatorflow-api` audience scope.
+5. Sign in with the bootstrap admin credentials from `.env`. On a clean volume, inspect the imported `creatorflow` realm and `creatorflow-web` client. Open the client's Credentials tab, retrieve its generated client secret, and set `Authentication__Oidc__ClientSecret` in `.env`. Do not commit the secret.
+6. Verify the client has Standard flow enabled, Direct access grants and Implicit flow disabled, redirect URI `http://localhost:8080/signin-oidc`, post-logout redirect URI `http://localhost:8080/signout-callback-oidc`, Web origin `http://localhost:8080`, and PKCE method **S256**. Confirm `creatorflow-api` is an optional client scope with an Audience mapper that adds audience `creatorflow-api` to access tokens only. Set `Authentication__Oidc__ApiScope=creatorflow-api` and `Authentication__Oidc__Audience=creatorflow-api`.
+7. Create a test user, set a password and verify that the ID token/UserInfo provides `email` and `email_verified=true`. Configure OTP/MFA for Owner/Admin before any public or shared deployment.
+
+**Existing Keycloak data volume:** realm import is non-destructive and does not overwrite an already-existing `creatorflow` realm. If you configured the realm manually before this export was added, keep the existing volume and compare its settings with the checked-in realm contract; do not run `docker compose down -v` to force an import.
 9. Rebuild/recreate Web after adding the OIDC settings, and restart the native API after loading the same `.env` values. The Compose network alias `creatorflow-id.test` routes Web to Keycloak internally; the Windows hosts entry routes the browser and native API to the loopback-published port. The API must use the same `Authentication__Oidc__Authority` and `Authentication__Oidc__Audience` as Web/Keycloak.
 
 Development-only HTTP OIDC metadata is enabled only when ASP.NET Core runs in the `Development` environment. Both Web and API continue to require HTTPS metadata outside Development. Do not carry the HTTP authority, `start-dev`, or the development database into Production. Production requires a stable HTTPS issuer, TLS, a production database (for example PostgreSQL), protected secrets, and a non-public administration surface. See the [Keycloak production guide](https://www.keycloak.org/server/configuration-production).
