@@ -60,10 +60,10 @@ $tables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database CreatorFlow_QC 
 SELECT
  CASE WHEN OBJECT_ID(N'dbo.VideoAssets',N'U') IS NOT NULL THEN 1 ELSE 0 END AS AssetsReady,
  CASE WHEN OBJECT_ID(N'dbo.VideoRenderJobs',N'U') IS NOT NULL THEN 1 ELSE 0 END AS JobsReady,
- CASE WHEN EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'017_video_render_pipeline') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'018_tenant_relationship_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'019_business_relationship_tenant_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'020_tenant_scoped_business_uniqueness') THEN 1 ELSE 0 END AS MigrationReady;
+ CASE WHEN EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'017_video_render_pipeline') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'018_tenant_relationship_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'019_business_relationship_tenant_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'020_tenant_scoped_business_uniqueness') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'025_topic_discovery_scheduler') THEN 1 ELSE 0 END AS MigrationReady;
 "@ -TrustServerCertificate -ErrorAction Stop)
 if ($tables.Count -ne 1 -or $tables[0].AssetsReady -ne 1 -or $tables[0].JobsReady -ne 1 -or $tables[0].MigrationReady -ne 1) {
-    throw 'Chưa có migration 017–020 hoặc chưa đủ bảng video. Chạy Apply-Migrations.ps1 và Verify-Database.ps1 trước.'
+    throw 'Chưa có migration 017–020, 025 hoặc chưa đủ bảng video/lịch khám phá. Chạy Apply-Migrations.ps1 và Verify-Database.ps1 trước.'
 }
 $stdout = Join-Path $root 'logs\worker-out.log'
 $stderr = Join-Path $root 'logs\worker-error.log'
@@ -81,6 +81,7 @@ if ($process.HasExited) {
     throw 'Worker đã thoát ngay sau khi khởi động. Xem log trong thư mục logs.'
 }
 Write-Host 'Engine dựng video: FFmpeg (After Effects không bắt buộc).'
+Write-Host 'Worker nền cũng xử lý lịch khám phá theo chủ đề; khi chưa có connector được duyệt, lần chạy được ghi là Skipped.'
 Write-Host "Worker dựng video đã khởi động (PID $($process.Id))."
 Write-Host "Thư mục video: $root"
 Write-Host "Log: $stdout"
