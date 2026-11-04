@@ -140,7 +140,7 @@ async def discovery_query_plan(
             raise ValueError("The model returned more queries than requested.")
     except (ValidationError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="Discovery query plan did not match the required contract.") from exc
-    return JSONResponse(status_code=200, content=result.model_dump(), headers={"X-CreatorFlow-LLM-Trace": trace})
+    return JSONResponse(status_code=200, content=result.model_dump(by_alias=True), headers={"X-CreatorFlow-LLM-Trace": trace})
 
 
 @app.post("/v1/analyze", response_model=AnalyzeResponse, dependencies=[Depends(require_service_key)])
