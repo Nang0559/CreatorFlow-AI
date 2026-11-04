@@ -1,8 +1,6 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using CreatorFlow.Domain.Content;
-using CreatorFlow.Domain.Identity;
-using CreatorFlow.Domain.Content;
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
