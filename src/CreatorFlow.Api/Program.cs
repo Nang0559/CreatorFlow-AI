@@ -48,26 +48,20 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
         policy.WithOrigins(allowedCorsOrigins).AllowAnyHeader().AllowAnyMethod();
 }));
 var rateLimitingEnabled = builder.Configuration.GetValue<bool?>("RateLimiting:Enabled") ?? true;
+// Cheap pre-authentication IP limiter: abusive requests are rejected before JWT validation
+// and before the database-backed tenant membership lookup.
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.GlobalLimiter = rateLimitingEnabled
         ? PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
         {
-            if (httpContext.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase) ||
-                httpContext.Request.Path.StartsWithSegments("/health"))
+            if (httpContext.Request.Path.StartsWithSegments("/health"))
                 return RateLimitPartition.GetNoLimiter("health");
-
-            var subject = httpContext.User.FindFirst("sub")?.Value;
-            var tenantId = httpContext.RequestServices.GetService<ITenantContext>()?.TenantId;
-            var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            var identityPartition = !string.IsNullOrWhiteSpace(subject) ? subject :
-                tenantId.HasValue && tenantId.Value != Guid.Empty ? tenantId.Value.ToString("N") : remoteAddress;
-            var routePartition = httpContext.Request.Path.StartsWithSegments("/api/v1/video") ? "video" : "api";
-            var partition = identityPartition + ":" + routePartition;
-            return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
+            var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter("ip:" + ip, _ => new FixedWindowRateLimiterOptions
             {
-                PermitLimit = 300,
+                PermitLimit = 600,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
                 AutoReplenishment = true
@@ -76,11 +70,34 @@ builder.Services.AddRateLimiter(options =>
         : PartitionedRateLimiter.Create<HttpContext, string>(_ =>
             RateLimitPartition.GetNoLimiter("rate-limiting-disabled"));
 });
+
+// Tenant/subject limiter runs after membership resolution and retains separate API/video buckets.
+builder.Services.AddSingleton<PartitionedRateLimiter<HttpContext>>(_ =>
+    PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        if (httpContext.Request.Path.StartsWithSegments("/health"))
+            return RateLimitPartition.GetNoLimiter("health");
+        var subject = httpContext.User.FindFirst("sub")?.Value;
+        var tenantId = httpContext.RequestServices.GetService<ITenantContext>()?.TenantId;
+        var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var identityPartition = !string.IsNullOrWhiteSpace(subject) ? subject :
+            tenantId.HasValue && tenantId.Value != Guid.Empty ? tenantId.Value.ToString("N") : remoteAddress;
+        var routePartition = httpContext.Request.Path.StartsWithSegments("/api/v1/video") ? "video" : "api";
+        var partition = identityPartition + ":" + routePartition;
+        return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 300,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    }));
 builder.Services.AddHttpClient<CreatorFlowAiClient>();
 builder.Services.AddAIProviderRegistry(builder.Configuration);
 builder.Services.AddScoped<TenantContext>();
 builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
 builder.Services.AddTransient<TenantContextMiddleware>();
+builder.Services.AddTransient<TenantRateLimitMiddleware>();
 builder.Services.AddScoped<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
 
 var oidcAuthority = builder.Configuration["Authentication:Oidc:Authority"];
@@ -140,9 +157,10 @@ app.UseExceptionHandler();
 app.UseForwardedHeaders();
 app.UseRouting();
 app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<TenantContextMiddleware>();
-app.UseRateLimiter();
+app.UseMiddleware<TenantRateLimitMiddleware>();
 app.UseMiddleware<TenantRoleGuardMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health").AllowAnonymous();
