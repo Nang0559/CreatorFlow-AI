@@ -118,12 +118,19 @@ jobs:
           request('PUT', f'/admin/realms/creatorflow/clients/{client_uuid}', web_client, admin)
           secret = request('GET', f'/admin/realms/creatorflow/clients/{client_uuid}/client-secret', token=admin)['value']
 
-          scopes = request('GET', '/admin/realms/creatorflow/client-scopes', token=admin)
-          basic_scope = next((scope for scope in scopes if scope['name'] == 'basic'), None)
-          assert basic_scope, 'Keycloak basic client scope is missing'
-          default_scopes = request('GET', f'/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes', token=admin)
-          if not any(scope['id'] == basic_scope['id'] for scope in default_scopes):
-              request('PUT', f"/admin/realms/creatorflow/clients/{client_uuid}/default-client-scopes/{basic_scope['id']}", token=admin)
+          mappers = request('GET', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', token=admin)
+          if not any(item.get('protocolMapper') == 'oidc-sub-mapper' for item in mappers):
+              request('POST', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', {
+                  'name': 'creatorflow-access-token-subject',
+                  'protocol': 'openid-connect',
+                  'protocolMapper': 'oidc-sub-mapper',
+                  'consentRequired': False,
+                  'config': {
+                      'access.token.claim': 'true',
+                      'id.token.claim': 'true',
+                      'introspection.token.claim': 'true'
+                  }
+              }, admin)
 
           users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
           if not users:
