@@ -193,8 +193,12 @@ async def discovery_query_plan(
             "requires_human_review": True,
         }
         result = DiscoveryQueryPlanResponse.model_validate(normalized)
-    except (ValidationError, ValueError, TypeError) as exc:
-        raise HTTPException(status_code=502, detail="Discovery query plan did not match the required contract.") from exc
+    except (ValidationError, ValueError, TypeError):
+        return JSONResponse(
+            status_code=502,
+            content={"detail": "Discovery query plan did not match the required contract."},
+            headers={"X-CreatorFlow-LLM-Trace": trace},
+        )
     return JSONResponse(status_code=200, content=result.model_dump(by_alias=True), headers={"X-CreatorFlow-LLM-Trace": trace})
 
 
