@@ -47,11 +47,13 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
     if (allowedCorsOrigins.Length > 0)
         policy.WithOrigins(allowedCorsOrigins).AllowAnyHeader().AllowAnyMethod();
 }));
+var rateLimitingEnabled = builder.Configuration.GetValue<bool?>("RateLimiting:Enabled") ?? true;
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-    {
+    options.GlobalLimiter = rateLimitingEnabled
+        ? PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        {
         if (httpContext.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase) ||
             httpContext.Request.Path.StartsWithSegments("/health"))
             return RateLimitPartition.GetNoLimiter("health");
@@ -69,8 +71,9 @@ builder.Services.AddRateLimiter(options =>
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
             AutoReplenishment = true
-        });
-    });
+        })
+        : PartitionedRateLimiter.Create<HttpContext, string>(_ =>
+            RateLimitPartition.GetNoLimiter("rate-limiting-disabled"));
 });
 builder.Services.AddHttpClient<CreatorFlowAiClient>();
 builder.Services.AddAIProviderRegistry(builder.Configuration);
