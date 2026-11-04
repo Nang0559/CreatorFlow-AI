@@ -159,7 +159,7 @@ async def discovery_query_plan(
             for item in values:
                 if not isinstance(item, str):
                     continue
-                cleaned = item.strip().lstrip("-•*0123456789. ").strip().strip('"\\'')
+                cleaned = item.strip().lstrip("-•*0123456789. ").strip().strip('"').strip("'")
                 key = cleaned.casefold()
                 if cleaned and key not in seen:
                     seen.add(key)
