@@ -42,9 +42,9 @@ $requiredTables = @(
     'DiscoveryMetricSnapshots', 'DiscoveryRankings', 'DiscoveryPriorityLinks',
     'DiscoveryFeedback', 'DiscoveryModelEvaluations', 'DiscoveryFeedbackEvents',
     'DiscoveryCandidateFeatureSnapshots', 'DiscoveryLearningInsights',
-    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions', 'CreatorFlowPlans', 'TenantSubscriptions', 'TenantUsageEvents', 'TenantStorageObjects', 'AIProviders', 'DiscoveryChannelSyncStates', 'DiscoveryVideoDownloadJobs', 'DiscoveryTopicRunHistory', 'DiscoveryConnectorConfigurations'
+    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions', 'TenantSubscriptions', 'TenantUsageEvents', 'TenantStorageObjects', 'AIProviders', 'DiscoveryChannelSyncStates', 'DiscoveryVideoDownloadJobs', 'DiscoveryTopicRunHistory', 'DiscoveryConnectorConfigurations'
 )
-if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs') }
+if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs', 'CreatorFlowPlans') }
 $tableValues = ($requiredTables | ForEach-Object { "(N'$_')" }) -join ','
 $missingTables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
 DECLARE @Required TABLE (TableName sysname NOT NULL);
