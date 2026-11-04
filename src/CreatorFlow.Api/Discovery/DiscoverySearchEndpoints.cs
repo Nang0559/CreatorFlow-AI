@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
+using CreatorFlow.Infrastructure.Persistence;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace CreatorFlow.Api.Discovery;
 
@@ -14,6 +16,9 @@ public static class DiscoverySearchEndpoints
     {
         app.MapPost("/api/v1/discovery/search", async (
             DiscoverySearchRequest request,
+            CreatorFlowDbContext? db,
+            ITenantContext tenant,
+            IDataProtectionProvider protection,
             IConfiguration configuration,
             IHttpClientFactory clients,
             CancellationToken cancellationToken) =>
@@ -31,9 +36,10 @@ public static class DiscoverySearchEndpoints
             if (queries.Length == 0)
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["queries"] = ["Cần ít nhất một truy vấn do AI lập kế hoạch."] });
 
+            var credentials = await DiscoveryConnectorSettingsEndpoints.ResolveAsync(db, tenant, protection, configuration, cancellationToken);
             var results = new List<DiscoverySearchResult>();
             var providerStates = new List<DiscoveryProviderState>();
-            var braveKey = configuration["BraveSearch:ApiKey"];
+            var braveKey = credentials.BraveApiKey;
             if (!string.IsNullOrWhiteSpace(braveKey))
             {
                 try
@@ -52,8 +58,8 @@ public static class DiscoverySearchEndpoints
                 providerStates.Add(new("Brave Search", "NotConfigured", 0, "Thiếu BraveSearch:ApiKey."));
             }
 
-            var researchKey = configuration["TikTokResearch:ClientKey"];
-            var researchSecret = configuration["TikTokResearch:ClientSecret"];
+            var researchKey = credentials.TikTokClientKey;
+            var researchSecret = credentials.TikTokClientSecret;
             if (!string.IsNullOrWhiteSpace(researchKey) && !string.IsNullOrWhiteSpace(researchSecret))
             {
                 try
