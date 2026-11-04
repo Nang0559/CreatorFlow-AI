@@ -40,17 +40,17 @@
 - [ ] Add SQL Server migration integration tests for empty database and schema 009 upgrade paths.
 - [x] Implement versioned candidate feature extraction with reproducible feature schema v1 (metadata-only; decision/status excluded).
 - [ ] Complete end-to-end preference learning from tenant-scoped SQL feedback through LLM interpretation, reviewed rules and measurable next-ranking changes; keep Watch out of binary labels.
-- [ ] Implement compliant TikTok Vietnam scan adapters with explicit provider eligibility, source provenance and coverage.
+- [x] Initial on-demand Brave public-web and approval-gated TikTok Research API discovery adapters return validated links/metadata; full TikTok Vietnam scan coverage and persisted candidate ingestion remain open.
 - [ ] Implement similarity and 24h/7d/30d saturation assessments.
 - [ ] Implement rights evidence registry and separate content/recommendation/account-enforcement risk assessments.
 - [x] Implement SQL-backed video render jobs, progress states, bounded retries and preview/download.
-- [ ] Implement discovery/provider durable orchestration, outbox, dead-letter handling and realtime dashboard.
+- [ ] Connect recurring topic schedules to provider execution; persist candidates; implement durable connector orchestration, outbox, dead-letter handling and realtime dashboard.
 - [ ] Connect official publishing/analytics APIs with explicit final creator approval.
 
 ## Phase 3 — Hybrid execution and media production
 - [ ] Private worker protocol (outbound mTLS/VPN), job leases and revocation.
 - [ ] Durable queue/outbox, idempotent workers, bounded retries and dead-letter handling.
-- [x] Initial After Effects + FFmpeg pipeline creates vertical MP4 variants from a source asset; Z240 hardware acceptance is pending.
+- [x] Initial FFmpeg-only pipeline creates vertical MP4 variants from a source asset; Z240 hardware acceptance is pending.
 - [ ] STT, subtitle alignment, TTS, advanced effects/B-roll and music beat analysis.
 - [x] Initial render validation, preview and MP4 download.
 - [ ] Artifact version lineage, visual QA automation and production storage lifecycle.
