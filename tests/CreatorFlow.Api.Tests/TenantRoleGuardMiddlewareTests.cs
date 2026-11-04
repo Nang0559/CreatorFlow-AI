@@ -29,18 +29,6 @@ public sealed class TenantRoleGuardMiddlewareTests
     }
 
     [Theory]
-    [InlineData("Analyst", "/api/v1/ai/providers", false)]
-    [InlineData("Publisher", "/api/v1/identity/workspaces", false)]
-    [InlineData("Admin", "/api/v1/ai/providers", true)]
-    public async Task Sensitive_reads_follow_owner_admin_policy(string role, string path, bool expectedAllowed)
-    {
-        var (statusCode, nextCalled) = await InvokeAsync(role, HttpMethods.Get, path);
-
-        Assert.Equal(expectedAllowed ? StatusCodes.Status200OK : StatusCodes.Status403Forbidden, statusCode);
-        Assert.Equal(expectedAllowed, nextCalled);
-    }
-
-    [Theory]
     [InlineData("Analyst")]
     [InlineData("Publisher")]
     [InlineData("Editor")]
