@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using System.IO.Compression;
 using CreatorFlow.Api.Security;
 using CreatorFlow.Api.Video;
@@ -21,6 +23,33 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 524_288_000);
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
+
+var allowedCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
+{
+    // No browser origins are trusted unless explicitly configured by the deployment.
+    if (allowedCorsOrigins.Length > 0)
+        policy.WithOrigins(allowedCorsOrigins).AllowAnyHeader().AllowAnyMethod();
+}));
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        var subject = httpContext.User.FindFirst("sub")?.Value;
+        var tenantSelector = httpContext.Request.Headers["X-CreatorFlow-Tenant"].ToString();
+        var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var partition = !string.IsNullOrWhiteSpace(subject) ? subject :
+            !string.IsNullOrWhiteSpace(tenantSelector) ? $"local:{tenantSelector}" : remoteAddress;
+        return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 120,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+});
 builder.Services.AddHttpClient<CreatorFlowAiClient>();
 builder.Services.AddAIProviderRegistry(builder.Configuration);
 builder.Services.AddScoped<TenantContext>();
@@ -82,7 +111,10 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 
 var app = builder.Build();
 app.UseExceptionHandler();
+app.UseRouting();
+app.UseCors();
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseMiddleware<TenantContextMiddleware>();
 app.UseMiddleware<TenantRoleGuardMiddleware>();
 app.UseAuthorization();
