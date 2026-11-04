@@ -97,7 +97,6 @@ builder.Services.AddAIProviderRegistry(builder.Configuration);
 builder.Services.AddScoped<TenantContext>();
 builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
 builder.Services.AddTransient<TenantContextMiddleware>();
-builder.Services.AddTransient<TenantRateLimitMiddleware>();
 builder.Services.AddScoped<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
 
 var oidcAuthority = builder.Configuration["Authentication:Oidc:Authority"];
