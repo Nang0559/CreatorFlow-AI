@@ -20,8 +20,7 @@ public sealed class TenantRoleGuardMiddleware(RequestDelegate next)
         "/api/v1/style-experiments",
         "/api/v1/style-profiles",
         "/api/v1/ai",
-        "/api/v1/video-assets",
-        "/api/v1/video-render",
+        "/api/v1/video",
         "/api/v1/discovery/search"
     ];
 
