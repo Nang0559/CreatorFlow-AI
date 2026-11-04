@@ -165,9 +165,9 @@
     </div></div>
   }
   <div class="schedule-options"><strong>Nền tảng theo dõi</strong><div class="schedule-checks">
-    <label><input type="checkbox" checked="@schedulePlatforms.Contains("TikTokVietnam")" @onchange="e => ToggleSchedulePlatform("TikTokVietnam", e)" /> TikTok Việt Nam</label>
-    <label><input type="checkbox" checked="@schedulePlatforms.Contains("YouTubeShortsVietnam")" @onchange="e => ToggleSchedulePlatform("YouTubeShortsVietnam", e)" /> YouTube Shorts Việt Nam</label>
-    <label><input type="checkbox" checked="@schedulePlatforms.Contains("FacebookReelsVietnam")" @onchange="e => ToggleSchedulePlatform("FacebookReelsVietnam", e)" /> Facebook Reels Việt Nam</label>
+    <label><input type="checkbox" checked="@(schedulePlatforms.Contains("TikTokVietnam"))" @onchange='e => ToggleSchedulePlatform("TikTokVietnam", e)' /> TikTok Việt Nam</label>
+    <label><input type="checkbox" checked="@(schedulePlatforms.Contains("YouTubeShortsVietnam"))" @onchange='e => ToggleSchedulePlatform("YouTubeShortsVietnam", e)' /> YouTube Shorts Việt Nam</label>
+    <label><input type="checkbox" checked="@(schedulePlatforms.Contains("FacebookReelsVietnam"))" @onchange='e => ToggleSchedulePlatform("FacebookReelsVietnam", e)' /> Facebook Reels Việt Nam</label>
   </div></div>
   <div class="form-actions">
     <button class="primary" disabled="@(busy || !Api.IsConfigured || !Guid.TryParse(selectedScheduleTopicId, out _))" @onclick="SaveScheduleAsync">Lưu lịch theo dõi</button>
@@ -310,7 +310,7 @@
         try {
             scheduleMessage = "";
             scheduleInfo = await Api.GetAsync<TopicScheduleItem>($"/api/v1/topics/{topicId}/schedule");
-            if (scheduleInfo is not null) { scheduleEnabled = scheduleInfo.IsEnabled; scheduleRefreshMinutes = scheduleInfo.RefreshMinutes; scheduleMode = scheduleInfo.ScheduleMode; scheduleLocalTime = scheduleInfo.LocalTime; scheduleDays = new HashSet<string>(scheduleInfo.DaysOfWeek ?? [], StringComparer.OrdinalIgnoreCase); schedulePlatforms = JsonSerializer.Deserialize<HashSet<string>>(scheduleInfo.PlatformsJson) ?? new(StringComparer.OrdinalIgnoreCase); scheduleTimeZoneId = scheduleInfo.TimeZoneId; }
+            if (scheduleInfo is not null) { scheduleEnabled = scheduleInfo.IsEnabled; scheduleRefreshMinutes = scheduleInfo.RefreshMinutes; scheduleMode = scheduleInfo.ScheduleMode; scheduleLocalTime = scheduleInfo.LocalTime; scheduleDays = new HashSet<string>(scheduleInfo.DaysOfWeek ?? [], StringComparer.OrdinalIgnoreCase); schedulePlatforms = System.Text.Json.JsonSerializer.Deserialize<HashSet<string>>(scheduleInfo.PlatformsJson) ?? new(StringComparer.OrdinalIgnoreCase); scheduleTimeZoneId = scheduleInfo.TimeZoneId; }
             scheduleHistory = await Api.GetAsync<List<TopicScheduleRunItem>>($"/api/v1/topics/{topicId}/schedule/history?take=20") ?? [];
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { scheduleInfo = null; scheduleHistory = []; scheduleEnabled = true; scheduleRefreshMinutes = 30; scheduleMode = "Interval"; scheduleLocalTime = "09:00"; scheduleDays = new(StringComparer.OrdinalIgnoreCase); schedulePlatforms = new(StringComparer.OrdinalIgnoreCase) { "TikTokVietnam" }; scheduleMessage = "Chủ đề chưa có lịch. Lưu cấu hình để tạo lịch đầu tiên."; }
