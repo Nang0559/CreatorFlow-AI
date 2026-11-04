@@ -65,7 +65,7 @@ public static class DiscoveryTopicSchedulerEndpoints
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["localTime"] = ["Giờ chạy phải theo định dạng HH:mm."] });
 
             var days = (request.DaysOfWeek ?? [])
-                .Select(x => x?.Trim())
+                .Select(x => x.Trim())
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
