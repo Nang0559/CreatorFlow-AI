@@ -232,6 +232,11 @@ INSERT @DiscoveryTables(TableName) VALUES $discoveryTenantValues;
 SELECT t.TableName
 FROM @DiscoveryTables t
 WHERE COL_LENGTH(N'dbo.' + t.TableName, N'TenantId') IS NULL
+   OR EXISTS
+      (SELECT 1 FROM sys.default_constraints dc
+       JOIN sys.columns c ON c.object_id=dc.parent_object_id AND c.column_id=dc.parent_column_id
+       WHERE dc.parent_object_id=OBJECT_ID(N'dbo.' + QUOTENAME(t.TableName))
+         AND c.name=N'TenantId')
    OR NOT EXISTS
       (SELECT 1 FROM sys.foreign_keys fk
        WHERE fk.parent_object_id=OBJECT_ID(N'dbo.' + QUOTENAME(t.TableName))
