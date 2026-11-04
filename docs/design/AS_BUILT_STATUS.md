@@ -8,7 +8,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 | Capability | Evidence in repository | Status |
 |---|---|---|
-| SaaS tenant identity and row-isolation foundation | Tenant/Membership/Invitation entities; API JWT validation; Web OIDC Authorization Code + PKCE; issuer+subject membership; one-time Owner bootstrap; invitation acceptance and membership administration; EF tenant filters; migrations 011–013 and composite tenant/unique-key migrations 018–020 | Baseline implemented in code; real provider configuration, email delivery, full role matrix, SQL execution and cross-tenant security tests remain pending |
+| SaaS tenant identity and row-isolation foundation | Tenant/Membership/Invitation entities; API JWT validation; Web OIDC Authorization Code + PKCE; issuer+subject membership; one-time Owner bootstrap; invitation acceptance and membership administration; EF tenant filters; migrations 011–013 and composite tenant/unique-key migrations 018–020 | Baseline implemented in code; real provider configuration, email delivery, resource-specific role checks, SQL execution and exhaustive cross-tenant security tests remain pending |
 | Content project foundation | Domain, API, EF mapping and SQL | Implemented foundation |
 | Topic management | Topic domain/API/UI and SQL | Metadata workflow |
 | Douyin source channel records | Channel domain/API/UI and SQL | Metadata workflow; no live Douyin follow |
@@ -24,7 +24,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 | Video source library and rights confirmation | Tenant-scoped asset upload, SHA-256 provenance, size/format checks, SQL metadata | Implemented foundation; codec/duration validation occurs in render worker |
 | Automated video render | Durable SQL jobs, Windows FFmpeg H.264/AAC MP4 worker, preview/download proxy | FFmpeg-only pilot pipeline; no After Effects JSX/AE render adapter is part of the current branch; hardware/visual acceptance on HP Z240 still required |
 | LLM runtime | Provider adapter, structured contracts, authenticated FastAPI endpoints, tests, .NET proxy, Style Lab generation UI and profile-scoped learning synthesis UI | Implemented first LLM workflow; provider credentials required; synthesis output is a draft and must be submitted to Learning Memory for review |
-| Human review and Learning Memory | Persisted proposal create/list/approve/reject, reviewer from authenticated identity, immutable profile versions | Implemented foundation; production OIDC and profile-scoped analysis remain release gates |
+| Human review and Learning Memory | Persisted proposal create/list/approve/reject, reviewer from authenticated identity, immutable profile versions | Implemented foundation; production OIDC and live end-to-end acceptance remain release gates |
 
 ## Not implemented / do not represent as complete
 - Douyin login, automatic channel follow, feed polling and new-video monitor.
@@ -40,6 +40,7 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Production OIDC provider configuration and signed-token contract tests; the local Keycloak realm export and static/live discovery contract check are implemented. MFA enforcement is delegated to the provider.
 - Invitation and membership administration APIs exist; invitation delivery is manual until SMTP/provider integration.
 - Central mutation authorization now uses a deny-by-default role matrix: Owner/Admin, content-workflow Editor allowlist, read-only Analyst and publishing-only Publisher. Publisher still has no writable route because `/api/v1/publishing` is not implemented; endpoint/resource-specific checks and exhaustive negative tests remain release gates.
+- API has a global fixed-window rate limit (120 requests/minute per authenticated subject or fallback partition) and an explicit CORS origin allowlist; per-route quotas, proxy-aware client identity and production tuning remain open.
 - SQL Server Row-Level Security is not yet configured. Composite same-tenant foreign keys are added for the currently mapped business relationships by migrations 018–019; migration 020 changes channel/video/trend/profile uniqueness to workspace scope. Remaining unmapped Discovery SQL tables still need explicit tenant ownership before those tables can be used by a multi-tenant runtime.
 - SQL Server execution of the current migration manifest through 028 has not yet been evidenced as successful on the user's HP Z240. The dedicated self-hosted SQL QC workflow exists, but its latest run must complete successfully before claiming SQL acceptance. Migration 012's legacy-workspace backfill assumes all listed existing business rows belong to one workspace; review ownership before applying it.
 - Background workers that access tenant-owned business data must scope each operation by TenantId; the video worker processes durable jobs globally but each job/output is tenant-keyed.
