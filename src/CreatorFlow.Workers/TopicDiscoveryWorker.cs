@@ -60,6 +60,19 @@ internal sealed class TopicDiscoveryWorker(
                 IsScheduled bit NOT NULL
             );
 
+            -- Recover abandoned work after a process crash; never leave a topic permanently locked.
+            UPDATE h
+            SET Status=N'Skipped',CompletedAt=SYSUTCDATETIME(),ErrorCode=N'WorkerLeaseExpired'
+            FROM dbo.DiscoveryTopicRunHistory h
+            INNER JOIN dbo.DiscoveryTopicProfiles p ON p.Id=h.TopicProfileId
+            WHERE h.Status=N'Running' AND p.LeaseUntil IS NOT NULL
+              AND p.LeaseUntil<SYSUTCDATETIME();
+
+            UPDATE dbo.DiscoveryTopicProfiles
+            SET LeaseUntil=NULL,LastRunStatus=N'Skipped',LastErrorCode=N'WorkerLeaseExpired'
+            WHERE LeaseUntil IS NOT NULL AND LeaseUntil<SYSUTCDATETIME()
+              AND LastRunStatus=N'Running';
+
             ;WITH manual AS
             (
                 SELECT TOP(1) h.Id,h.TopicProfileId,h.PlatformsJson
