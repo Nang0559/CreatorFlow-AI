@@ -106,11 +106,13 @@ public static class DiscoverySearchEndpoints
                 .Take(50)
                 .ToArray();
 
-            var configured = providerStates.Any(x => x.Status == "Completed");
+            var overallStatus = providerStates.Any(x => x.Status == "Completed")
+                ? "Completed"
+                : providerStates.Any(x => x.Status == "Failed") ? "Failed" : "NotConfigured";
             return Results.Ok(new DiscoverySearchResponse(
                 topic,
                 DateTimeOffset.UtcNow,
-                configured ? "Completed" : "NotConfigured",
+                overallStatus,
                 channels,
                 unique,
                 providerStates,
