@@ -52,6 +52,7 @@ jobs:
             'tools/sql-qc/Protect-QcDatabase.ps1',
             'tools/sql-qc/Test-SqlQcPreflight.ps1',
             'scripts/Test-KeycloakRealmContract.ps1',
+            'scripts/Initialize-KeycloakLocal.ps1',
             'scripts/docker/Import-LocalPilotEnv.ps1'
           )
           foreach ($file in $files) {
