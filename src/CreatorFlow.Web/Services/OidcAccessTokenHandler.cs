@@ -112,11 +112,8 @@ public sealed class OidcAccessTokenHandler(
         using var response = await backchannel.PostAsync(
             discovery.TokenEndpoint, content, cancellationToken);
         if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync(cancellationToken);
             throw new InvalidOperationException(
                 $"Không thể làm mới phiên OIDC (HTTP {(int)response.StatusCode}). Vui lòng đăng nhập lại.");
-        }
 
         var result = await response.Content.ReadFromJsonAsync<TokenRefreshResponse>(
             cancellationToken: cancellationToken);
