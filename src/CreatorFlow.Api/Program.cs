@@ -57,8 +57,12 @@ builder.Services.AddRateLimiter(options =>
             return RateLimitPartition.GetNoLimiter("health");
 
         var subject = httpContext.User.FindFirst("sub")?.Value;
+        var tenantId = httpContext.RequestServices.GetService<ITenantContext>()?.TenantId;
         var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var partition = !string.IsNullOrWhiteSpace(subject) ? subject : remoteAddress;
+        var identityPartition = !string.IsNullOrWhiteSpace(subject) ? subject :
+            tenantId.HasValue && tenantId.Value != Guid.Empty ? tenantId.Value.ToString("N") : remoteAddress;
+        var routePartition = httpContext.Request.Path.StartsWithSegments("/api/v1/video") ? "video" : "api";
+        var partition = identityPartition + ":" + routePartition;
         return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 300,
@@ -133,9 +137,9 @@ app.UseForwardedHeaders();
 app.UseRouting();
 app.UseCors();
 app.UseAuthentication();
-app.UseRateLimiter();
 app.UseMiddleware<TenantContextMiddleware>();
 app.UseMiddleware<TenantRoleGuardMiddleware>();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" })).AllowAnonymous();
