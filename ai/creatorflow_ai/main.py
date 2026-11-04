@@ -149,7 +149,7 @@ async def discovery_query_plan(
 
         def string_list(value: Any) -> list[str]:
             if isinstance(value, str):
-                values = value.replace("\\r", "\\n").split("\\n")
+                values = value.splitlines()
             elif isinstance(value, list):
                 values = value
             else:
