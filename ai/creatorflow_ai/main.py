@@ -135,10 +135,65 @@ async def discovery_query_plan(
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers={"X-CreatorFlow-LLM-Trace": trace})
     trace = encode_provider_trace(client)
     try:
-        result = DiscoveryQueryPlanResponse.model_validate({**raw, "requires_human_review": True})
-        if len(result.queries) > request.max_queries:
-            raise ValueError("The model returned more queries than requested.")
-    except (ValidationError, ValueError) as exc:
+        if not isinstance(raw, dict):
+            raise ValueError("The model response must be a JSON object.")
+
+        # Providers sometimes vary between snake_case/camelCase or return a single
+        # newline-delimited query. Normalize those harmless shape differences before
+        # enforcing the public response contract.
+        def pick(*names: str, default: Any = None) -> Any:
+            for name in names:
+                if name in raw and raw[name] is not None:
+                    return raw[name]
+            return default
+
+        def string_list(value: Any) -> list[str]:
+            if isinstance(value, str):
+                values = value.replace("\\r", "\\n").split("\\n")
+            elif isinstance(value, list):
+                values = value
+            else:
+                values = []
+            result: list[str] = []
+            seen: set[str] = set()
+            for item in values:
+                if not isinstance(item, str):
+                    continue
+                cleaned = item.strip().lstrip("-•*0123456789. ").strip().strip('"\\'')
+                key = cleaned.casefold()
+                if cleaned and key not in seen:
+                    seen.add(key)
+                    result.append(cleaned[:300])
+            return result
+
+        queries = string_list(pick("queries", "search_queries", "searchQueries", "query_suggestions", "querySuggestions"))
+        # Keep the plan useful when a model omits or duplicates query variants.
+        # These are transparent topic-derived search phrases, never claimed results.
+        seed_terms = [request.topic, *request.keywords]
+        if request.product_context:
+            seed_terms.append(request.product_context)
+        for term in seed_terms:
+            term = term.strip()
+            if not term:
+                continue
+            for suffix in ("review trải nghiệm", "giá và đánh giá"):
+                candidate = f"{term} {suffix}"
+                if candidate.casefold() not in {q.casefold() for q in queries}:
+                    queries.append(candidate)
+                if len(queries) >= request.max_queries:
+                    break
+            if len(queries) >= request.max_queries:
+                break
+        normalized = {
+            "topic": pick("topic", "subject", default=request.topic),
+            "queries": queries[:request.max_queries],
+            "related_topics": string_list(pick("related_topics", "relatedTopics")),
+            "intent_signals": string_list(pick("intent_signals", "intentSignals", "purchase_intents", "purchaseIntents")),
+            "exclusions": string_list(pick("exclusions", "exclude_terms", "excludeTerms")),
+            "requires_human_review": True,
+        }
+        result = DiscoveryQueryPlanResponse.model_validate(normalized)
+    except (ValidationError, ValueError, TypeError) as exc:
         raise HTTPException(status_code=502, detail="Discovery query plan did not match the required contract.") from exc
     return JSONResponse(status_code=200, content=result.model_dump(by_alias=True), headers={"X-CreatorFlow-LLM-Trace": trace})
 
