@@ -168,6 +168,28 @@ def test_discovery_rank_rejects_out_of_range_features(monkeypatch) -> None:
     assert response.status_code == 422
 
 
+def test_discovery_query_plan_normalizes_provider_variants_and_missing_fields(monkeypatch) -> None:
+    headers = auth(monkeypatch)
+    fake = FakeLLM({
+        "queries": "máy hút bụi mini\\nreview máy hút bụi cầm tay",
+        "purchaseIntents": ["so sánh giá", "đánh giá thực tế"],
+    })
+    app.dependency_overrides[get_llm_client] = lambda: fake
+    try:
+        response = client.post("/v1/discovery/query-plan", headers=headers, json={
+            "topic": "đồ công nghệ", "keywords": ["máy hút bụi mini"],
+            "targetMarket": "Vietnam", "maxQueries": 8,
+        })
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["topic"] == "đồ công nghệ"
+    assert len(payload["queries"]) >= 2
+    assert payload["intentSignals"] == ["so sánh giá", "đánh giá thực tế"]
+    assert payload["requiresHumanReview"] is True
+
+
 def test_discovery_query_plan_is_optional_link_independent_and_bounded(monkeypatch) -> None:
     headers = auth(monkeypatch)
     fake = FakeLLM({
