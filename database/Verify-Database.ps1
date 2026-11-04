@@ -243,6 +243,42 @@ WHERE COL_LENGTH(N'dbo.' + t.TableName, N'TenantId') IS NULL
 "@)
     if ($discoveryTenantCheck.Count -gt 0) { throw "Discovery tenant isolation is incomplete (014/015/025 tables missing TenantId or trusted tenant FK): $(($discoveryTenantCheck | ForEach-Object { $_.TableName }) -join ', ')" }
 
+    $discoveryRelationships = @(
+        'FK_DiscoveryCandidates_Tenant_Source',
+        'FK_DiscoveryMetricSnapshots_Tenant_Candidate','FK_DiscoveryMetricSnapshots_Tenant_Run',
+        'FK_DiscoveryRankings_Tenant_Candidate','FK_DiscoveryRankings_Tenant_Run',
+        'FK_DiscoveryPriorityLinks_Tenant_Candidate','FK_DiscoveryFeedback_Tenant_Candidate',
+        'FK_DiscoveryFeedbackEvents_Tenant_Candidate','FK_DiscoveryCandidateFeatureSnapshots_Tenant_Candidate',
+        'FK_DiscoveryLearningInsights_Tenant_Feedback','FK_DiscoveryPreferenceRules_Tenant_Insight',
+        'FK_DiscoveryTopicProfiles_Tenant_Topic','FK_DiscoveryTopicRunHistory_Tenant_Profile'
+    )
+    $relationshipValues = ($discoveryRelationships | ForEach-Object { "(N'$_')" }) -join ','
+    $relationshipCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+DECLARE @Expected TABLE (ConstraintName sysname NOT NULL);
+INSERT @Expected(ConstraintName) VALUES $relationshipValues;
+SELECT e.ConstraintName
+FROM @Expected e
+WHERE NOT EXISTS
+(
+    SELECT 1 FROM sys.foreign_keys fk
+    WHERE fk.name=e.ConstraintName AND fk.is_disabled=0 AND fk.is_not_trusted=0
+      AND (SELECT COUNT(*) FROM sys.foreign_key_columns fkc WHERE fkc.constraint_object_id=fk.object_id)=2
+      AND EXISTS
+      (
+        SELECT 1 FROM sys.foreign_key_columns fkc
+        JOIN sys.columns c ON c.object_id=fkc.parent_object_id AND c.column_id=fkc.parent_column_id
+        WHERE fkc.constraint_object_id=fk.object_id AND fkc.constraint_column_id=1 AND c.name=N'TenantId'
+      )
+      AND EXISTS
+      (
+        SELECT 1 FROM sys.foreign_key_columns fkc
+        JOIN sys.columns c ON c.object_id=fkc.parent_object_id AND c.column_id=fkc.parent_column_id
+        WHERE fkc.constraint_object_id=fk.object_id AND fkc.constraint_column_id=2
+      )
+);
+"@)
+    if ($relationshipCheck.Count -gt 0) { throw "Discovery tenant-composite relationships are missing or untrusted: $(($relationshipCheck | ForEach-Object { $_.ConstraintName }) -join ', ')" }
+
     $newTenantTables = @('TenantSubscriptions','TenantUsageEvents','TenantStorageObjects','AIProviders','DiscoveryChannelSyncStates','DiscoveryVideoDownloadJobs','DiscoveryTopicProfiles','DiscoveryTopicRunHistory','DiscoveryConnectorConfigurations')
     $newTenantValues = ($newTenantTables | ForEach-Object { "(N'$_')" }) -join ','
     $newTenantCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
