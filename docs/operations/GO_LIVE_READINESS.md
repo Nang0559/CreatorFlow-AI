@@ -26,7 +26,7 @@ This document prevents a green build or a healthy local URL from being mistaken 
 8. **Production identity and operations:** production OIDC, HTTPS, backup/restore, observability, retention, rate limits, incident handling and secret rotation must be configured and tested before public deployment.
 
 ## Required acceptance evidence before Go-live
-- [ ] HP Z240 SQL migrations 001–010 and 014–020 applied with verified checksums; tenant migrations 011–013 present and all required tenant/composite FKs trusted and workspace-scoped unique indexes verified.
+- [ ] HP Z240 SQL migrations 001–028 applied with verified checksums; tenant migrations 011–013 present, later tenant migrations 016–028 applied, and all required tenant/composite FKs trusted and workspace-scoped unique indexes verified. Legacy Discovery tables created by 014–015 remain excluded from multi-tenant runtime until a tenant-scoped replacement/migration is delivered.
 - [ ] Full .NET and Python test suites pass on the exact release commit.
 - [ ] Docker images build on the exact release commit; containers stay healthy after reboot.
 - [ ] Web/API/AI health, readiness, API authorization and tenant isolation verified against SQL.
@@ -42,3 +42,11 @@ This document prevents a green build or a healthy local URL from being mistaken 
 
 ## Release policy
 A build passing CI is necessary but not sufficient. Until every applicable gate has evidence on the target environment, label the deployment **Local Pilot / Pre-Go-live**, not Production.
+
+
+## CI and SQL Server QC topology (2026-11-04)
+
+- `.github/workflows/ci.yml` runs on GitHub-hosted runners: .NET restore/build/test, Python tests and PowerShell parser validation. It does not connect to the Z240 SQL Server.
+- `.github/workflows/sqlserver-selfhosted-qc.yml` is a separate push/workflow-dispatch workflow on the dedicated `[self-hosted, Windows, X64]` runner. It runs the local QC database guard, `database/Verify-Database.ps1 -RequireTenantMigrations`, SQL connectivity smoke test and .NET tests.
+- The SQL workflow deliberately has no `pull_request` trigger so untrusted PR code cannot execute on the machine holding the local QC database. A pending run is not a passing run; record its completed conclusion and job logs before claiming SQL acceptance.
+- The verifier checks migration checksums for its selected manifest through 028 and verifies tenant ownership for mapped tenant tables. The legacy Discovery schema from 014–015 is not tenant-scoped; table existence alone is not evidence that it is safe for multi-tenant queries. Do not add those legacy tables to active multi-tenant runtime paths without a tenant-scoped schema and negative isolation tests.
