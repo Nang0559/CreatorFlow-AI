@@ -57,7 +57,7 @@ Use separate secret sets per environment. The current repository's bootstrap set
 .NET API (current keys; verify exact configuration binding in the deployed build):
 - `ConnectionStrings__CreatorFlow`
 - `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`, ... (optional explicit browser-origin allowlist; unset means no cross-origin browser origin is trusted).
-- API global rate limiting is enabled by default at 120 requests/minute per authenticated subject, or a fallback tenant/IP partition for local API-key/anonymous traffic. Tune at the edge and per expensive route before public SaaS; do not disable it as a workaround.
+- API global rate limiting is enabled by default at 300 requests/minute per authenticated subject, or a fallback tenant/IP partition for local API-key/anonymous traffic. Tune at the edge and per expensive route before public SaaS; do not disable it as a workaround.
 - `Authentication__ApiKey` (bootstrap only; do not use as the public SaaS user identity)
 - `CREATORFLOW_AI_BASE_URL`
 - `CREATORFLOW_AI_API_KEY`
@@ -134,3 +134,7 @@ Never put OAuth tokens, API keys, full signed URLs, private media or sensitive p
 ## 10. Operational acceptance
 
 A deployment is accepted only when health checks, schema verification, auth/tenant isolation, storage access, backup/restore, monitoring, and rollback are evidenced. A green build alone is not a production deployment sign-off.
+
+### Reverse proxy
+
+Set `ForwardedHeaders__KnownProxies__0` and additional indexed entries to the exact private IP addresses of trusted reverse proxies. The API processes one forwarded hop only. Leave the list empty when no trusted proxy is deployed. Ensure the proxy strips client-supplied forwarded headers and writes its own values. `/health` bypasses the global API rate limiter; other API routes share the 300/minute per-subject/IP baseline pending route-specific production tuning.
