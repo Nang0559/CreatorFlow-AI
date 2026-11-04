@@ -184,8 +184,11 @@ async def discovery_query_plan(
                     break
             if len(queries) >= request.max_queries:
                 break
+        response_topic = pick("topic", "subject", default=request.topic)
+        if not isinstance(response_topic, str) or not response_topic.strip():
+            response_topic = request.topic
         normalized = {
-            "topic": pick("topic", "subject", default=request.topic),
+            "topic": response_topic,
             "queries": queries[:request.max_queries],
             "related_topics": string_list(pick("related_topics", "relatedTopics")),
             "intent_signals": string_list(pick("intent_signals", "intentSignals", "purchase_intents", "purchaseIntents")),
