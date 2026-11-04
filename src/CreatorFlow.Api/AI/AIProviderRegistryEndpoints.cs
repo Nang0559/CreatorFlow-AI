@@ -24,10 +24,9 @@ public static class AIProviderRegistryEndpoints
 
     public static IEndpointRouteBuilder MapAIProviderRegistry(this IEndpointRouteBuilder endpoints)
     {
-        var group = endpoints.MapGroup("/api/v1/ai/providers").RequireAuthorization();
+        var group = endpoints.MapGroup("/api/v1/ai/providers").RequireAuthorization("TenantOwnerOrAdmin");
         group.MapGet("/runtime", (IConfiguration config, ITenantContext tenant) =>
         {
-            if (!CanManage(tenant)) return Results.Forbid();
             var names = new[] { "gemini", "openai", "ollama" };
             var rows = names.Select(name =>
             {
@@ -44,7 +43,6 @@ public static class AIProviderRegistryEndpoints
         });
         group.MapGet("/", async (CreatorFlowDbContext? db, ITenantContext tenant, CancellationToken ct) =>
         {
-            if (!CanManage(tenant)) return Results.Forbid();
             if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
             var rows = await db.AIProviderConfigurations.AsNoTracking().OrderBy(x => x.RoutingRole).ThenBy(x => x.FallbackOrder)
                 .Select(x => new AIProviderResponse(x.Id, x.DisplayName, x.ProviderType, x.BaseUrl, x.Model, x.IsActive,
@@ -55,7 +53,6 @@ public static class AIProviderRegistryEndpoints
         group.MapPost("/", async (AIProviderWriteRequest request, CreatorFlowDbContext? db, ITenantContext tenant,
             IDataProtectionProvider protection, CancellationToken ct) =>
         {
-            if (!CanManage(tenant)) return Results.Forbid();
             if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
             var error = Validate(request);
             if (error is not null) return Results.ValidationProblem(new Dictionary<string, string[]> { ["provider"] = [error] });
@@ -85,7 +82,6 @@ public static class AIProviderRegistryEndpoints
         group.MapPut("/{id:guid}", async (Guid id, AIProviderWriteRequest request, CreatorFlowDbContext? db, ITenantContext tenant,
             IDataProtectionProvider protection, CancellationToken ct) =>
         {
-            if (!CanManage(tenant)) return Results.Forbid();
             if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
             var error = Validate(request);
             if (error is not null) return Results.ValidationProblem(new Dictionary<string, string[]> { ["provider"] = [error] });
@@ -111,7 +107,6 @@ public static class AIProviderRegistryEndpoints
         });
         group.MapDelete("/{id:guid}", async (Guid id, CreatorFlowDbContext? db, ITenantContext tenant, CancellationToken ct) =>
         {
-            if (!CanManage(tenant)) return Results.Forbid();
             if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
             var row = await db.AIProviderConfigurations.SingleOrDefaultAsync(x => x.Id == id, ct);
             if (row is null) return Results.NotFound();
@@ -122,7 +117,6 @@ public static class AIProviderRegistryEndpoints
         group.MapPost("/{id:guid}/test", async (Guid id, CreatorFlowDbContext? db, ITenantContext tenant,
             IDataProtectionProvider protection, IHttpClientFactory clients, CancellationToken ct) =>
         {
-            if (!CanManage(tenant)) return Results.Forbid();
             if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
             var row = await db.AIProviderConfigurations.SingleOrDefaultAsync(x => x.Id == id, ct);
             if (row is null) return Results.NotFound();
@@ -141,9 +135,6 @@ public static class AIProviderRegistryEndpoints
         });
         return endpoints;
     }
-
-    private static bool CanManage(ITenantContext tenant) => tenant.IsResolved &&
-        (string.Equals(tenant.Role, "Owner", StringComparison.Ordinal) || string.Equals(tenant.Role, "Admin", StringComparison.Ordinal));
 
     private static string? Validate(AIProviderWriteRequest request)
     {
