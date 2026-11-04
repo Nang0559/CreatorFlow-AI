@@ -528,19 +528,22 @@
 
     private async Task SearchDiscoverySourcesAsync()
     {
-        if (discoveryPlan is null || discoveryPlan.Queries is not { Length: > 0 }) return;
+        var plan = discoveryPlan;
+        if (plan is null || plan.Queries is not { Length: > 0 }) return;
         try
         {
             busy = true; error = ""; successMessage = ""; discoverySearch = null;
             var started = DateTimeOffset.UtcNow;
             discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG TÌM NGUỒN", "Đang gọi Brave Search và TikTok Research API nếu đã cấu hình."));
             await InvokeAsync(StateHasChanged);
-            discoverySearch = await Api.PostAsync<object, DiscoverySearchResponse>("/api/v1/discovery/search",
-                new { topic = discoveryPlan.Topic, queries = discoveryPlan.Queries });
-            var summary = string.Join(" · ", discoverySearch.Providers.Select(x => $"{x.Provider}: {x.Status} ({x.ResultCount})"));
-            discoveryLogs[0] = new DiscoveryLogItem(started, discoverySearch.Status == "Completed" ? "HOÀN TẤT TÌM NGUỒN" : "CHƯA CẤU HÌNH NGUỒN", summary);
-            successMessage = discoverySearch.Channels.Length > 0 || discoverySearch.Videos.Length > 0
-                ? $"Đã nhận {discoverySearch.Channels.Length} kênh và {discoverySearch.Videos.Length} video từ connector."
+            var search = await Api.PostAsync<object, DiscoverySearchResponse>("/api/v1/discovery/search",
+                new { topic = plan.Topic, queries = plan.Queries });
+            if (search is null) throw new InvalidOperationException("Connector không trả về nội dung phản hồi.");
+            discoverySearch = search;
+            var summary = string.Join(" · ", search.Providers.Select(x => $"{x.Provider}: {x.Status} ({x.ResultCount})"));
+            discoveryLogs[0] = new DiscoveryLogItem(started, search.Status == "Completed" ? "HOÀN TẤT TÌM NGUỒN" : "CHƯA CẤU HÌNH NGUỒN", summary);
+            successMessage = search.Channels.Length > 0 || search.Videos.Length > 0
+                ? $"Đã nhận {search.Channels.Length} kênh và {search.Videos.Length} video từ connector."
                 : "Connector đã chạy nhưng chưa trả về URL TikTok phù hợp. Kiểm tra trạng thái từng nguồn.";
         }
         catch (Exception ex)
