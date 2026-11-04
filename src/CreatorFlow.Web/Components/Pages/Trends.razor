@@ -459,7 +459,7 @@
             discoveryPlan = result.Data;
             var detail = ParseProviderTrace(result.ProviderTrace);
             discoveryLogs[0] = new DiscoveryLogItem(started, result.Error is not null ? "THẤT BẠI" : discoveryPlan is null ? "KHÔNG CÓ KẾT QUẢ" : "THÀNH CÔNG", string.Join(" · ", new[] { detail, result.Error }.Where(x => !string.IsNullOrWhiteSpace(x))));
-            if (result.Error is not null) error = result.Error;
+            if (result.Error is not null) error = ToUserMessage(new InvalidOperationException(result.Error));
             else if (discoveryPlan is null) error = "AI chưa trả về kế hoạch tìm kiếm.";
             else successMessage = "Đã tạo bộ truy vấn khám phá cho chủ đề.";
         }
@@ -595,6 +595,10 @@
             return "Ghi nhận này đã tồn tại. Hãy dùng chức năng cập nhật quan sát thay vì tạo mục trùng.";
         if (message.Contains("HTTP 400", StringComparison.OrdinalIgnoreCase))
             return "Dữ liệu chưa hợp lệ. Hãy kiểm tra các trường có dấu * và định dạng đường dẫn HTTPS.";
+        if (message.Contains("Discovery query plan did not match the required contract", StringComparison.OrdinalIgnoreCase))
+            return "AI provider đã trả về cấu trúc bộ truy vấn chưa hợp lệ. CreatorFlow đã chuẩn hóa các định dạng phổ biến; nếu lỗi tiếp diễn, hãy gửi nhật ký provider/model để kiểm tra.";
+        if (message.Contains("HTTP 502", StringComparison.OrdinalIgnoreCase))
+            return "Nhà cung cấp AI không trả về kết quả hợp lệ (HTTP 502). Hãy kiểm tra nhật ký provider/model.";
         return "Không thể hoàn tất yêu cầu. Chi tiết: " + message;
     }
 }
