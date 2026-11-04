@@ -114,7 +114,18 @@ jobs:
               'implicitFlowEnabled': False,
               'directAccessGrantsEnabled': True,
               'serviceAccountsEnabled': False,
-              'optionalClientScopes': ['creatorflow-api']
+              'protocolMappers': [{
+                  'name': 'creatorflow-api-audience',
+                  'protocol': 'openid-connect',
+                  'protocolMapper': 'oidc-audience-mapper',
+                  'consentRequired': False,
+                  'config': {
+                      'included.client.audience': 'creatorflow-api',
+                      'id.token.claim': 'false',
+                      'access.token.claim': 'true',
+                      'introspection.token.claim': 'true'
+                  }
+              }]
           }
           request('POST', '/admin/realms/creatorflow/clients', client, admin)
           users = request('GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin)
@@ -136,7 +147,7 @@ jobs:
               'grant_type': 'password',
               'username': 'ci-oidc-contract',
               'password': 'ci-only-user-password-123456',
-              'scope': 'openid creatorflow-api'
+              'scope': 'openid'
           })
           access_token = token_response['access_token']
           metadata = request('GET', '/realms/creatorflow/.well-known/openid-configuration')
