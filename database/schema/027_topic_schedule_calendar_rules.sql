@@ -16,12 +16,9 @@ IF COL_LENGTH(N'dbo.DiscoveryTopicProfiles',N'TimeZoneId') IS NULL
     ALTER TABLE dbo.DiscoveryTopicProfiles ADD TimeZoneId nvarchar(80) NOT NULL
         CONSTRAINT DF_DiscoveryTopicProfiles_TimeZone DEFAULT N'Asia/Ho_Chi_Minh';
 IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE name=N'CK_DiscoveryTopicProfiles_ScheduleMode')
-    ALTER TABLE dbo.DiscoveryTopicProfiles ADD CONSTRAINT CK_DiscoveryTopicProfiles_ScheduleMode
-        CHECK(ScheduleMode IN(N'Interval',N'Daily',N'Weekly'));
+    EXEC(N'ALTER TABLE dbo.DiscoveryTopicProfiles ADD CONSTRAINT CK_DiscoveryTopicProfiles_ScheduleMode CHECK(ScheduleMode IN(N''Interval'',N''Daily'',N''Weekly''));');
 IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE name=N'CK_DiscoveryTopicProfiles_LocalTime')
-    ALTER TABLE dbo.DiscoveryTopicProfiles ADD CONSTRAINT CK_DiscoveryTopicProfiles_LocalTime
-        CHECK(LocalTime LIKE '[0-2][0-9]:[0-5][0-9]');
+    EXEC(N'ALTER TABLE dbo.DiscoveryTopicProfiles ADD CONSTRAINT CK_DiscoveryTopicProfiles_LocalTime CHECK(LocalTime LIKE ''[0-2][0-9]:[0-5][0-9]'');');
 IF NOT EXISTS(SELECT 1 FROM sys.check_constraints WHERE name=N'CK_DiscoveryTopicProfiles_DaysOfWeekJson')
-    ALTER TABLE dbo.DiscoveryTopicProfiles ADD CONSTRAINT CK_DiscoveryTopicProfiles_DaysOfWeekJson
-        CHECK(ISJSON(DaysOfWeekJson)=1);
+    EXEC(N'ALTER TABLE dbo.DiscoveryTopicProfiles ADD CONSTRAINT CK_DiscoveryTopicProfiles_DaysOfWeekJson CHECK(ISJSON(DaysOfWeekJson)=1);');
 COMMIT TRANSACTION;
