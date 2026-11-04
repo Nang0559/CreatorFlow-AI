@@ -1,6 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using CreatorFlow.Domain.Identity;
+using CreatorFlow.Domain.Discovery;
+using CreatorFlow.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using Xunit;
 
 namespace CreatorFlow.Api.Tests;
@@ -102,6 +106,65 @@ public sealed class JwtTenantMembershipIntegrationTests
         var response = await client.GetAsync("/api/v1/topics/");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Jwt_membership_scopes_topic_list_to_selected_workspace()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        var foreignTenantId = Guid.NewGuid();
+        await factory.SeedAsync(async (db, tenantContext) =>
+        {
+            var foreignTenant = Tenant.Create("Foreign workspace", $"foreign-{foreignTenantId:N}", DateTimeOffset.UtcNow);
+            db.Entry(foreignTenant).Property(x => x.Id).CurrentValue = foreignTenantId;
+            db.Tenants.Add(foreignTenant);
+            tenantContext.Set(foreignTenantId, "Owner");
+            db.ContentTopics.Add(ContentTopic.Create("Foreign-only topic", "foreign", DateTimeOffset.UtcNow));
+            await db.SaveChangesAsync();
+
+            tenantContext.Set(CreatorFlowApiFactory.LegacyTenantId, "Owner");
+            db.ContentTopics.Add(ContentTopic.Create("Current workspace topic", "current", DateTimeOffset.UtcNow));
+        });
+
+        using var client = CreateAuthenticatedClient(factory, Subject);
+        var response = await client.GetAsync("/api/v1/topics/");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var names = payload.RootElement.EnumerateArray()
+            .Select(item => item.GetProperty("name").GetString())
+            .ToArray();
+        Assert.Contains("Current workspace topic", names);
+        Assert.DoesNotContain("Foreign-only topic", names);
+    }
+
+    [Fact]
+    public async Task Jwt_membership_does_not_read_foreign_workspace_connector_credentials()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        var foreignTenantId = Guid.NewGuid();
+        await factory.SeedAsync(async (db, tenantContext) =>
+        {
+            var foreignTenant = Tenant.Create("Foreign workspace", $"foreign-{foreignTenantId:N}", DateTimeOffset.UtcNow);
+            db.Entry(foreignTenant).Property(x => x.Id).CurrentValue = foreignTenantId;
+            db.Tenants.Add(foreignTenant);
+            tenantContext.Set(foreignTenantId, "Owner");
+            db.DiscoveryConnectorConfigurations.Add(new DiscoveryConnectorConfiguration
+            {
+                TenantId = foreignTenantId,
+                EncryptedBraveApiKey = "foreign-workspace-ciphertext"
+            });
+            await db.SaveChangesAsync();
+            tenantContext.Set(CreatorFlowApiFactory.LegacyTenantId, "Owner");
+        });
+
+        using var client = CreateAuthenticatedClient(factory, Subject);
+        var response = await client.GetAsync("/api/v1/discovery/connectors/settings");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.False(payload.RootElement.GetProperty("hasBraveApiKey").GetBoolean());
+        Assert.False(payload.RootElement.GetProperty("isStoredInWorkspace").GetBoolean());
     }
 
     private static HttpClient CreateAuthenticatedClient(CreatorFlowApiFactory factory, string subject)
