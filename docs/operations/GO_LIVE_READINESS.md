@@ -31,7 +31,7 @@ This document prevents a green build or a healthy local URL from being mistaken 
 - [ ] Docker images build on the exact release commit; containers stay healthy after reboot.
 - [ ] Web/API/AI health, readiness, API authorization and tenant isolation verified against SQL.
 - [ ] Discovery 014/015 tenant migration 029 applied and verified; all composite candidate/source/run/feedback foreign keys are trusted, and negative cross-tenant endpoint tests pass.
-- [ ] Fresh local Keycloak volume imports the checked-in `creatorflow` realm; `scripts/Test-KeycloakRealmContract.ps1 -CheckLive` passes and a signed access token is accepted by the API with the expected issuer/audience.
+- [ ] Fresh local Keycloak volume imports the checked-in `creatorflow` realm; `scripts/Test-KeycloakRealmContract.ps1 -CheckLive` passes and a signed access token issued by that Keycloak instance is accepted by the API with the expected issuer/audience and active SQL membership. CI currently tests the API JwtBearer + membership path with a separately signed test JWT and tests Keycloak token issuance/audience independently; the combined live-Keycloak-to-API path remains open.
 - [ ] Data Protection key ring path, Windows identity/DPAPI scope, ACLs and backup/restore are verified; multi-instance deployments use a shared key ring with a suitable shared at-rest protection strategy.
 - [ ] iPhone Shortcut receives a Douyin share and the Share Inbox stores it once; duplicate submission is idempotent.
 - [ ] Share links are not fetched server-side and unsupported URLs are rejected.
@@ -53,3 +53,8 @@ A build passing CI is necessary but not sufficient. Until every applicable gate 
 - `.github/workflows/sqlserver-selfhosted-qc.yml` is a separate push/workflow-dispatch workflow on the dedicated `[self-hosted, Windows, X64]` runner. It runs the local QC database guard, fail-closed migration-state preflight, `database/Apply-Migrations.ps1` for migrations 001–029, `database/Verify-Database.ps1 -RequireTenantMigrations`, SQL connectivity smoke test and .NET tests. It refuses automatic legacy-workspace backfill when an existing ledger lacks tenant migrations 011–013; an operator must review and initialize that state explicitly.
 - The SQL workflow deliberately has no `pull_request` trigger so untrusted PR code cannot execute on the machine holding the local QC database. A pending run is not a passing run; record its completed conclusion and job logs before claiming SQL acceptance.
 - The verifier checks migration checksums for its selected manifest through 029 and verifies tenant ownership for mapped tenant tables. The legacy Discovery schema from 014–015 is not tenant-scoped; table existence alone is not evidence that it is safe for multi-tenant queries. Do not add those legacy tables to active multi-tenant runtime paths without a tenant-scoped schema and negative isolation tests.
+
+
+## JWT + membership test coverage (2026-11-04)
+
+The API test factory now exercises the real JwtBearer authentication handler with signed test tokens, followed by tenant selection and issuer+subject membership lookup. The suite verifies active membership success, Editor role enforcement from the membership row, denial when the token selects a workspace without membership, and denial for suspended membership. The backing provider in these tests is EF Core InMemory; SQL Server provider parity and the full live Keycloak token → API → SQL membership path are still required acceptance work.
