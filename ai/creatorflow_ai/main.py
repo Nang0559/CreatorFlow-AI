@@ -40,6 +40,16 @@ def require_service_key(x_creatorflow_ai_key: str | None = Header(default=None))
         raise HTTPException(status_code=401, detail="Invalid CreatorFlow AI service credential.")
 
 
+class _UnavailableLLMClient:
+    """Defer provider configuration failures until after FastAPI validates the request body."""
+
+    def __init__(self, error: AIConfigurationError):
+        self._error = error
+
+    async def complete_json(self, *, system_prompt: str, user_payload: dict[str, Any]) -> dict[str, Any]:
+        raise self._error
+
+
 def get_llm_client(x_creatorflow_llm_route: str | None = Header(default=None)) -> OpenAICompatibleLLM:
     try:
         if x_creatorflow_llm_route:
@@ -53,13 +63,26 @@ def get_llm_client(x_creatorflow_llm_route: str | None = Header(default=None)) -
         else:
             settings = LLMSettings.from_environment()
         return OpenAICompatibleLLM(settings)
-    except (AIConfigurationError, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=503, detail="AI provider configuration is invalid or unavailable.") from exc
+    except (AIConfigurationError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        # FastAPI resolves dependencies before invoking the endpoint. Returning a deferred
+        # failure lets Pydantic report malformed requests as 422 even when AI is offline.
+        return _UnavailableLLMClient(
+            AIConfigurationError("AI provider configuration is invalid or unavailable.")
+        )  # type: ignore[return-value]
+
+
+def encode_provider_trace(client: Any) -> str:
+    trace = getattr(client, "last_trace", [])
+    if not isinstance(trace, list):
+        trace = []
+    return base64.b64encode(json.dumps(trace, ensure_ascii=False).encode("utf-8")).decode("ascii")
 
 
 async def invoke_llm(client: OpenAICompatibleLLM, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
     try:
         return await client.complete_json(system_prompt=system_prompt, user_payload=payload)
+    except AIConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="AI provider configuration is invalid or unavailable.") from exc
     except AIInvalidOutputError as exc:
         raise HTTPException(status_code=502, detail="LLM provider returned invalid structured output.") from exc
     except AIProviderError as exc:
@@ -108,9 +131,9 @@ async def discovery_query_plan(
     try:
         raw = await invoke_llm(client, system_prompt, request.model_dump())
     except HTTPException as exc:
-        trace = base64.b64encode(json.dumps(client.last_trace, ensure_ascii=False).encode("utf-8")).decode("ascii")
+        trace = encode_provider_trace(client)
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers={"X-CreatorFlow-LLM-Trace": trace})
-    trace = base64.b64encode(json.dumps(client.last_trace, ensure_ascii=False).encode("utf-8")).decode("ascii")
+    trace = encode_provider_trace(client)
     try:
         result = DiscoveryQueryPlanResponse.model_validate({**raw, "requires_human_review": True})
         if len(result.queries) > request.max_queries:
