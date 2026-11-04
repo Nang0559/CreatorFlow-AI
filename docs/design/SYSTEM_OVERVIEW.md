@@ -5,7 +5,7 @@ CreatorFlow uses Douyin (China) for discovery and TikTok Vietnam for distributio
 
 Intended loop: discover → select → analyze → localize → produce → review → publish → measure → learn.
 
-The repository includes a provider-backed LLM runtime for text analysis, 2–3-variant Vietnamese creative generation and evidence-grounded style synthesis. SQL-backed project/trend/Style Lab foundations, tenant identity/isolation foundations, creator-shared link inbox, and a local After Effects + FFmpeg render pipeline also exist. Discovery query planning/ranking is not a live data collector; feedback learning is not yet an activated SQL-to-ranking loop. Trained ML, external platform connectors, speech/music understanding and publishing remain integration work.
+The repository includes a provider-backed LLM runtime for text analysis, 2–3-variant Vietnamese creative generation, evidence-grounded style synthesis and discovery query planning. SQL-backed project/trend/Style Lab foundations, tenant identity/isolation foundations, creator-shared link inbox, workspace-managed AI/discovery provider credentials, on-demand Brave public-web search and an approval-gated TikTok Research API adapter exist. Discovery connector results are not yet persisted into the candidate model or executed by recurring topic schedules; feedback learning is not yet an activated SQL-to-ranking loop. Trained ML, Douyin connectors, speech/music understanding and publishing remain integration work. The initial local video renderer is FFmpeg-only; After Effects is a future adapter, not a required current dependency.
 
 ## 2. Logical components
 
@@ -16,9 +16,9 @@ The repository includes a provider-backed LLM runtime for text analysis, 2–3-v
 | Domain | Lifecycle invariants and deterministic style analysis | Implemented for projects, discovery, experiments, profiles and evidence |
 | Infrastructure | SQL Server persistence through EF Core | DbContext mappings and SQL scripts exist |
 | AI service | LLM-backed source analysis, Vietnamese variant generation and evidence-grounded style synthesis | Python FastAPI service calls a configured OpenAI-compatible chat-completions provider; outputs are schema-validated drafts |
-| Discovery connectors | Douyin account/feed/video ingestion | Not implemented; endpoints accept metadata |
+| Discovery connectors | AI-assisted topic query planning plus permitted public/official search adapters | Brave indexed public-web search and approval-gated TikTok Research API are implemented as on-demand connectors; results are not yet persisted or scheduled |
 | Vietnam trend connectors | TikTok Vietnam creator/video/sound ingestion | Not implemented; observations are manual or connector-supplied |
-| Media engine | Source asset intake, AE project/PNG render, FFmpeg MP4 encode, preview/download | Initial local Windows pipeline implemented; advanced effects, STT/TTS, music analysis and hardware acceptance remain open |
+| Media engine | Source asset intake, FFmpeg MP4 encode, preview/download | Initial local Windows FFmpeg-only pipeline; advanced effects, STT/TTS, music analysis and hardware acceptance remain open |
 | Publishing and analytics | TikTok publishing, product attachment and metric sync | Not implemented |
 | Background processing | Durable video render jobs, retries and render status | SQL-backed video queue/worker implemented; discovery/provider orchestration, outbox and dead-letter handling remain open |
 
@@ -63,6 +63,6 @@ The deterministic Style Learning endpoint analyzes evaluated experiment variants
 8. Deduplicate platform identities and evidence imports; future jobs/publishing need durable idempotency keys.
 
 ## 7. Deployment and schema
-Apply numbered migrations through `database/Apply-Migrations.ps1`; current manifest includes 001–010 and 014–020, with 011–013 enabled only after explicit legacy-workspace ownership review. Migrations 017–020 cover video jobs, same-tenant relationships and workspace-scoped uniqueness.
+Apply numbered migrations through `database/Apply-Migrations.ps1`; current manifest includes 001–010 and 014–028, with 011–013 enabled only after explicit legacy-workspace ownership review. Migrations 017–020 cover video jobs, same-tenant relationships and workspace-scoped uniqueness; 024–028 add workspace AI providers and discovery schedules/credentials.
 
 Do not apply these scripts to an unrelated production database. See ../GETTING_STARTED.md for runtime configuration.
