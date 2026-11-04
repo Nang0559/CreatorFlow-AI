@@ -60,7 +60,7 @@ public static class DiscoveryConnectorSettingsEndpoints
                     row.EncryptedTikTokResearchClientSecret = tiktokSecret.Protect(request.TikTokResearchClientSecret.Trim());
             }
             row.UpdatedAt = DateTimeOffset.UtcNow;
-            if (row.EncryptedTikTokResearchClientKey is null != (row.EncryptedTikTokResearchClientSecret is null))
+            if ((row.EncryptedTikTokResearchClientKey is null) != (row.EncryptedTikTokResearchClientSecret is null))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["tiktok"] = ["Client Key và Client Secret phải được cấu hình cùng nhau."] });
             await db.SaveChangesAsync(ct);
             return Results.Ok(new DiscoveryConnectorSettingsResponse(
