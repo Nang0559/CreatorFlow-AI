@@ -7,6 +7,8 @@ using System.Text.Json;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 using System.IO.Compression;
 using CreatorFlow.Api.Security;
 using CreatorFlow.Api.Video;
@@ -24,6 +26,20 @@ builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 
+// Trust forwarded client/proto information only from explicitly configured proxy IPs.
+// Do not enable unrestricted X-Forwarded-* processing on an internet-facing listener.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownProxies.Clear();
+    options.KnownNetworks.Clear();
+    var trustedProxyIps = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+    foreach (var value in trustedProxyIps)
+        if (IPAddress.TryParse(value, out var address))
+            options.KnownProxies.Add(address);
+});
+
 var allowedCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
@@ -36,12 +52,16 @@ builder.Services.AddRateLimiter(options =>
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
     {
+        if (httpContext.Request.Path.Equals("/health", StringComparison.OrdinalIgnoreCase) ||
+            httpContext.Request.Path.StartsWithSegments("/health"))
+            return RateLimitPartition.GetNoLimiter("health");
+
         var subject = httpContext.User.FindFirst("sub")?.Value;
         var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var partition = !string.IsNullOrWhiteSpace(subject) ? subject : remoteAddress;
         return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 120,
+            PermitLimit = 300,
             Window = TimeSpan.FromMinutes(1),
             QueueLimit = 0,
             AutoReplenishment = true
@@ -109,6 +129,7 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 
 var app = builder.Build();
 app.UseExceptionHandler();
+app.UseForwardedHeaders();
 app.UseRouting();
 app.UseCors();
 app.UseAuthentication();
