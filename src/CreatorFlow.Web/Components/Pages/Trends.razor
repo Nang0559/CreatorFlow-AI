@@ -175,19 +175,21 @@
   </div>
   @if (!string.IsNullOrWhiteSpace(scheduleMessage)) { <p class="muted" role="status">@scheduleMessage</p> }
   @if (scheduleInfo is not null) {
-    <article class="trend-item"><div><span class="status">@(scheduleInfo.IsEnabled ? "Đã bật lịch" : "Đã tắt lịch") · @(scheduleInfo.LastRunStatus ?? "Chưa chạy")</span>
-      <p class="muted">Kiểu lịch: @ScheduleModeLabel(scheduleInfo.ScheduleMode) · Giờ địa phương: @scheduleInfo.LocalTime</p>
+    <article class="trend-item"><div><span class="status">@(scheduleInfo.IsEnabled ? "Đã bật lịch" : "Đã tắt lịch") · @ScheduleRunStatusLabel(scheduleInfo.LastRunStatus)</span>
+      <p class="muted">Kiểu lịch: @ScheduleModeLabel(scheduleInfo.ScheduleMode) · Giờ Việt Nam: @scheduleInfo.LocalTime</p>
+      @if (scheduleInfo.ScheduleMode == "Weekly") { <p class="muted">Ngày chạy: @string.Join(", ", scheduleInfo.DaysOfWeek.Select(ScheduleDayLabel))</p> }
+      <p class="muted">Nền tảng: @string.Join(", ", JsonPlatformLabels(scheduleInfo.PlatformsJson))</p>
       <p class="muted">Lần chạy gần nhất: @(scheduleInfo.LastRunAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa có")</p>
       <p class="muted">Lần chạy tiếp theo: @(scheduleInfo.NextRunAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa xếp lịch")</p>
       <p class="muted">Kết quả: @scheduleInfo.CandidateCount ứng viên · @scheduleInfo.ChannelCount kênh</p>
-      @if (!string.IsNullOrWhiteSpace(scheduleInfo.LastErrorCode)) { <p class="muted">Mã trạng thái: @scheduleInfo.LastErrorCode</p> }
+      @if (!string.IsNullOrWhiteSpace(scheduleInfo.LastErrorCode)) { <p class="muted">Chi tiết: @ScheduleErrorLabel(scheduleInfo.LastErrorCode)</p> }
     </div></article>
   }
   <h3>Lịch sử thực thi</h3>
   @if (scheduleHistory.Count == 0) { <p class="muted">Chưa có lần chạy nào.</p> }
   @foreach (var run in scheduleHistory) {
-    <article class="share-item"><div><strong>@run.Status</strong><p class="muted">@run.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @run.CandidateCount ứng viên · @run.ChannelCount kênh</p>
-      @if (!string.IsNullOrWhiteSpace(run.ErrorCode)) { <small class="muted">@run.ErrorCode</small> }
+    <article class="share-item"><div><strong>@ScheduleRunStatusLabel(run.Status)</strong><p class="muted">@run.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @run.CandidateCount ứng viên · @run.ChannelCount kênh</p>
+      @if (!string.IsNullOrWhiteSpace(run.ErrorCode)) { <small class="muted">@ScheduleErrorLabel(run.ErrorCode)</small> }
     </div></article>
   }
   <p class="muted">Khi chưa có connector nguồn được phê duyệt, worker ghi trạng thái bỏ qua thay vì tạo dữ liệu xu hướng giả.</p>
@@ -355,6 +357,42 @@
     {
         "Daily" => "Hằng ngày", "Weekly" => "Theo ngày trong tuần", _ => "Lặp theo chu kỳ"
     };
+
+    private static string ScheduleRunStatusLabel(string? status) => status switch
+    {
+        "Queued" => "Đang chờ", "Running" => "Đang chạy", "Completed" => "Hoàn tất",
+        "Partial" => "Hoàn tất một phần", "Failed" => "Thất bại", "Skipped" => "Đã bỏ qua",
+        null or "" => "Chưa chạy", _ => status
+    };
+
+    private static string ScheduleErrorLabel(string? code) => code switch
+    {
+        "NoApprovedSourceConnector" => "Chưa có nguồn dữ liệu được phê duyệt; chưa thu thập xu hướng.",
+        "LeaseExpired" => "Lượt chạy trước hết thời gian giữ chỗ và đã được đánh dấu lỗi.",
+        null or "" => "", _ => code
+    };
+
+    private static string ScheduleDayLabel(string day) => day switch
+    {
+        "Monday" => "Thứ 2", "Tuesday" => "Thứ 3", "Wednesday" => "Thứ 4",
+        "Thursday" => "Thứ 5", "Friday" => "Thứ 6", "Saturday" => "Thứ 7",
+        "Sunday" => "Chủ nhật", _ => day
+    };
+
+    private static string[] JsonPlatformLabels(string json)
+    {
+        try
+        {
+            return (System.Text.Json.JsonSerializer.Deserialize<string[]>(json) ?? [])
+                .Select(x => x switch {
+                    "TikTokVietnam" => "TikTok Việt Nam",
+                    "YouTubeShortsVietnam" => "YouTube Shorts Việt Nam",
+                    "FacebookReelsVietnam" => "Facebook Reels Việt Nam",
+                    _ => x
+                }).ToArray();
+        }
+        catch { return []; }
+    }
 
     private async Task SaveTopicAsync()
     {
