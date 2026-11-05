@@ -81,7 +81,7 @@ internal static class SafeProviderHttpClient
         throw new HttpRequestException("Không thể kết nối provider.", lastError);
     }
 
-    private static bool IsPublicAddress(IPAddress address)
+    public static bool IsPublicAddress(IPAddress address)
     {
         if (address.IsIPv4MappedToIPv6)
             address = address.MapToIPv4();
