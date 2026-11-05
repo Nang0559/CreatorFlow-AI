@@ -61,7 +61,7 @@ DiscoverySearch__Providers__1__TitlePath=title
 DiscoverySearch__Providers__1__DescriptionPath=snippet
 DiscoverySearch__Providers__1__ApiKey=replace-with-your-key
 DiscoverySearch__Providers__1__ApiKeyHeader=Authorization
-DiscoverySearch__Providers__1__ApiKeyPrefix=Bearer 
+DiscoverySearch__Providers__1__ApiKeyPrefix="Bearer "
 ```
 
 Các trường `ResultsPath`, `UrlPath`, `TitlePath`, `DescriptionPath` là đường dẫn thuộc tính JSON phân tách bằng dấu chấm. `ApiKey`, `ApiKeyHeader`, `ApiKeyPrefix` là tùy chọn. Có thể khai báo nhiều provider bằng chỉ số `0`, `1`, `2`... Tên provider nên duy nhất để dễ theo dõi trạng thái.
