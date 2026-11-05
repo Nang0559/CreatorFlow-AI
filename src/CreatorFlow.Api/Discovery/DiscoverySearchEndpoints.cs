@@ -159,6 +159,35 @@ public static class DiscoverySearchEndpoints
                 "Kết quả chỉ gồm URL TikTok HTTPS trả về từ nguồn tìm kiếm. Kết quả web là trang được lập chỉ mục, không đảm bảo còn tồn tại hoặc mở được; chỉ số chỉ xuất hiện khi API nguồn trả về."));
         }).RequireAuthorization();
 
+        app.MapPost("/api/v1/discovery/search/provider-test", async (
+            CustomProviderTestRequest request,
+            CreatorFlowDbContext? db,
+            ITenantContext tenant,
+            IDataProtectionProvider protection,
+            IHttpClientFactory clients,
+            CancellationToken cancellationToken) =>
+        {
+            if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
+            var row = await db.DiscoveryConnectorConfigurations.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.TenantId == tenant.TenantId, cancellationToken);
+            var provider = DiscoveryConnectorSettingsEndpoints.ReadCustomProviders(row, protection)
+                .FirstOrDefault(x => x.Id == request.ProviderId);
+            if (provider is null) return Results.NotFound(new { error = "Không tìm thấy provider trong workspace." });
+            if (!Uri.TryCreate(provider.Endpoint, UriKind.Absolute, out var endpoint) ||
+                (endpoint.Scheme != Uri.UriSchemeHttps && endpoint.Scheme != Uri.UriSchemeHttp))
+                return Results.BadRequest(new { error = "Endpoint phải là URL HTTP(S) hợp lệ." });
+            try
+            {
+                var found = await SearchConfiguredProviderAsync(clients.CreateClient(), provider,
+                    "Kiểm tra kết nối nguồn", ["creatorflow connector verification"], cancellationToken);
+                return Results.Ok(new DiscoveryProviderTestResponse(provider.Id, provider.Name, "Completed", found.Count, null));
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or FormatException)
+            {
+                return Results.Ok(new DiscoveryProviderTestResponse(provider.Id, provider.Name, "Failed", 0, SafeError(ex)));
+            }
+        }).RequireAuthorization("TenantOwnerOrAdmin");
+
         return app;
     }
 
@@ -461,3 +490,6 @@ public sealed class ConfiguredSearchProvider
     public int TimeoutSeconds { get; set; } = 15;
     public int MaxQueries { get; set; } = 4;
 }
+
+public sealed record CustomProviderTestRequest(Guid ProviderId);
+public sealed record DiscoveryProviderTestResponse(Guid ProviderId, string Provider, string Status, int ResultCount, string? Error);
