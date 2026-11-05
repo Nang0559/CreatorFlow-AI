@@ -6,7 +6,7 @@
     <div>
         <p class="eyebrow">CẤU HÌNH KHÁM PHÁ</p>
         <h1>Nguồn tìm kiếm</h1>
-        <p class="muted">Quản lý Brave Search, TikTok Research API và theo dõi các provider tìm kiếm bổ sung được khai báo trong cấu hình máy chủ. Khóa workspace được mã hóa phía máy chủ.</p>
+        <p class="muted">Quản lý Brave Search, TikTok Research API và các provider GET/POST tùy chỉnh ngay trong workspace. Khóa API được mã hóa phía máy chủ.</p>
     </div>
     <button class="primary" @onclick="ReloadAsync" disabled="@busy">Làm mới</button>
 </header>
@@ -136,9 +136,14 @@
             </div>
             <div class="form-actions">
                 <label><input type="checkbox" @bind="item.Enabled" /> Bật provider</label>
+                <button class="secondary" @onclick="() => TestProviderAsync(item)" disabled="@(busy || !item.Id.HasValue)">Kiểm tra provider</button>
                 <button class="secondary" @onclick="() => UseLangSearchTemplate(item)" disabled="@busy">Mẫu LangSearch</button>
                 <button class="secondary" @onclick="() => RemoveProvider(item)" disabled="@busy">Xóa provider</button>
             </div>
+            @if (!string.IsNullOrWhiteSpace(item.TestStatus))
+            {
+                <p class="muted"><strong>@item.TestStatus</strong> · @item.TestResultCount kết quả · @(item.TestError ?? "API đã chấp nhận truy vấn")</p>
+            }
         </div>
     }
     <div class="form-actions">
@@ -278,6 +283,32 @@
 
     private void RemoveProvider(CustomProviderEdit item) => customProviders.Remove(item);
 
+    private async Task TestProviderAsync(CustomProviderEdit item)
+    {
+        if (!item.Id.HasValue)
+        {
+            item.TestStatus = "Chưa lưu";
+            item.TestError = "Hãy lưu provider trước khi kiểm tra.";
+            return;
+        }
+        try
+        {
+            busy = true;
+            var result = await Api.PostAsync<ProviderTestRequest, ProviderTestResponse>(
+                "/api/v1/discovery/search/provider-test", new ProviderTestRequest(item.Id.Value));
+            item.TestStatus = result?.Status ?? "Failed";
+            item.TestResultCount = result?.ResultCount ?? 0;
+            item.TestError = result?.Error;
+        }
+        catch (Exception ex)
+        {
+            item.TestStatus = "Failed";
+            item.TestResultCount = 0;
+            item.TestError = FriendlyError(ex, "Không thể kiểm tra provider.");
+        }
+        finally { busy = false; }
+    }
+
     private async Task SaveCustomProvidersAsync()
     {
         try
@@ -330,6 +361,7 @@
         public string? UrlPath { get; set; } = "url"; public string? TitlePath { get; set; } = "title";
         public string? DescriptionPath { get; set; } = "content"; public string? ApiKey { get; set; }
         public bool HasApiKey { get; set; } public string? ApiKeyHeader { get; set; }
+        public string? TestStatus { get; set; } public int TestResultCount { get; set; } public string? TestError { get; set; }
         public string? ApiKeyPrefix { get; set; } public string? Accept { get; set; } = "application/json";
         public int TimeoutSeconds { get; set; } = 15; public int MaxQueries { get; set; } = 4;
     }
@@ -343,6 +375,8 @@
         bool ClearBraveApiKey = false, bool ClearTikTokResearchCredentials = false);
     private sealed class SettingsResponse { public bool HasBraveApiKey { get; set; } public bool HasTikTokResearchClientKey { get; set; } public bool HasTikTokResearchClientSecret { get; set; } public bool IsStoredInWorkspace { get; set; } }
     private sealed record SearchRequest(string Topic, string[] Queries);
+    private sealed record ProviderTestRequest(Guid ProviderId);
+    private sealed class ProviderTestResponse { public Guid ProviderId { get; set; } public string Status { get; set; } = ""; public int ResultCount { get; set; } public string? Error { get; set; } }
     private sealed class SearchResponse { public ProviderState[] Providers { get; set; } = []; }
     private sealed class ProviderState { public string Provider { get; set; } = ""; public string Status { get; set; } = ""; public int ResultCount { get; set; } public string? Error { get; set; } }
 }
