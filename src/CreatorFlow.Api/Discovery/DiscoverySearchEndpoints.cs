@@ -99,11 +99,11 @@ public static class DiscoverySearchEndpoints
 
                 try
                 {
+                    using var providerClient = SafeProviderHttpClient.Create(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45)));
                     var providerResults = await SearchConfiguredProviderAsync(
-                        SafeProviderHttpClient.Create(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45))),
-                        provider, topic, queries, cancellationToken);
+                        providerClient, provider, topic, queries, cancellationToken);
                     results.AddRange(providerResults);
-                    providerStates.Add(new(provider.Name, "Completed", providerResults.Count, null));
+                    providerStates.Add(new("Custom: " + provider.Name, "Completed", providerResults.Count, null));
                 }
                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or FormatException)
                 {
@@ -178,9 +178,9 @@ public static class DiscoverySearchEndpoints
                 return Results.BadRequest(new { error = "Endpoint phải là URL HTTPS công khai hợp lệ." });
             try
             {
+                using var providerClient = SafeProviderHttpClient.Create(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45)));
                 var found = await SearchConfiguredProviderAsync(
-                    SafeProviderHttpClient.Create(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45))),
-                    provider, "Kiểm tra kết nối nguồn", ["creatorflow connector verification"], cancellationToken);
+                    providerClient, provider, "Kiểm tra kết nối nguồn", ["creatorflow connector verification"], cancellationToken);
                 return Results.Ok(new DiscoveryProviderTestResponse(provider.Id, "Custom provider", "Completed", found.Count, null));
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or FormatException)
@@ -403,7 +403,7 @@ public static class DiscoverySearchEndpoints
                 found.Add(new DiscoverySearchResult(
                     normalized, title ?? username ?? "TikTok", description, username,
                     null, null, null, null, videoId is null ? "ChannelOrPage" : "Video",
-                    provider.Name, DateTimeOffset.UtcNow));
+                    "Custom: " + provider.Name, DateTimeOffset.UtcNow));
             }
         }
 
@@ -413,6 +413,7 @@ public static class DiscoverySearchEndpoints
     private static bool IsAllowedProviderEndpoint(string? value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
         uri.Scheme == Uri.UriSchemeHttps &&
+        uri.Port == 443 &&
         string.IsNullOrEmpty(uri.UserInfo) &&
         string.IsNullOrEmpty(uri.Fragment) &&
         !string.IsNullOrWhiteSpace(uri.Host);
