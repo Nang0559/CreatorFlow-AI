@@ -1,0 +1,189 @@
+@page "/settings/discovery-connectors"
+@inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
+
+<PageTitle>Nguồn tìm kiếm · CreatorFlow</PageTitle>
+<header class="page-header">
+    <div>
+        <p class="eyebrow">CẤU HÌNH KHÁM PHÁ</p>
+        <h1>Nguồn tìm kiếm</h1>
+        <p class="muted">Quản lý Brave Search và TikTok Research API cho workspace hiện tại. Khóa được lưu mã hóa phía máy chủ, không gửi xuống trình duyệt sau khi lưu.</p>
+    </div>
+    <button class="primary" @onclick="ReloadAsync" disabled="@busy">Làm mới</button>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <section class="@(hasError ? "notice validation-summary" : "success-notice")" role="status" aria-live="polite"><strong>@message</strong></section>
+}
+@if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <section class="notice validation-summary" role="alert"><strong>@loadError</strong></section>
+}
+
+<section class="panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">BRAVE SEARCH</p><h2>Tìm kiếm web công khai</h2>
+            <p class="muted">Dùng chỉ mục web để tìm các trang TikTok công khai theo chủ đề tại Việt Nam. Kết quả là đầu mối khám phá, không đảm bảo đầy đủ hoặc còn hoạt động.</p>
+        </div>
+        <span class="status">@Presence(hasBrave)</span>
+    </div>
+    <label>Brave Search API Key
+        <input type="password" autocomplete="new-password" @bind="braveKey" placeholder="Nhập API key · để trống nếu giữ khóa hiện tại" />
+    </label>
+    <div class="form-actions">
+        <button class="primary" @onclick="SaveBraveAsync" disabled="@busy">Lưu Brave Search</button>
+        <button class="secondary" @onclick="TestAsync" disabled="@(busy || !hasBrave)">Kiểm tra kết nối</button>
+        <button class="secondary" @onclick="ClearBraveAsync" disabled="@(busy || !hasBrave)">Xóa khóa</button>
+    </div>
+    @if (braveState is not null) { <p class="muted"><strong>@braveState.Status</strong> · @braveState.ResultCount kết quả · @(braveState.Error ?? "Không có lỗi")</p> }
+</section>
+
+<section class="panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">TIKTOK RESEARCH API</p><h2>Dữ liệu nghiên cứu TikTok</h2>
+            <p class="muted">Yêu cầu dự án được TikTok phê duyệt Research API. Thông tin ứng dụng thông thường hoặc quyền Display API không thay thế quyền Research API.</p>
+        </div>
+        <span class="status">@Presence(hasTikTok)</span>
+    </div>
+    <div class="form-grid">
+        <label>Client Key
+            <input type="password" autocomplete="new-password" @bind="tikTokKey" placeholder="Nhập Client Key · để trống nếu giữ khóa hiện tại" />
+        </label>
+        <label>Client Secret
+            <input type="password" autocomplete="new-password" @bind="tikTokSecret" placeholder="Nhập Client Secret · để trống nếu giữ khóa hiện tại" />
+        </label>
+    </div>
+    <div class="form-actions">
+        <button class="primary" @onclick="SaveTikTokAsync" disabled="@busy">Lưu TikTok Research API</button>
+        <button class="secondary" @onclick="TestAsync" disabled="@(busy || !hasTikTok)">Kiểm tra kết nối</button>
+        <button class="secondary" @onclick="ClearTikTokAsync" disabled="@(busy || !hasTikTok)">Xóa thông tin</button>
+    </div>
+    @if (tikTokState is not null) { <p class="muted"><strong>@tikTokState.Status</strong> · @tikTokState.ResultCount kết quả · @(tikTokState.Error ?? "Không có lỗi")</p> }
+</section>
+
+<section class="panel">
+    <p class="eyebrow">TRẠNG THÁI NGUỒN</p>
+    <h2>Kiểm tra nguồn thực tế</h2>
+    <p class="muted">Nút kiểm tra thực hiện một truy vấn thật qua API connector. Trạng thái Connected chỉ xác nhận API chấp nhận yêu cầu tại thời điểm kiểm tra; không bảo đảm độ phủ dữ liệu. Nếu TikTok trả lỗi quyền, cần hoàn tất phê duyệt Research API với TikTok.</p>
+    <div class="form-actions">
+        <button class="primary" @onclick="TestAsync" disabled="@busy">@(busy ? "Đang kiểm tra…" : "Kiểm tra tất cả nguồn")</button>
+    </div>
+    @if (lastChecked is not null)
+    {
+        <p class="muted">Kiểm tra lúc @lastChecked.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</p>
+        @foreach (var state in providerStates)
+        {
+            <div class="variant-stats" style="padding:10px 0;border-bottom:1px solid var(--border,#ddd)">
+                <div><strong>@state.Provider</strong><div class="muted">@StatusLabel(state.Status) · @state.ResultCount kết quả</div>
+                    @if (!string.IsNullOrWhiteSpace(state.Error)) { <small class="muted">@state.Error</small> }
+                </div>
+            </div>
+        }
+    }
+</section>
+
+<p class="muted">Bảo mật: khóa chỉ được gửi tới API đã xác thực và lưu dưới dạng mã hóa bằng ASP.NET Core Data Protection. Giao diện không đọc lại khóa. Khi sửa, để trống trường khóa để giữ khóa hiện tại. Chỉ Owner/Admin của workspace được phép quản lý.</p>
+
+@code {
+    private bool busy, hasBrave, hasTikTok, hasError;
+    private string braveKey = "", tikTokKey = "", tikTokSecret = "";
+    private string message = "", loadError = "";
+    private DateTimeOffset? lastChecked;
+    private List<ProviderState> providerStates = [];
+    private ProviderState? braveState, tikTokState;
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            busy = true; loadError = "";
+            var result = await Api.GetAsync<SettingsResponse>("/api/v1/discovery/connectors/settings");
+            hasBrave = result?.HasBraveApiKey == true;
+            hasTikTok = result?.HasTikTokResearchClientKey == true && result?.HasTikTokResearchClientSecret == true;
+        }
+        catch (Exception ex) { loadError = FriendlyError(ex, "Không thể tải cấu hình nguồn. Kiểm tra kết nối API và quyền Owner/Admin."); }
+        finally { busy = false; }
+    }
+
+    private async Task SaveBraveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(braveKey)) { message = "Hãy nhập Brave API Key trước khi lưu."; hasError = true; return; }
+        await SaveAsync(new SettingsWrite(braveKey.Trim(), null, null));
+        if (!hasError) { braveKey = ""; await ReloadAsync(); }
+    }
+
+    private async Task SaveTikTokAsync()
+    {
+        if (string.IsNullOrWhiteSpace(tikTokKey) || string.IsNullOrWhiteSpace(tikTokSecret))
+        { message = "Khi thêm mới, cần nhập cả Client Key và Client Secret."; hasError = true; return; }
+        await SaveAsync(new SettingsWrite(null, tikTokKey.Trim(), tikTokSecret.Trim()));
+        if (!hasError) { tikTokKey = ""; tikTokSecret = ""; await ReloadAsync(); }
+    }
+
+    private async Task SaveAsync(SettingsWrite body)
+    {
+        try
+        {
+            busy = true; hasError = false;
+            await Api.PutAsync<SettingsWrite, SettingsResponse>("/api/v1/discovery/connectors/settings", body);
+            message = "Đã lưu cấu hình nguồn trong workspace.";
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể lưu cấu hình nguồn."); hasError = true; }
+        finally { busy = false; }
+    }
+
+    private async Task ClearBraveAsync()
+    {
+        try
+        {
+            busy = true; hasError = false;
+            await Api.PutAsync<SettingsWrite, SettingsResponse>("/api/v1/discovery/connectors/settings", new(null, null, null, true, false));
+            hasBrave = false; braveKey = ""; braveState = null; message = "Đã xóa khóa Brave được lưu trong workspace.";
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể xóa khóa Brave."); hasError = true; }
+        finally { busy = false; }
+    }
+
+    private async Task ClearTikTokAsync()
+    {
+        try
+        {
+            busy = true; hasError = false;
+            await Api.PutAsync<SettingsWrite, SettingsResponse>("/api/v1/discovery/connectors/settings", new(null, null, null, false, true));
+            hasTikTok = false; tikTokKey = ""; tikTokSecret = ""; tikTokState = null; message = "Đã xóa Client Key và Client Secret khỏi workspace.";
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể xóa thông tin TikTok."); hasError = true; }
+        finally { busy = false; }
+    }
+
+    private async Task TestAsync()
+    {
+        try
+        {
+            busy = true; hasError = false; message = "";
+            var result = await Api.PostAsync<SearchResponse, SearchResponse>("/api/v1/discovery/search",
+                new SearchResponse("Kiểm tra kết nối nguồn", ["creatorflow connector verification"], "", [], [], [], ""));
+            providerStates = result?.Providers?.ToList() ?? [];
+            braveState = providerStates.FirstOrDefault(x => x.Provider.Contains("Brave", StringComparison.OrdinalIgnoreCase));
+            tikTokState = providerStates.FirstOrDefault(x => x.Provider.Contains("TikTok", StringComparison.OrdinalIgnoreCase));
+            lastChecked = DateTimeOffset.Now;
+            var connected = providerStates.Count(x => x.Status == "Completed");
+            message = connected > 0 ? $"Kiểm tra hoàn tất: {connected} nguồn đã phản hồi." : "Chưa có nguồn nào kết nối thành công. Xem trạng thái và hướng xử lý bên dưới.";
+            hasError = connected == 0;
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể kiểm tra nguồn."); hasError = true; }
+        finally { busy = false; }
+    }
+
+    private static string Presence(bool value) => value ? "Đã cấu hình" : "NotConfigured";
+    private static string StatusLabel(string status) => status switch { "Completed" => "Connected", "NotConfigured" => "NotConfigured", "Failed" => "Failed", _ => status };
+    private static string FriendlyError(Exception ex, string fallback) => ex is HttpRequestException ? ex.Message : fallback;
+
+    private sealed record SettingsWrite(string? BraveApiKey, string? TikTokResearchClientKey, string? TikTokResearchClientSecret,
+        bool ClearBraveApiKey = false, bool ClearTikTokResearchCredentials = false);
+    private sealed class SettingsResponse { public bool HasBraveApiKey { get; set; } public bool HasTikTokResearchClientKey { get; set; } public bool HasTikTokResearchClientSecret { get; set; } public bool IsStoredInWorkspace { get; set; } }
+    private sealed record SearchResponse(string Topic, string[] Queries, string Status, object[] Channels, object[] Videos, ProviderState[] Providers, string Notice);
+    private sealed class ProviderState { public string Provider { get; set; } = ""; public string Status { get; set; } = ""; public int ResultCount { get; set; } public string? Error { get; set; } }
+}
