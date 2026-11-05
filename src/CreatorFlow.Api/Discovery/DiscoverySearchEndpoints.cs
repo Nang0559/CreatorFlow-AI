@@ -337,8 +337,9 @@ public static class DiscoverySearchEndpoints
         value = root;
         foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(segment, out value))
+            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(segment, out var child))
                 return false;
+            value = child;
         }
         return true;
     }
