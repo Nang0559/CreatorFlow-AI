@@ -35,8 +35,8 @@ public static class DiscoveryConnectorSettingsEndpoints
             var providers = ReadCustomProviders(row, protection);
             return Results.Ok(providers.Select(x => new CustomProviderResponse(
                 x.Id, x.Name, x.Enabled, x.Endpoint, x.Method, x.RequestBodyTemplate, x.ContentType,
-                x.HeadersJson, x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath,
-                x.TitlePath, x.DescriptionPath, x.ApiKey is not null, x.ApiKeyHeader,
+                null, x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath,
+                x.TitlePath, x.DescriptionPath, x.ApiKey is not null, !string.IsNullOrWhiteSpace(x.HeadersJson), x.ApiKeyHeader,
                 x.ApiKeyPrefix, x.Accept, x.TimeoutSeconds, x.MaxQueries)).ToArray());
         });
         group.MapPut("/custom-providers", async (CustomProviderWriteRequest[] request, CreatorFlowDbContext? db,
@@ -55,17 +55,18 @@ public static class DiscoveryConnectorSettingsEndpoints
             foreach (var item in request)
             {
                 if (!Uri.TryCreate(item.Endpoint, UriKind.Absolute, out var uri) ||
-                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
-                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Endpoint phải là URL HTTP(S) hợp lệ."] });
-                var isLangSearch = item.Name.Trim().Equals("LangSearch", StringComparison.OrdinalIgnoreCase);
-                var method = isLangSearch ? "POST" : (item.Method ?? "GET").Trim().ToUpperInvariant();
+                    uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.UserInfo) ||
+                    !string.IsNullOrEmpty(uri.Fragment))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Chỉ chấp nhận endpoint HTTPS, không chứa thông tin đăng nhập hoặc fragment."] });
+                if (item.Name.Trim().Equals("Brave Search", StringComparison.OrdinalIgnoreCase) ||
+                    item.Name.Trim().Equals("TikTok Research API", StringComparison.OrdinalIgnoreCase))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Tên này dành riêng cho nguồn tích hợp hệ thống."] });
+                var method = (item.Method ?? "GET").Trim().ToUpperInvariant();
                 if (method is not ("GET" or "POST"))
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["method"] = ["Method chỉ được là GET hoặc POST."] });
                 if (method == "POST")
                 {
-                    var requestBody = string.IsNullOrWhiteSpace(item.RequestBodyTemplate) && isLangSearch
-                        ? "{ \"query\": \"{query}\", \"count\": 10 }"
-                        : item.RequestBodyTemplate;
+                    var requestBody = item.RequestBodyTemplate;
                     if (string.IsNullOrWhiteSpace(requestBody))
                         return Results.ValidationProblem(new Dictionary<string, string[]> { ["requestBodyTemplate"] = ["POST cần mẫu JSON body. Nhấn Mẫu LangSearch hoặc nhập JSON body."] });
                     try { using var body = JsonDocument.Parse(requestBody); }
@@ -99,13 +100,10 @@ public static class DiscoveryConnectorSettingsEndpoints
                 return new ConfiguredSearchProvider
                 {
                     Id = id, Name = x.Name.Trim(), Enabled = x.Enabled, Endpoint = x.Endpoint.Trim(),
-                    Method = x.Name.Trim().Equals("LangSearch", StringComparison.OrdinalIgnoreCase)
-                        ? "POST" : (x.Method ?? "GET").Trim().ToUpperInvariant(),
-                    RequestBodyTemplate = string.IsNullOrWhiteSpace(x.RequestBodyTemplate) &&
-                        x.Name.Trim().Equals("LangSearch", StringComparison.OrdinalIgnoreCase)
-                        ? "{ \"query\": \"{query}\", \"count\": 10 }" : x.RequestBodyTemplate,
+                    Method = (x.Method ?? "GET").Trim().ToUpperInvariant(),
+                    RequestBodyTemplate = x.RequestBodyTemplate,
                     ContentType = x.ContentType ?? "application/json",
-                    HeadersJson = x.HeadersJson,
+                    HeadersJson = string.IsNullOrWhiteSpace(x.HeadersJson) ? prior?.HeadersJson : x.HeadersJson.Trim(),
                     QueryParameter = x.QueryParameter ?? "q", QueryTemplate = x.QueryTemplate ?? "{topic} {query}",
                     ResultsPath = x.ResultsPath ?? "results", UrlPath = x.UrlPath ?? "url",
                     TitlePath = x.TitlePath ?? "title", DescriptionPath = x.DescriptionPath ?? "content",
@@ -120,7 +118,7 @@ public static class DiscoveryConnectorSettingsEndpoints
             await db.SaveChangesAsync(ct);
             return Results.Ok(saved.Select(x => new CustomProviderResponse(
                 x.Id, x.Name, x.Enabled, x.Endpoint, x.Method, x.RequestBodyTemplate, x.ContentType,
-                x.HeadersJson, x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath,
+                null, x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath,
                 x.TitlePath, x.DescriptionPath, x.ApiKey is not null, x.ApiKeyHeader,
                 x.ApiKeyPrefix, x.Accept, x.TimeoutSeconds, x.MaxQueries)).ToArray());
         });
@@ -211,5 +209,5 @@ public sealed record CustomProviderWriteRequest(Guid? Id, string Name, bool Enab
 public sealed record CustomProviderResponse(Guid Id, string Name, bool Enabled, string Endpoint,
     string? Method, string? RequestBodyTemplate, string? ContentType, string? HeadersJson,
     string? QueryParameter, string? QueryTemplate, string? ResultsPath, string? UrlPath,
-    string? TitlePath, string? DescriptionPath, bool HasApiKey, string? ApiKeyHeader,
+    string? TitlePath, string? DescriptionPath, bool HasApiKey, bool HasHeaders, string? ApiKeyHeader,
     string? ApiKeyPrefix, string? Accept, int TimeoutSeconds, int MaxQueries);
