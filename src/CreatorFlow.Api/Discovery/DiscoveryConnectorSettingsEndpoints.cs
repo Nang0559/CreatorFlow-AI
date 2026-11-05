@@ -34,10 +34,10 @@ public static class DiscoveryConnectorSettingsEndpoints
                 .SingleOrDefaultAsync(x => x.TenantId == tenant.TenantId, ct);
             var providers = ReadCustomProviders(row, protection);
             return Results.Ok(providers.Select(x => new CustomProviderResponse(
-                x.Id, x.Name, x.Enabled, x.Endpoint, x.QueryParameter, x.QueryTemplate,
-                x.ResultsPath, x.UrlPath, x.TitlePath, x.DescriptionPath,
-                x.ApiKey is not null, x.ApiKeyHeader, x.ApiKeyPrefix, x.Accept,
-                x.TimeoutSeconds, x.MaxQueries)).ToArray());
+                x.Id, x.Name, x.Enabled, x.Endpoint, x.Method, x.RequestBodyTemplate, x.ContentType,
+                x.HeadersJson, x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath,
+                x.TitlePath, x.DescriptionPath, x.ApiKey is not null, x.ApiKeyHeader,
+                x.ApiKeyPrefix, x.Accept, x.TimeoutSeconds, x.MaxQueries)).ToArray());
         });
         group.MapPut("/custom-providers", async (CustomProviderWriteRequest[] request, CreatorFlowDbContext? db,
             ITenantContext tenant, IDataProtectionProvider protection, CancellationToken ct) =>
@@ -46,14 +46,39 @@ public static class DiscoveryConnectorSettingsEndpoints
             if (request.Length > 20 || request.Any(x => string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 80 ||
                 string.IsNullOrWhiteSpace(x.Endpoint) || x.Endpoint.Length > 1000 ||
                 x.ApiKey?.Length > 2000 || x.QueryParameter?.Length > 80 ||
-                x.ResultsPath?.Length > 200 || x.UrlPath?.Length > 200))
+                x.ResultsPath?.Length > 200 || x.UrlPath?.Length > 200 ||
+                x.RequestBodyTemplate?.Length > 10000 || x.HeadersJson?.Length > 5000 ||
+                x.Method?.Length > 10 || x.ContentType?.Length > 100))
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["providers"] = ["Tối đa 20 provider; tên, endpoint và các trường cấu hình phải hợp lệ."] });
             if (request.Select(x => x.Name.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != request.Length)
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["providers"] = ["Tên provider không được trùng nhau."] });
             foreach (var item in request)
+            {
                 if (!Uri.TryCreate(item.Endpoint, UriKind.Absolute, out var uri) ||
                     (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Endpoint phải là URL HTTP(S) hợp lệ."] });
+                var method = (item.Method ?? "GET").Trim().ToUpperInvariant();
+                if (method is not ("GET" or "POST"))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["method"] = ["Method chỉ được là GET hoặc POST."] });
+                if (method == "POST")
+                {
+                    if (string.IsNullOrWhiteSpace(item.RequestBodyTemplate))
+                        return Results.ValidationProblem(new Dictionary<string, string[]> { ["requestBodyTemplate"] = ["POST cần mẫu JSON body."] });
+                    try { using var body = JsonDocument.Parse(item.RequestBodyTemplate); }
+                    catch (JsonException) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["requestBodyTemplate"] = ["Mẫu body phải là JSON hợp lệ."] }); }
+                }
+                if (!string.IsNullOrWhiteSpace(item.HeadersJson))
+                {
+                    try
+                    {
+                        using var headers = JsonDocument.Parse(item.HeadersJson);
+                        if (headers.RootElement.ValueKind != JsonValueKind.Object ||
+                            headers.RootElement.EnumerateObject().Any(x => x.Value.ValueKind != JsonValueKind.String))
+                            return Results.ValidationProblem(new Dictionary<string, string[]> { ["headersJson"] = ["Headers phải là JSON object với các giá trị chuỗi."] });
+                    }
+                    catch (JsonException) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["headersJson"] = ["Headers phải là JSON hợp lệ."] }); }
+                }
+            }
 
             var row = await db.DiscoveryConnectorConfigurations
                 .SingleOrDefaultAsync(x => x.TenantId == tenant.TenantId, ct);
@@ -70,6 +95,9 @@ public static class DiscoveryConnectorSettingsEndpoints
                 return new ConfiguredSearchProvider
                 {
                     Id = id, Name = x.Name.Trim(), Enabled = x.Enabled, Endpoint = x.Endpoint.Trim(),
+                    Method = (x.Method ?? "GET").Trim().ToUpperInvariant(),
+                    RequestBodyTemplate = x.RequestBodyTemplate, ContentType = x.ContentType ?? "application/json",
+                    HeadersJson = x.HeadersJson,
                     QueryParameter = x.QueryParameter ?? "q", QueryTemplate = x.QueryTemplate ?? "{topic} {query}",
                     ResultsPath = x.ResultsPath ?? "results", UrlPath = x.UrlPath ?? "url",
                     TitlePath = x.TitlePath ?? "title", DescriptionPath = x.DescriptionPath ?? "content",
@@ -168,10 +196,12 @@ public sealed record DiscoveryConnectorSettingsResponse(bool HasBraveApiKey, boo
     bool HasTikTokResearchClientSecret, bool IsStoredInWorkspace);
 
 public sealed record CustomProviderWriteRequest(Guid? Id, string Name, bool Enabled, string Endpoint,
+    string? Method, string? RequestBodyTemplate, string? ContentType, string? HeadersJson,
     string? QueryParameter, string? QueryTemplate, string? ResultsPath, string? UrlPath,
     string? TitlePath, string? DescriptionPath, string? ApiKey, string? ApiKeyHeader,
     string? ApiKeyPrefix, string? Accept, int TimeoutSeconds = 15, int MaxQueries = 4);
 public sealed record CustomProviderResponse(Guid Id, string Name, bool Enabled, string Endpoint,
+    string? Method, string? RequestBodyTemplate, string? ContentType, string? HeadersJson,
     string? QueryParameter, string? QueryTemplate, string? ResultsPath, string? UrlPath,
     string? TitlePath, string? DescriptionPath, bool HasApiKey, string? ApiKeyHeader,
     string? ApiKeyPrefix, string? Accept, int TimeoutSeconds, int MaxQueries);
