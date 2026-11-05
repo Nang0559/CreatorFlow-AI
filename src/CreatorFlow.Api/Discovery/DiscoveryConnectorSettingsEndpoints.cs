@@ -119,7 +119,7 @@ public static class DiscoveryConnectorSettingsEndpoints
             return Results.Ok(saved.Select(x => new CustomProviderResponse(
                 x.Id, x.Name, x.Enabled, x.Endpoint, x.Method, x.RequestBodyTemplate, x.ContentType,
                 null, x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath,
-                x.TitlePath, x.DescriptionPath, x.ApiKey is not null, x.ApiKeyHeader,
+                x.TitlePath, x.DescriptionPath, x.ApiKey is not null, !string.IsNullOrWhiteSpace(x.HeadersJson), x.ApiKeyHeader,
                 x.ApiKeyPrefix, x.Accept, x.TimeoutSeconds, x.MaxQueries)).ToArray());
         });
 
