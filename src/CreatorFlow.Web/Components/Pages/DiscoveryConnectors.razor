@@ -64,7 +64,7 @@
 <section class="panel">
     <div class="panel-heading">
         <div><p class="eyebrow">NHÀ CUNG CẤP TÙY CHỈNH</p><h2>Thêm nguồn tìm kiếm</h2>
-            <p class="muted">Khai báo nhiều dịch vụ GET + JSON ngay tại đây. API key được mã hóa phía máy chủ; để trống key khi sửa để giữ key đã lưu.</p>
+            <p class="muted">Khai báo dịch vụ GET hoặc POST + JSON ngay tại đây. API key được mã hóa phía máy chủ; để trống key khi sửa để giữ key đã lưu.</p>
         </div>
         <button class="secondary" @onclick="AddProvider" disabled="@(busy || customProviders.Count >= 20)">+ Thêm provider</button>
     </div>
@@ -76,9 +76,27 @@
                 <label>Tên hiển thị
                     <input @bind="item.Name" placeholder="Ví dụ: SearXNG" />
                 </label>
-                <label>Endpoint (HTTP GET)
-                    <input @bind="item.Endpoint" placeholder="https://search.example.com/search" />
+                <label>Endpoint (HTTP/HTTPS)
+                    <input @bind="item.Endpoint" placeholder="https://api.example.com/search" />
                 </label>
+                <label>Phương thức HTTP
+                    <select @bind="item.Method">
+                        <option value="GET">GET · Query string</option>
+                        <option value="POST">POST · JSON body</option>
+                    </select>
+                </label>
+                @if (item.Method == "POST")
+                {
+                    <label>Content-Type
+                        <input @bind="item.ContentType" placeholder="application/json" />
+                    </label>
+                    <label>JSON body (hỗ trợ {topic} và {query})
+                        <textarea rows="4" @bind="item.RequestBodyTemplate" placeholder="{ &quot;query&quot;: &quot;{query}&quot; }"></textarea>
+                    </label>
+                    <label>Headers bổ sung (JSON object, tùy chọn)
+                        <textarea rows="3" @bind="item.HeadersJson" placeholder="{ &quot;X-Custom-Header&quot;: &quot;value&quot; }"></textarea>
+                    </label>
+                }
                 <label>Tham số truy vấn
                     <input @bind="item.QueryParameter" placeholder="q" />
                 </label>
@@ -118,6 +136,7 @@
             </div>
             <div class="form-actions">
                 <label><input type="checkbox" @bind="item.Enabled" /> Bật provider</label>
+                <button class="secondary" @onclick="() => UseLangSearchTemplate(item)" disabled="@busy">Mẫu LangSearch</button>
                 <button class="secondary" @onclick="() => RemoveProvider(item)" disabled="@busy">Xóa provider</button>
             </div>
         </div>
@@ -149,7 +168,7 @@
     }
 </section>
 
-<p class="muted">Provider tùy chỉnh được quản lý trực tiếp trong workspace bằng biểu mẫu phía trên. Hệ thống hiện hỗ trợ endpoint HTTP GET trả JSON; các API POST hoặc OAuth đặc thù cần adapter riêng. Khóa Brave/TikTok trên trang này được gửi tới API đã xác thực và lưu mã hóa bằng ASP.NET Core Data Protection. Chỉ Owner/Admin được phép quản lý.</p>
+<p class="muted">Provider tùy chỉnh được quản lý trực tiếp trong workspace bằng biểu mẫu phía trên. Hệ thống hỗ trợ endpoint HTTP GET hoặc POST trả JSON; OAuth đặc thù vẫn cần adapter riêng. Khóa Brave/TikTok trên trang này được gửi tới API đã xác thực và lưu mã hóa bằng ASP.NET Core Data Protection. Chỉ Owner/Admin được phép quản lý.</p>
 
 @code {
     private bool busy, hasBrave, hasTikTok, hasError;
@@ -232,9 +251,29 @@
     private void AddProvider()
     {
         if (customProviders.Count >= 20) return;
-        customProviders.Add(new CustomProviderEdit { Name = "Nhà cung cấp mới", Endpoint = "https://", QueryParameter = "q",
-            QueryTemplate = "{topic} {query}", ResultsPath = "results", UrlPath = "url",
-            TitlePath = "title", DescriptionPath = "content", Accept = "application/json" });
+        customProviders.Add(new CustomProviderEdit { Name = "Nhà cung cấp mới", Endpoint = "https://", Method = "GET", QueryParameter = "q",
+            QueryTemplate = "{topic} {query}", RequestBodyTemplate = "{\n  \"query\": \"{query}\"\n}", ContentType = "application/json",
+            ResultsPath = "results", UrlPath = "url", TitlePath = "title",
+            DescriptionPath = "content", Accept = "application/json" });
+    }
+
+    private void UseLangSearchTemplate(CustomProviderEdit item)
+    {
+        item.Name = "LangSearch";
+        item.Endpoint = "https://api.langsearch.com/v1/web-search";
+        item.Method = "POST";
+        item.QueryTemplate = "{query}";
+        item.RequestBodyTemplate = "{\n  \"query\": \"{query}\",\n  \"count\": 10\n}";
+        item.ContentType = "application/json";
+        item.HeadersJson = "";
+        item.ResultsPath = "data.webPages.value";
+        item.UrlPath = "url";
+        item.TitlePath = "name";
+        item.DescriptionPath = "snippet";
+        item.ApiKeyHeader = "Authorization";
+        item.ApiKeyPrefix = "Bearer ";
+        item.Accept = "application/json";
+        item.Enabled = true;
     }
 
     private void RemoveProvider(CustomProviderEdit item) => customProviders.Remove(item);
@@ -245,6 +284,7 @@
         {
             busy = true; hasError = false;
             var payload = customProviders.Select(x => new CustomProviderWrite(x.Id, x.Name, x.Enabled, x.Endpoint,
+                x.Method, x.RequestBodyTemplate, x.ContentType, x.HeadersJson,
                 x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath, x.TitlePath, x.DescriptionPath,
                 x.ApiKey, x.ApiKeyHeader, x.ApiKeyPrefix, x.Accept, x.TimeoutSeconds, x.MaxQueries)).ToArray();
             var saved = await Api.PutAsync<CustomProviderWrite[], CustomProviderEdit[]>("/api/v1/discovery/connectors/custom-providers", payload);
@@ -282,7 +322,10 @@
     private sealed class CustomProviderEdit
     {
         public Guid? Id { get; set; } public string Name { get; set; } = ""; public bool Enabled { get; set; } = true;
-        public string Endpoint { get; set; } = ""; public string? QueryParameter { get; set; } = "q";
+        public string Endpoint { get; set; } = ""; public string Method { get; set; } = "GET";
+        public string? RequestBodyTemplate { get; set; } = "{\n  \"query\": \"{query}\"\n}";
+        public string? ContentType { get; set; } = "application/json"; public string? HeadersJson { get; set; }
+        public string? QueryParameter { get; set; } = "q";
         public string? QueryTemplate { get; set; } = "{topic} {query}"; public string? ResultsPath { get; set; } = "results";
         public string? UrlPath { get; set; } = "url"; public string? TitlePath { get; set; } = "title";
         public string? DescriptionPath { get; set; } = "content"; public string? ApiKey { get; set; }
@@ -291,6 +334,7 @@
         public int TimeoutSeconds { get; set; } = 15; public int MaxQueries { get; set; } = 4;
     }
     private sealed record CustomProviderWrite(Guid? Id, string Name, bool Enabled, string Endpoint,
+        string? Method, string? RequestBodyTemplate, string? ContentType, string? HeadersJson,
         string? QueryParameter, string? QueryTemplate, string? ResultsPath, string? UrlPath,
         string? TitlePath, string? DescriptionPath, string? ApiKey, string? ApiKeyHeader,
         string? ApiKeyPrefix, string? Accept, int TimeoutSeconds, int MaxQueries);
