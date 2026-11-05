@@ -10,7 +10,7 @@ namespace CreatorFlow.Api.Discovery;
 /// </summary>
 public static class SafeProviderHttpClient
 {
-    internal const int MaxResponseBytes = 2 * 1024 * 1024;
+    public const int MaxResponseBytes = 2 * 1024 * 1024;
 
     public static HttpClient Create(TimeSpan timeout)
     {
