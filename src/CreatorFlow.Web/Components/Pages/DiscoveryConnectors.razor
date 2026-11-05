@@ -62,6 +62,73 @@
 </section>
 
 <section class="panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">NHÀ CUNG CẤP TÙY CHỈNH</p><h2>Thêm nguồn tìm kiếm</h2>
+            <p class="muted">Khai báo nhiều dịch vụ GET + JSON ngay tại đây. API key được mã hóa phía máy chủ; để trống key khi sửa để giữ key đã lưu.</p>
+        </div>
+        <button class="secondary" @onclick="AddProvider" disabled="@(busy || customProviders.Count >= 20)">+ Thêm provider</button>
+    </div>
+    @if (customProviders.Count == 0) { <p class="muted">Chưa có provider tùy chỉnh. Bấm “Thêm provider” để khai báo.</p> }
+    @foreach (var item in customProviders)
+    {
+        <div class="variant-stats" style="display:block;padding:14px 0;border-bottom:1px solid var(--border,#ddd)">
+            <div class="form-grid">
+                <label>Tên hiển thị
+                    <input @bind="item.Name" placeholder="Ví dụ: SearXNG" />
+                </label>
+                <label>Endpoint (HTTP GET)
+                    <input @bind="item.Endpoint" placeholder="https://search.example.com/search" />
+                </label>
+                <label>Tham số truy vấn
+                    <input @bind="item.QueryParameter" placeholder="q" />
+                </label>
+                <label>Mẫu truy vấn
+                    <input @bind="item.QueryTemplate" placeholder="{topic} {query}" />
+                </label>
+                <label>JSON path danh sách kết quả
+                    <input @bind="item.ResultsPath" placeholder="results hoặc data.results" />
+                </label>
+                <label>JSON path URL
+                    <input @bind="item.UrlPath" placeholder="url" />
+                </label>
+                <label>JSON path tiêu đề
+                    <input @bind="item.TitlePath" placeholder="title" />
+                </label>
+                <label>JSON path mô tả
+                    <input @bind="item.DescriptionPath" placeholder="content" />
+                </label>
+                <label>API Key (để trống nếu giữ key cũ)
+                    <input type="password" autocomplete="new-password" @bind="item.ApiKey" placeholder="@(item.HasApiKey ? "Đã lưu key · nhập mới để thay" : "Không bắt buộc")" />
+                </label>
+                <label>Tên header chứa key
+                    <input @bind="item.ApiKeyHeader" placeholder="Authorization hoặc X-API-Key" />
+                </label>
+                <label>Tiền tố key
+                    <input @bind="item.ApiKeyPrefix" placeholder="Bearer " />
+                </label>
+                <label>Accept
+                    <input @bind="item.Accept" placeholder="application/json" />
+                </label>
+                <label>Timeout (giây)
+                    <input type="number" min="3" max="45" @bind="item.TimeoutSeconds" />
+                </label>
+                <label>Số truy vấn tối đa
+                    <input type="number" min="1" max="6" @bind="item.MaxQueries" />
+                </label>
+            </div>
+            <div class="form-actions">
+                <label><input type="checkbox" @bind="item.Enabled" /> Bật provider</label>
+                <button class="secondary" @onclick="() => RemoveProvider(item)" disabled="@busy">Xóa provider</button>
+            </div>
+        </div>
+    }
+    <div class="form-actions">
+        <button class="primary" @onclick="SaveCustomProvidersAsync" disabled="@busy">Lưu danh sách provider</button>
+        <button class="secondary" @onclick="TestAsync" disabled="@busy">Kiểm tra tất cả nguồn</button>
+    </div>
+</section>
+
+<section class="panel">
     <p class="eyebrow">TRẠNG THÁI NGUỒN</p>
     <h2>Kiểm tra nguồn thực tế</h2>
     <p class="muted">Nút kiểm tra thực hiện truy vấn thật qua tất cả connector đã cấu hình, gồm provider bổ sung khai báo trong DiscoverySearch:Providers. Trạng thái Connected chỉ xác nhận API chấp nhận yêu cầu tại thời điểm kiểm tra; không bảo đảm độ phủ dữ liệu. Nếu TikTok trả lỗi quyền, cần hoàn tất phê duyệt Research API với TikTok.</p>
@@ -82,7 +149,7 @@
     }
 </section>
 
-<p class="muted">Provider bổ sung được khai báo trong .env của máy chủ bằng DiscoverySearch__Providers__0__, __1__... (xem docs/LOCAL_API_SETUP.md). Các provider GET + JSON tương thích sẽ tự xuất hiện trong kết quả kiểm tra; không cần sửa code cho từng nhà cung cấp. Khóa Brave/TikTok trên trang này được gửi tới API đã xác thực và lưu mã hóa bằng ASP.NET Core Data Protection. Chỉ Owner/Admin được phép quản lý.</p>
+<p class="muted">Provider tùy chỉnh được quản lý trực tiếp trong workspace bằng biểu mẫu phía trên. Hệ thống hiện hỗ trợ endpoint HTTP GET trả JSON; các API POST hoặc OAuth đặc thù cần adapter riêng. Khóa Brave/TikTok trên trang này được gửi tới API đã xác thực và lưu mã hóa bằng ASP.NET Core Data Protection. Chỉ Owner/Admin được phép quản lý.</p>
 
 @code {
     private bool busy, hasBrave, hasTikTok, hasError;
@@ -91,6 +158,7 @@
     private DateTimeOffset? lastChecked;
     private List<ProviderState> providerStates = [];
     private ProviderState? braveState, tikTokState;
+    private List<CustomProviderEdit> customProviders = [];
 
     protected override async Task OnInitializedAsync() => await ReloadAsync();
 
@@ -102,6 +170,7 @@
             var result = await Api.GetAsync<SettingsResponse>("/api/v1/discovery/connectors/settings");
             hasBrave = result?.HasBraveApiKey == true;
             hasTikTok = result?.HasTikTokResearchClientKey == true && result?.HasTikTokResearchClientSecret == true;
+            customProviders = (await Api.GetAsync<CustomProviderEdit[]>("/api/v1/discovery/connectors/custom-providers"))?.ToList() ?? [];
         }
         catch (Exception ex) { loadError = FriendlyError(ex, "Không thể tải cấu hình nguồn. Kiểm tra kết nối API và quyền Owner/Admin."); }
         finally { busy = false; }
@@ -160,6 +229,32 @@
         finally { busy = false; }
     }
 
+    private void AddProvider()
+    {
+        if (customProviders.Count >= 20) return;
+        customProviders.Add(new CustomProviderEdit { Name = "Nhà cung cấp mới", Endpoint = "https://", QueryParameter = "q",
+            QueryTemplate = "{topic} {query}", ResultsPath = "results", UrlPath = "url",
+            TitlePath = "title", DescriptionPath = "content", Accept = "application/json" });
+    }
+
+    private void RemoveProvider(CustomProviderEdit item) => customProviders.Remove(item);
+
+    private async Task SaveCustomProvidersAsync()
+    {
+        try
+        {
+            busy = true; hasError = false;
+            var payload = customProviders.Select(x => new CustomProviderWrite(x.Id, x.Name, x.Enabled, x.Endpoint,
+                x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath, x.TitlePath, x.DescriptionPath,
+                x.ApiKey, x.ApiKeyHeader, x.ApiKeyPrefix, x.Accept, x.TimeoutSeconds, x.MaxQueries)).ToArray();
+            var saved = await Api.PutAsync<CustomProviderWrite[], CustomProviderEdit[]>("/api/v1/discovery/connectors/custom-providers", payload);
+            customProviders = saved?.ToList() ?? [];
+            message = "Đã lưu danh sách nhà cung cấp cho workspace. Bí mật được giữ ở máy chủ.";
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể lưu provider."); hasError = true; }
+        finally { busy = false; }
+    }
+
     private async Task TestAsync()
     {
         try
@@ -182,6 +277,23 @@
     private static string Presence(bool value) => value ? "Đã cấu hình" : "NotConfigured";
     private static string StatusLabel(string status) => status switch { "Completed" => "Connected", "NotConfigured" => "NotConfigured", "Failed" => "Failed", _ => status };
     private static string FriendlyError(Exception ex, string fallback) => ex is HttpRequestException ? ex.Message : fallback;
+
+
+    private sealed class CustomProviderEdit
+    {
+        public Guid? Id { get; set; } public string Name { get; set; } = ""; public bool Enabled { get; set; } = true;
+        public string Endpoint { get; set; } = ""; public string? QueryParameter { get; set; } = "q";
+        public string? QueryTemplate { get; set; } = "{topic} {query}"; public string? ResultsPath { get; set; } = "results";
+        public string? UrlPath { get; set; } = "url"; public string? TitlePath { get; set; } = "title";
+        public string? DescriptionPath { get; set; } = "content"; public string? ApiKey { get; set; }
+        public bool HasApiKey { get; set; } public string? ApiKeyHeader { get; set; }
+        public string? ApiKeyPrefix { get; set; } public string? Accept { get; set; } = "application/json";
+        public int TimeoutSeconds { get; set; } = 15; public int MaxQueries { get; set; } = 4;
+    }
+    private sealed record CustomProviderWrite(Guid? Id, string Name, bool Enabled, string Endpoint,
+        string? QueryParameter, string? QueryTemplate, string? ResultsPath, string? UrlPath,
+        string? TitlePath, string? DescriptionPath, string? ApiKey, string? ApiKeyHeader,
+        string? ApiKeyPrefix, string? Accept, int TimeoutSeconds, int MaxQueries);
 
     private sealed record SettingsWrite(string? BraveApiKey, string? TikTokResearchClientKey, string? TikTokResearchClientSecret,
         bool ClearBraveApiKey = false, bool ClearTikTokResearchCredentials = false);
