@@ -1,6 +1,8 @@
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace CreatorFlow.Api.Discovery;
 
@@ -24,6 +26,69 @@ public static class DiscoveryConnectorSettingsEndpoints
                 row?.EncryptedTikTokResearchClientSecret is not null || !string.IsNullOrWhiteSpace(config["TikTokResearch:ClientSecret"]),
                 row is not null));
         });
+        group.MapGet("/custom-providers", async (CreatorFlowDbContext? db, ITenantContext tenant,
+            IDataProtectionProvider protection, CancellationToken ct) =>
+        {
+            if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
+            var row = await db.DiscoveryConnectorConfigurations.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.TenantId == tenant.TenantId, ct);
+            var providers = ReadCustomProviders(row, protection);
+            return Results.Ok(providers.Select(x => new CustomProviderResponse(
+                x.Id, x.Name, x.Enabled, x.Endpoint, x.QueryParameter, x.QueryTemplate,
+                x.ResultsPath, x.UrlPath, x.TitlePath, x.DescriptionPath,
+                x.ApiKey is not null, x.ApiKeyHeader, x.ApiKeyPrefix, x.Accept,
+                x.TimeoutSeconds, x.MaxQueries)).ToArray());
+        });
+        group.MapPut("/custom-providers", async (CustomProviderWriteRequest[] request, CreatorFlowDbContext? db,
+            ITenantContext tenant, IDataProtectionProvider protection, CancellationToken ct) =>
+        {
+            if (db is null) return Results.Problem("SQL Server is not configured.", statusCode: 503);
+            if (request.Length > 20 || request.Any(x => string.IsNullOrWhiteSpace(x.Name) || x.Name.Length > 80 ||
+                string.IsNullOrWhiteSpace(x.Endpoint) || x.Endpoint.Length > 1000 ||
+                x.ApiKey?.Length > 2000 || x.QueryParameter?.Length > 80 ||
+                x.ResultsPath?.Length > 200 || x.UrlPath?.Length > 200))
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["providers"] = ["Tối đa 20 provider; tên, endpoint và các trường cấu hình phải hợp lệ."] });
+            if (request.Select(x => x.Name.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count() != request.Length)
+                return Results.ValidationProblem(new Dictionary<string, string[]> { ["providers"] = ["Tên provider không được trùng nhau."] });
+            foreach (var item in request)
+                if (!Uri.TryCreate(item.Endpoint, UriKind.Absolute, out var uri) ||
+                    (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Endpoint phải là URL HTTP(S) hợp lệ."] });
+
+            var row = await db.DiscoveryConnectorConfigurations
+                .SingleOrDefaultAsync(x => x.TenantId == tenant.TenantId, ct);
+            if (row is null)
+            {
+                row = new DiscoveryConnectorConfiguration();
+                db.DiscoveryConnectorConfigurations.Add(row);
+            }
+            var existing = ReadCustomProviders(row, protection).ToDictionary(x => x.Id);
+            var saved = request.Select(x =>
+            {
+                var id = x.Id ?? Guid.NewGuid();
+                existing.TryGetValue(id, out var prior);
+                return new ConfiguredSearchProvider
+                {
+                    Id = id, Name = x.Name.Trim(), Enabled = x.Enabled, Endpoint = x.Endpoint.Trim(),
+                    QueryParameter = x.QueryParameter ?? "q", QueryTemplate = x.QueryTemplate ?? "{topic} {query}",
+                    ResultsPath = x.ResultsPath ?? "results", UrlPath = x.UrlPath ?? "url",
+                    TitlePath = x.TitlePath ?? "title", DescriptionPath = x.DescriptionPath ?? "content",
+                    ApiKey = string.IsNullOrWhiteSpace(x.ApiKey) ? prior?.ApiKey : x.ApiKey.Trim(),
+                    ApiKeyHeader = x.ApiKeyHeader, ApiKeyPrefix = x.ApiKeyPrefix, Accept = x.Accept ?? "application/json",
+                    TimeoutSeconds = Math.Clamp(x.TimeoutSeconds, 3, 45), MaxQueries = Math.Clamp(x.MaxQueries, 1, 6)
+                };
+            }).ToArray();
+            var protector = protection.CreateProtector("CreatorFlow.Discovery.CustomProviders.v1");
+            row.EncryptedCustomProvidersJson = protector.Protect(JsonSerializer.Serialize(saved));
+            row.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(saved.Select(x => new CustomProviderResponse(
+                x.Id, x.Name, x.Enabled, x.Endpoint, x.QueryParameter, x.QueryTemplate,
+                x.ResultsPath, x.UrlPath, x.TitlePath, x.DescriptionPath,
+                x.ApiKey is not null, x.ApiKeyHeader, x.ApiKeyPrefix, x.Accept,
+                x.TimeoutSeconds, x.MaxQueries)).ToArray());
+        });
+
         group.MapPut("/settings", async (DiscoveryConnectorSettingsWriteRequest request, CreatorFlowDbContext? db,
             ITenantContext tenant, IDataProtectionProvider protection, CancellationToken ct) =>
         {
@@ -68,6 +133,19 @@ public static class DiscoveryConnectorSettingsEndpoints
         return app;
     }
 
+    public static ConfiguredSearchProvider[] ReadCustomProviders(DiscoveryConnectorConfiguration? row, IDataProtectionProvider protection)
+    {
+        if (string.IsNullOrWhiteSpace(row?.EncryptedCustomProvidersJson)) return [];
+        try
+        {
+            var json = protection.CreateProtector("CreatorFlow.Discovery.CustomProviders.v1")
+                .Unprotect(row.EncryptedCustomProvidersJson);
+            return JsonSerializer.Deserialize<ConfiguredSearchProvider[]>(json) ?? [];
+        }
+        catch (CryptographicException) { return []; }
+        catch (JsonException) { return []; }
+    }
+
     public static async Task<(string? BraveApiKey, string? TikTokClientKey, string? TikTokClientSecret)> ResolveAsync(
         CreatorFlowDbContext? db, ITenantContext tenant, IDataProtectionProvider protection, IConfiguration config,
         CancellationToken ct)
@@ -88,3 +166,12 @@ public sealed record DiscoveryConnectorSettingsWriteRequest(string? BraveApiKey,
     string? TikTokResearchClientSecret, bool ClearBraveApiKey = false, bool ClearTikTokResearchCredentials = false);
 public sealed record DiscoveryConnectorSettingsResponse(bool HasBraveApiKey, bool HasTikTokResearchClientKey,
     bool HasTikTokResearchClientSecret, bool IsStoredInWorkspace);
+
+public sealed record CustomProviderWriteRequest(Guid? Id, string Name, bool Enabled, string Endpoint,
+    string? QueryParameter, string? QueryTemplate, string? ResultsPath, string? UrlPath,
+    string? TitlePath, string? DescriptionPath, string? ApiKey, string? ApiKeyHeader,
+    string? ApiKeyPrefix, string? Accept, int TimeoutSeconds = 15, int MaxQueries = 4);
+public sealed record CustomProviderResponse(Guid Id, string Name, bool Enabled, string Endpoint,
+    string? QueryParameter, string? QueryTemplate, string? ResultsPath, string? UrlPath,
+    string? TitlePath, string? DescriptionPath, bool HasApiKey, string? ApiKeyHeader,
+    string? ApiKeyPrefix, string? Accept, int TimeoutSeconds, int MaxQueries);
