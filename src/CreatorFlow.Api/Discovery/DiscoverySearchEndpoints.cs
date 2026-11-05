@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using CreatorFlow.Infrastructure.Persistence;
+using CreatorFlow.Domain.Discovery;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 
@@ -125,6 +126,34 @@ public static class DiscoverySearchEndpoints
                 .ToArray();
 
             var videosOnly = unique.Where(x => x.Kind == "Video").ToArray();
+            var savedCandidateCount = 0;
+            if (request.ContentTopicId.HasValue && videosOnly.Length > 0)
+            {
+                if (db is null || tenant.TenantId is not Guid tenantId || tenantId == Guid.Empty)
+                    return Results.Problem("Không thể lưu ứng viên khi workspace chưa kết nối cơ sở dữ liệu.", statusCode: 503);
+                var topicExists = await db.ContentTopics.AnyAsync(
+                    x => x.Id == request.ContentTopicId.Value && x.IsActive, cancellationToken);
+                if (!topicExists)
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["contentTopicId"] = ["Chủ đề không tồn tại hoặc không còn hoạt động trong workspace hiện tại."] });
+
+                foreach (var video in videosOnly)
+                {
+                    if (!TryNormalizeTikTokUrl(video.Url, out _, out _, out var videoId) ||
+                        string.IsNullOrWhiteSpace(videoId))
+                        continue;
+                    var exists = await db.DouyinVideoCandidates.AnyAsync(
+                        x => x.DouyinVideoId == videoId, cancellationToken);
+                    if (exists) continue;
+                    var candidate = DouyinVideoCandidate.Create(
+                        videoId, null, video.Url, video.Title, VideoDiscoveryMethod.TopicExplore,
+                        video.PublishedAt, DateTimeOffset.UtcNow, request.ContentTopicId);
+                    db.DouyinVideoCandidates.Add(candidate);
+                    savedCandidateCount++;
+                }
+                if (savedCandidateCount > 0)
+                    await db.SaveChangesAsync(cancellationToken);
+            }
+
             var channels = unique
                 .Where(x => !string.IsNullOrWhiteSpace(x.Username))
                 .GroupBy(x => x.Username!, StringComparer.OrdinalIgnoreCase)
@@ -157,6 +186,7 @@ public static class DiscoverySearchEndpoints
                 channels,
                 videosOnly,
                 providerStates.ToArray(),
+                savedCandidateCount,
                 "Kết quả chỉ gồm URL TikTok HTTPS trả về từ nguồn tìm kiếm. Kết quả web là trang được lập chỉ mục, không đảm bảo còn tồn tại hoặc mở được; chỉ số chỉ xuất hiện khi API nguồn trả về."));
         }).RequireAuthorization();
 
@@ -475,11 +505,11 @@ public static class DiscoverySearchEndpoints
         ex is TaskCanceledException ? "Nguồn tìm kiếm hết thời gian chờ." : ex.Message;
 }
 
-public sealed record DiscoverySearchRequest(string Topic, string[] Queries);
+public sealed record DiscoverySearchRequest(string Topic, string[] Queries, Guid? ContentTopicId = null);
 public sealed record DiscoverySearchResponse(
     string Topic, DateTimeOffset SearchedAt, string Status,
     DiscoveryChannelResult[] Channels, DiscoverySearchResult[] Videos,
-    DiscoveryProviderState[] Providers, string Notice);
+    DiscoveryProviderState[] Providers, int SavedCandidateCount, string Notice);
 public sealed record DiscoveryProviderState(string Provider, string Status, int ResultCount, string? Error);
 public sealed record DiscoveryChannelResult(
     string Username, string DisplayName, string ProfileUrl, int VideoCount,
