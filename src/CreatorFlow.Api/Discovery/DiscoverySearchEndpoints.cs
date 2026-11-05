@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.WebUtilities;
 using CreatorFlow.Infrastructure.Persistence;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 
 namespace CreatorFlow.Api.Discovery;
 
@@ -80,7 +81,11 @@ public static class DiscoverySearchEndpoints
 
             // Additional providers are declared in configuration; no provider-specific code is
             // required for compatible GET + JSON search APIs (for example SearXNG).
-            foreach (var provider in configuration.GetSection("DiscoverySearch:Providers").Get<ConfiguredSearchProvider[]>() ?? [])
+            var workspaceConnector = db is null ? null : await db.DiscoveryConnectorConfigurations.AsNoTracking()
+                .SingleOrDefaultAsync(x => x.TenantId == tenant.TenantId, cancellationToken);
+            var configuredProviders = configuration.GetSection("DiscoverySearch:Providers").Get<ConfiguredSearchProvider[]>() ?? [];
+            var workspaceProviders = DiscoveryConnectorSettingsEndpoints.ReadCustomProviders(workspaceConnector, protection);
+            foreach (var provider in workspaceProviders.Concat(configuredProviders))
             {
                 if (!provider.Enabled || string.IsNullOrWhiteSpace(provider.Name) ||
                     string.IsNullOrWhiteSpace(provider.Endpoint))
@@ -400,6 +405,7 @@ public sealed record DiscoverySearchResult(
 
 public sealed class ConfiguredSearchProvider
 {
+    public Guid Id { get; set; } = Guid.NewGuid();
     public bool Enabled { get; set; } = true;
     public string Name { get; set; } = "";
     public string Endpoint { get; set; } = "";
