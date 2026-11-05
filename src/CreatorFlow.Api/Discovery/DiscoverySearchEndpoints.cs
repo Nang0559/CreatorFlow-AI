@@ -78,6 +78,34 @@ public static class DiscoverySearchEndpoints
                 providerStates.Add(new("TikTok Research API", "NotConfigured", 0, "Chưa có Client Key/Secret hoặc dự án chưa được cấp quyền Research API."));
             }
 
+            // Additional providers are declared in configuration; no provider-specific code is
+            // required for compatible GET + JSON search APIs (for example SearXNG).
+            foreach (var provider in configuration.GetSection("DiscoverySearch:Providers").Get<ConfiguredSearchProvider[]>() ?? [])
+            {
+                if (!provider.Enabled || string.IsNullOrWhiteSpace(provider.Name) ||
+                    string.IsNullOrWhiteSpace(provider.Endpoint))
+                    continue;
+
+                if (!Uri.TryCreate(provider.Endpoint, UriKind.Absolute, out var endpoint) ||
+                    (endpoint.Scheme != Uri.UriSchemeHttps && endpoint.Scheme != Uri.UriSchemeHttp))
+                {
+                    providerStates.Add(new(provider.Name, "Failed", 0, "Endpoint phải là URL HTTP(S) hợp lệ."));
+                    continue;
+                }
+
+                try
+                {
+                    var providerResults = await SearchConfiguredProviderAsync(
+                        clients.CreateClient(), provider, topic, queries, cancellationToken);
+                    results.AddRange(providerResults);
+                    providerStates.Add(new(provider.Name, "Completed", providerResults.Count, null));
+                }
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+                {
+                    providerStates.Add(new(provider.Name, "Failed", 0, SafeError(ex)));
+                }
+            }
+
             var unique = results
                 .Where(x => Uri.TryCreate(x.Url, UriKind.Absolute, out var uri) &&
                     uri.Scheme == Uri.UriSchemeHttps &&
@@ -244,6 +272,77 @@ public static class DiscoverySearchEndpoints
         return results;
     }
 
+    private static async Task<List<DiscoverySearchResult>> SearchConfiguredProviderAsync(
+        HttpClient client, ConfiguredSearchProvider provider, string topic, string[] queries, CancellationToken ct)
+    {
+        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45));
+        var found = new List<DiscoverySearchResult>();
+        var queryParameter = string.IsNullOrWhiteSpace(provider.QueryParameter) ? "q" : provider.QueryParameter;
+        var resultsPath = string.IsNullOrWhiteSpace(provider.ResultsPath) ? "results" : provider.ResultsPath;
+        var urlPath = string.IsNullOrWhiteSpace(provider.UrlPath) ? "url" : provider.UrlPath;
+        var titlePath = string.IsNullOrWhiteSpace(provider.TitlePath) ? "title" : provider.TitlePath;
+        var descriptionPath = string.IsNullOrWhiteSpace(provider.DescriptionPath) ? "content" : provider.DescriptionPath;
+
+        foreach (var query in queries.Take(Math.Clamp(provider.MaxQueries, 1, 6)))
+        {
+            var searchText = (provider.QueryTemplate ?? "{topic} {query}")
+                .Replace("{topic}", topic, StringComparison.OrdinalIgnoreCase)
+                .Replace("{query}", query, StringComparison.OrdinalIgnoreCase);
+            var requestUrl = QueryHelpers.AddQueryString(provider.Endpoint,
+                new Dictionary<string, string?> { [queryParameter] = searchText });
+
+            using var message = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+            if (!string.IsNullOrWhiteSpace(provider.ApiKey) && !string.IsNullOrWhiteSpace(provider.ApiKeyHeader))
+            {
+                var headerValue = (provider.ApiKeyPrefix ?? "") + provider.ApiKey;
+                if (!message.Headers.TryAddWithoutValidation(provider.ApiKeyHeader, headerValue))
+                    throw new InvalidOperationException("Không thể thiết lập header xác thực cho provider.");
+            }
+            if (!string.IsNullOrWhiteSpace(provider.Accept))
+                message.Headers.Accept.ParseAdd(provider.Accept);
+
+            using var response = await client.SendAsync(message, ct);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"{provider.Name} trả HTTP {(int)response.StatusCode}.");
+
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            if (!TryGetJsonPath(json.RootElement, resultsPath, out var items) || items.ValueKind != JsonValueKind.Array)
+                continue;
+
+            foreach (var item in items.EnumerateArray())
+            {
+                var resultUrl = ReadPathString(item, urlPath);
+                if (!TryNormalizeTikTokUrl(resultUrl, out var normalized, out var username, out var videoId))
+                    continue;
+                var title = ReadPathString(item, titlePath);
+                var description = ReadPathString(item, descriptionPath);
+                found.Add(new DiscoverySearchResult(
+                    normalized, title ?? username ?? "TikTok", description, username,
+                    null, null, null, null, videoId is null ? "ChannelOrPage" : "Video",
+                    provider.Name, DateTimeOffset.UtcNow));
+            }
+        }
+
+        return found;
+    }
+
+    private static string? ReadPathString(JsonElement element, string path) =>
+        TryGetJsonPath(element, path, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static bool TryGetJsonPath(JsonElement root, string path, out JsonElement value)
+    {
+        value = root;
+        foreach (var segment in path.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (value.ValueKind != JsonValueKind.Object || !value.TryGetProperty(segment, out value))
+                return false;
+        }
+        return true;
+    }
+
     private static bool TryNormalizeTikTokUrl(string? value, out string normalized, out string? username, out string? videoId)
     {
         normalized = "";
@@ -297,3 +396,22 @@ public sealed record DiscoverySearchResult(
     string Url, string Title, string? Description, string? Username,
     long? Views, long? Likes, long? Comments, long? Shares,
     string Kind, string Source, DateTimeOffset RetrievedAt, DateTimeOffset? PublishedAt = null, long? Followers = null, string? DisplayName = null);
+
+public sealed class ConfiguredSearchProvider
+{
+    public bool Enabled { get; set; } = true;
+    public string Name { get; set; } = "";
+    public string Endpoint { get; set; } = "";
+    public string QueryParameter { get; set; } = "q";
+    public string QueryTemplate { get; set; } = "{topic} {query}";
+    public string ResultsPath { get; set; } = "results";
+    public string UrlPath { get; set; } = "url";
+    public string TitlePath { get; set; } = "title";
+    public string DescriptionPath { get; set; } = "content";
+    public string? ApiKey { get; set; }
+    public string? ApiKeyHeader { get; set; }
+    public string? ApiKeyPrefix { get; set; }
+    public string? Accept { get; set; } = "application/json";
+    public int TimeoutSeconds { get; set; } = 15;
+    public int MaxQueries { get; set; } = 4;
+}
