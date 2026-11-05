@@ -111,10 +111,10 @@ public static class DiscoveryConnectorSettingsEndpoints
             row.UpdatedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
             return Results.Ok(saved.Select(x => new CustomProviderResponse(
-                x.Id, x.Name, x.Enabled, x.Endpoint, x.QueryParameter, x.QueryTemplate,
-                x.ResultsPath, x.UrlPath, x.TitlePath, x.DescriptionPath,
-                x.ApiKey is not null, x.ApiKeyHeader, x.ApiKeyPrefix, x.Accept,
-                x.TimeoutSeconds, x.MaxQueries)).ToArray());
+                x.Id, x.Name, x.Enabled, x.Endpoint, x.Method, x.RequestBodyTemplate, x.ContentType,
+                x.HeadersJson, x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath,
+                x.TitlePath, x.DescriptionPath, x.ApiKey is not null, x.ApiKeyHeader,
+                x.ApiKeyPrefix, x.Accept, x.TimeoutSeconds, x.MaxQueries)).ToArray());
         });
 
         group.MapPut("/settings", async (DiscoveryConnectorSettingsWriteRequest request, CreatorFlowDbContext? db,
