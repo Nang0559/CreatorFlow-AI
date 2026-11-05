@@ -91,8 +91,7 @@ public static class DiscoverySearchEndpoints
                     string.IsNullOrWhiteSpace(provider.Endpoint))
                     continue;
 
-                if (!Uri.TryCreate(provider.Endpoint, UriKind.Absolute, out var endpoint) ||
-                    (endpoint.Scheme != Uri.UriSchemeHttps && endpoint.Scheme != Uri.UriSchemeHttp))
+                if (!IsAllowedProviderEndpoint(provider.Endpoint))
                 {
                     providerStates.Add(new(provider.Name, "Failed", 0, "Endpoint phải là URL HTTP(S) hợp lệ."));
                     continue;
@@ -101,13 +100,15 @@ public static class DiscoverySearchEndpoints
                 try
                 {
                     var providerResults = await SearchConfiguredProviderAsync(
-                        clients.CreateClient(), provider, topic, queries, cancellationToken);
+                        SafeProviderHttpClient.Create(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45))),
+                        provider, topic, queries, cancellationToken);
                     results.AddRange(providerResults);
                     providerStates.Add(new(provider.Name, "Completed", providerResults.Count, null));
                 }
-                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+                catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or FormatException)
                 {
-                    providerStates.Add(new(provider.Name, "Failed", 0, SafeError(ex)));
+                    providerStates.Add(new("Custom provider", "Failed", 0,
+                        ex is TaskCanceledException ? "Nguồn tìm kiếm hết thời gian chờ." : "Không thể truy cập hoặc phân tích phản hồi của provider."));
                 }
             }
 
@@ -173,18 +174,19 @@ public static class DiscoverySearchEndpoints
             var provider = DiscoveryConnectorSettingsEndpoints.ReadCustomProviders(row, protection)
                 .FirstOrDefault(x => x.Id == request.ProviderId);
             if (provider is null) return Results.NotFound(new { error = "Không tìm thấy provider trong workspace." });
-            if (!Uri.TryCreate(provider.Endpoint, UriKind.Absolute, out var endpoint) ||
-                (endpoint.Scheme != Uri.UriSchemeHttps && endpoint.Scheme != Uri.UriSchemeHttp))
-                return Results.BadRequest(new { error = "Endpoint phải là URL HTTP(S) hợp lệ." });
+            if (!IsAllowedProviderEndpoint(provider.Endpoint))
+                return Results.BadRequest(new { error = "Endpoint phải là URL HTTPS công khai hợp lệ." });
             try
             {
-                var found = await SearchConfiguredProviderAsync(clients.CreateClient(), provider,
-                    "Kiểm tra kết nối nguồn", ["creatorflow connector verification"], cancellationToken);
-                return Results.Ok(new DiscoveryProviderTestResponse(provider.Id, provider.Name, "Completed", found.Count, null));
+                var found = await SearchConfiguredProviderAsync(
+                    SafeProviderHttpClient.Create(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45))),
+                    provider, "Kiểm tra kết nối nguồn", ["creatorflow connector verification"], cancellationToken);
+                return Results.Ok(new DiscoveryProviderTestResponse(provider.Id, "Custom provider", "Completed", found.Count, null));
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or FormatException)
             {
-                return Results.Ok(new DiscoveryProviderTestResponse(provider.Id, provider.Name, "Failed", 0, SafeError(ex)));
+                return Results.Ok(new DiscoveryProviderTestResponse(provider.Id, "Custom provider", "Failed", 0,
+                    ex is TaskCanceledException ? "Nguồn tìm kiếm hết thời gian chờ." : "Không thể truy cập hoặc phân tích phản hồi của provider."));
             }
         }).RequireAuthorization("TenantOwnerOrAdmin");
 
@@ -309,7 +311,6 @@ public static class DiscoverySearchEndpoints
     private static async Task<List<DiscoverySearchResult>> SearchConfiguredProviderAsync(
         HttpClient client, ConfiguredSearchProvider provider, string topic, string[] queries, CancellationToken ct)
     {
-        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45));
         var found = new List<DiscoverySearchResult>();
         var method = (provider.Method ?? "GET").Trim().ToUpperInvariant();
         if (method is not ("GET" or "POST"))
@@ -319,6 +320,18 @@ public static class DiscoverySearchEndpoints
         var urlPath = string.IsNullOrWhiteSpace(provider.UrlPath) ? "url" : provider.UrlPath;
         var titlePath = string.IsNullOrWhiteSpace(provider.TitlePath) ? "title" : provider.TitlePath;
         var descriptionPath = string.IsNullOrWhiteSpace(provider.DescriptionPath) ? "content" : provider.DescriptionPath;
+        if (!IsAllowedProviderEndpoint(provider.Endpoint))
+            throw new InvalidOperationException("Endpoint không được phép.");
+        if (!string.IsNullOrWhiteSpace(provider.HeadersJson))
+        {
+            using var headerValidation = JsonDocument.Parse(provider.HeadersJson);
+            if (headerValidation.RootElement.ValueKind != JsonValueKind.Object)
+                throw new InvalidOperationException("Headers bổ sung không hợp lệ.");
+            var blockedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                { "Host", "Connection", "Content-Length", "Transfer-Encoding", "Proxy-Authorization", "Proxy-Connection", "Cookie", "Set-Cookie", "Upgrade", "TE", "Trailer" };
+            if (headerValidation.RootElement.EnumerateObject().Any(x => blockedHeaders.Contains(x.Name)))
+                throw new InvalidOperationException("Provider sử dụng header bị cấm.");
+        }
 
         foreach (var query in queries.Take(Math.Clamp(provider.MaxQueries, 1, 6)))
         {
@@ -363,19 +376,20 @@ public static class DiscoverySearchEndpoints
                     .Replace("\"{query}\"", JsonSerializer.Serialize(searchText), StringComparison.OrdinalIgnoreCase);
                 using var validation = JsonDocument.Parse(body);
                 var contentType = string.IsNullOrWhiteSpace(provider.ContentType) ? "application/json" : provider.ContentType;
-                message.Content = new StringContent(body, Encoding.UTF8, contentType);
+                if (!contentType.Equals("application/json", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Provider chỉ được gửi Content-Type application/json.");
+                message.Content = new StringContent(body, Encoding.UTF8, "application/json");
             }
 
-            using var response = await client.SendAsync(message, ct);
+            using var response = await client.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, ct);
+            if ((int)response.StatusCode is >= 300 and < 400)
+                throw new InvalidOperationException("Provider redirect bị chặn.");
             if (!response.IsSuccessStatusCode)
-                throw new HttpRequestException($"{provider.Name} trả HTTP {(int)response.StatusCode}.");
+                throw new HttpRequestException("Provider trả về phản hồi không thành công.");
 
-            await using var stream = await response.Content.ReadAsStreamAsync(ct);
-            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
-            if (provider.Name.Equals("LangSearch", StringComparison.OrdinalIgnoreCase) &&
-                json.RootElement.TryGetProperty("code", out var langSearchCode) &&
-                langSearchCode.ToString() != "200")
-                throw new InvalidOperationException($"LangSearch từ chối truy vấn: {GetString(json.RootElement, "message") ?? "mã phản hồi không thành công"}.");
+            var responseBytes = await SafeProviderHttpClient.ReadBoundedAsync(response.Content, ct);
+            using var responseStream = new MemoryStream(responseBytes, writable: false);
+            using var json = await JsonDocument.ParseAsync(responseStream, cancellationToken: ct);
             if (!TryGetJsonPath(json.RootElement, resultsPath, out var items) || items.ValueKind != JsonValueKind.Array)
                 continue;
 
@@ -395,6 +409,13 @@ public static class DiscoverySearchEndpoints
 
         return found;
     }
+
+    private static bool IsAllowedProviderEndpoint(string? value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        uri.Scheme == Uri.UriSchemeHttps &&
+        string.IsNullOrEmpty(uri.UserInfo) &&
+        string.IsNullOrEmpty(uri.Fragment) &&
+        !string.IsNullOrWhiteSpace(uri.Host);
 
     private static string? ReadPathString(JsonElement element, string path) =>
         TryGetJsonPath(element, path, out var value) && value.ValueKind == JsonValueKind.String
