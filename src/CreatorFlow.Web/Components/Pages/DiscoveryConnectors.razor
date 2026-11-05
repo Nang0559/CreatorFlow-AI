@@ -32,7 +32,7 @@
     </label>
     <div class="form-actions">
         <button class="primary" @onclick="SaveBraveAsync" disabled="@busy">Lưu Brave Search</button>
-        <button class="secondary" @onclick="TestAsync" disabled="@(busy || !hasBrave)">Kiểm tra kết nối</button>
+        <button class="secondary" @onclick="TestAsync" disabled="@(busy || !hasBrave)">Kiểm tra nguồn</button>
         <button class="secondary" @onclick="ClearBraveAsync" disabled="@(busy || !hasBrave)">Xóa khóa</button>
     </div>
     @if (braveState is not null) { <p class="muted"><strong>@braveState.Status</strong> · @braveState.ResultCount kết quả · @(braveState.Error ?? "Không có lỗi")</p> }
@@ -116,7 +116,9 @@
 
     private async Task SaveTikTokAsync()
     {
-        if (string.IsNullOrWhiteSpace(tikTokKey) || string.IsNullOrWhiteSpace(tikTokSecret))
+        if (string.IsNullOrWhiteSpace(tikTokKey) && string.IsNullOrWhiteSpace(tikTokSecret))
+        { message = "Hãy nhập ít nhất một trường cần thay đổi."; hasError = true; return; }
+        if (!hasTikTok && (string.IsNullOrWhiteSpace(tikTokKey) || string.IsNullOrWhiteSpace(tikTokSecret)))
         { message = "Khi thêm mới, cần nhập cả Client Key và Client Secret."; hasError = true; return; }
         await SaveAsync(new SettingsWrite(null, tikTokKey.Trim(), tikTokSecret.Trim()));
         if (!hasError) { tikTokKey = ""; tikTokSecret = ""; await ReloadAsync(); }
