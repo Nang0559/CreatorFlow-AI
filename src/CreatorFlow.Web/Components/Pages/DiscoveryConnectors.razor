@@ -163,8 +163,8 @@
         try
         {
             busy = true; hasError = false; message = "";
-            var result = await Api.PostAsync<SearchResponse, SearchResponse>("/api/v1/discovery/search",
-                new SearchResponse("Kiểm tra kết nối nguồn", ["creatorflow connector verification"], "", [], [], [], ""));
+            var result = await Api.PostAsync<SearchRequest, SearchResponse>("/api/v1/discovery/search",
+                new SearchRequest("Kiểm tra kết nối nguồn", ["creatorflow connector verification"]));
             providerStates = result?.Providers?.ToList() ?? [];
             braveState = providerStates.FirstOrDefault(x => x.Provider.Contains("Brave", StringComparison.OrdinalIgnoreCase));
             tikTokState = providerStates.FirstOrDefault(x => x.Provider.Contains("TikTok", StringComparison.OrdinalIgnoreCase));
@@ -184,6 +184,7 @@
     private sealed record SettingsWrite(string? BraveApiKey, string? TikTokResearchClientKey, string? TikTokResearchClientSecret,
         bool ClearBraveApiKey = false, bool ClearTikTokResearchCredentials = false);
     private sealed class SettingsResponse { public bool HasBraveApiKey { get; set; } public bool HasTikTokResearchClientKey { get; set; } public bool HasTikTokResearchClientSecret { get; set; } public bool IsStoredInWorkspace { get; set; } }
-    private sealed record SearchResponse(string Topic, string[] Queries, string Status, object[] Channels, object[] Videos, ProviderState[] Providers, string Notice);
+    private sealed record SearchRequest(string Topic, string[] Queries);
+    private sealed class SearchResponse { public ProviderState[] Providers { get; set; } = []; }
     private sealed class ProviderState { public string Provider { get; set; } = ""; public string Status { get; set; } = ""; public int ResultCount { get; set; } public string? Error { get; set; } }
 }
