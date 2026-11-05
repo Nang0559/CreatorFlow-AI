@@ -6,7 +6,7 @@
     <div>
         <p class="eyebrow">CẤU HÌNH KHÁM PHÁ</p>
         <h1>Nguồn tìm kiếm</h1>
-        <p class="muted">Quản lý Brave Search và TikTok Research API cho workspace hiện tại. Khóa được lưu mã hóa phía máy chủ, không gửi xuống trình duyệt sau khi lưu.</p>
+        <p class="muted">Quản lý Brave Search, TikTok Research API và theo dõi các provider tìm kiếm bổ sung được khai báo trong cấu hình máy chủ. Khóa workspace được mã hóa phía máy chủ.</p>
     </div>
     <button class="primary" @onclick="ReloadAsync" disabled="@busy">Làm mới</button>
 </header>
@@ -64,7 +64,7 @@
 <section class="panel">
     <p class="eyebrow">TRẠNG THÁI NGUỒN</p>
     <h2>Kiểm tra nguồn thực tế</h2>
-    <p class="muted">Nút kiểm tra thực hiện một truy vấn thật qua API connector. Trạng thái Connected chỉ xác nhận API chấp nhận yêu cầu tại thời điểm kiểm tra; không bảo đảm độ phủ dữ liệu. Nếu TikTok trả lỗi quyền, cần hoàn tất phê duyệt Research API với TikTok.</p>
+    <p class="muted">Nút kiểm tra thực hiện truy vấn thật qua tất cả connector đã cấu hình, gồm provider bổ sung khai báo trong DiscoverySearch:Providers. Trạng thái Connected chỉ xác nhận API chấp nhận yêu cầu tại thời điểm kiểm tra; không bảo đảm độ phủ dữ liệu. Nếu TikTok trả lỗi quyền, cần hoàn tất phê duyệt Research API với TikTok.</p>
     <div class="form-actions">
         <button class="primary" @onclick="TestAsync" disabled="@busy">@(busy ? "Đang kiểm tra…" : "Kiểm tra tất cả nguồn")</button>
     </div>
@@ -82,7 +82,7 @@
     }
 </section>
 
-<p class="muted">Bảo mật: khóa chỉ được gửi tới API đã xác thực và lưu dưới dạng mã hóa bằng ASP.NET Core Data Protection. Giao diện không đọc lại khóa. Khi sửa, để trống trường khóa để giữ khóa hiện tại. Chỉ Owner/Admin của workspace được phép quản lý.</p>
+<p class="muted">Provider bổ sung được khai báo trong .env của máy chủ bằng DiscoverySearch__Providers__0__, __1__... (xem docs/LOCAL_API_SETUP.md). Các provider GET + JSON tương thích sẽ tự xuất hiện trong kết quả kiểm tra; không cần sửa code cho từng nhà cung cấp. Khóa Brave/TikTok trên trang này được gửi tới API đã xác thực và lưu mã hóa bằng ASP.NET Core Data Protection. Chỉ Owner/Admin được phép quản lý.</p>
 
 @code {
     private bool busy, hasBrave, hasTikTok, hasError;
