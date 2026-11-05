@@ -1,5 +1,6 @@
 using System.Net;
 using CreatorFlow.Api.Discovery;
+using Xunit;
 
 namespace CreatorFlow.Api.Tests.Discovery;
 
