@@ -8,7 +8,7 @@ namespace CreatorFlow.Api.Discovery;
 /// validated at connection time, and the validated address is the address actually
 /// connected to (preventing DNS-rebinding between validation and connect).
 /// </summary>
-internal static class SafeProviderHttpClient
+public static class SafeProviderHttpClient
 {
     internal const int MaxResponseBytes = 2 * 1024 * 1024;
 
