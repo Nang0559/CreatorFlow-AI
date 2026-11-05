@@ -57,14 +57,18 @@ public static class DiscoveryConnectorSettingsEndpoints
                 if (!Uri.TryCreate(item.Endpoint, UriKind.Absolute, out var uri) ||
                     (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp))
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Endpoint phải là URL HTTP(S) hợp lệ."] });
-                var method = (item.Method ?? "GET").Trim().ToUpperInvariant();
+                var isLangSearch = item.Name.Trim().Equals("LangSearch", StringComparison.OrdinalIgnoreCase);
+                var method = isLangSearch ? "POST" : (item.Method ?? "GET").Trim().ToUpperInvariant();
                 if (method is not ("GET" or "POST"))
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["method"] = ["Method chỉ được là GET hoặc POST."] });
                 if (method == "POST")
                 {
-                    if (string.IsNullOrWhiteSpace(item.RequestBodyTemplate))
-                        return Results.ValidationProblem(new Dictionary<string, string[]> { ["requestBodyTemplate"] = ["POST cần mẫu JSON body."] });
-                    try { using var body = JsonDocument.Parse(item.RequestBodyTemplate); }
+                    var requestBody = string.IsNullOrWhiteSpace(item.RequestBodyTemplate) && isLangSearch
+                        ? "{ \"query\": \"{query}\", \"count\": 10 }"
+                        : item.RequestBodyTemplate;
+                    if (string.IsNullOrWhiteSpace(requestBody))
+                        return Results.ValidationProblem(new Dictionary<string, string[]> { ["requestBodyTemplate"] = ["POST cần mẫu JSON body. Nhấn Mẫu LangSearch hoặc nhập JSON body."] });
+                    try { using var body = JsonDocument.Parse(requestBody); }
                     catch (JsonException) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["requestBodyTemplate"] = ["Mẫu body phải là JSON hợp lệ."] }); }
                 }
                 if (!string.IsNullOrWhiteSpace(item.HeadersJson))
@@ -95,8 +99,12 @@ public static class DiscoveryConnectorSettingsEndpoints
                 return new ConfiguredSearchProvider
                 {
                     Id = id, Name = x.Name.Trim(), Enabled = x.Enabled, Endpoint = x.Endpoint.Trim(),
-                    Method = (x.Method ?? "GET").Trim().ToUpperInvariant(),
-                    RequestBodyTemplate = x.RequestBodyTemplate, ContentType = x.ContentType ?? "application/json",
+                    Method = x.Name.Trim().Equals("LangSearch", StringComparison.OrdinalIgnoreCase)
+                        ? "POST" : (x.Method ?? "GET").Trim().ToUpperInvariant(),
+                    RequestBodyTemplate = string.IsNullOrWhiteSpace(x.RequestBodyTemplate) &&
+                        x.Name.Trim().Equals("LangSearch", StringComparison.OrdinalIgnoreCase)
+                        ? "{ \"query\": \"{query}\", \"count\": 10 }" : x.RequestBodyTemplate,
+                    ContentType = x.ContentType ?? "application/json",
                     HeadersJson = x.HeadersJson,
                     QueryParameter = x.QueryParameter ?? "q", QueryTemplate = x.QueryTemplate ?? "{topic} {query}",
                     ResultsPath = x.ResultsPath ?? "results", UrlPath = x.UrlPath ?? "url",
