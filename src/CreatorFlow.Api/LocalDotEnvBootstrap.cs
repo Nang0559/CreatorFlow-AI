@@ -11,15 +11,11 @@ internal static class LocalDotEnvBootstrap
     [ModuleInitializer]
     internal static void Initialize()
     {
+        // Opt-in only: tests, IDEs, services, and production hosts must never
+        // inherit a developer's repository .env file unless explicitly requested.
         var enabled = Environment.GetEnvironmentVariable("CREATORFLOW_LOAD_DOTENV");
-        if (string.Equals(enabled, "false", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(enabled, "0", StringComparison.OrdinalIgnoreCase))
-            return;
-
-        // Never load a developer .env file when the host explicitly declares Production.
-        var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-            ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-        if (string.Equals(environment, "Production", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(enabled, "1", StringComparison.OrdinalIgnoreCase))
             return;
 
         var configuredPath = Environment.GetEnvironmentVariable("CREATORFLOW_DOTENV_PATH");
