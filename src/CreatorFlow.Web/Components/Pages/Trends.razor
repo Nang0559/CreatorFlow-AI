@@ -541,14 +541,16 @@
             var started = DateTimeOffset.UtcNow;
             discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG TÌM NGUỒN", "Đang gọi Brave Search và TikTok Research API nếu đã cấu hình."));
             await InvokeAsync(StateHasChanged);
+            if (!Guid.TryParse(selectedTopicId, out var topicId))
+                throw new InvalidOperationException("Hãy chọn chủ đề theo dõi trước khi tìm kiếm để lưu ứng viên đúng chủ đề.");
             var search = await Api.PostAsync<object, DiscoverySearchResponse>("/api/v1/discovery/search",
-                new { topic = plan.Topic, queries = plan.Queries });
+                new { topic = plan.Topic, queries = plan.Queries, contentTopicId = topicId });
             if (search is null) throw new InvalidOperationException("Connector không trả về nội dung phản hồi.");
             discoverySearch = search;
             var summary = string.Join(" · ", search.Providers.Select(x => $"{x.Provider}: {x.Status} ({x.ResultCount})"));
             discoveryLogs[0] = new DiscoveryLogItem(started, search.Status == "Completed" ? "HOÀN TẤT TÌM NGUỒN" : "CHƯA CẤU HÌNH NGUỒN", summary);
             successMessage = search.Channels.Length > 0 || search.Videos.Length > 0
-                ? $"Đã nhận {search.Channels.Length} kênh và {search.Videos.Length} video từ connector."
+                ? $"Đã nhận {search.Channels.Length} kênh, {search.Videos.Length} video; lưu mới {search.SavedCandidateCount} ứng viên vào chủ đề. Video trùng được giữ nguyên."
                 : "Connector đã chạy nhưng chưa trả về URL TikTok phù hợp. Kiểm tra trạng thái từng nguồn.";
         }
         catch (Exception ex)
@@ -561,7 +563,7 @@
     }
 
     private sealed record DiscoverySearchResponse(string Topic, DateTimeOffset SearchedAt, string Status,
-        DiscoveryChannelResult[] Channels, DiscoverySearchResult[] Videos, DiscoveryProviderState[] Providers, string Notice);
+        DiscoveryChannelResult[] Channels, DiscoverySearchResult[] Videos, DiscoveryProviderState[] Providers, int SavedCandidateCount, string Notice);
     private sealed record DiscoveryChannelResult(string Username, string DisplayName, string ProfileUrl, int VideoCount,
         long MaxObservedViews, long? Followers, string[] VideoUrls, string Source, DateTimeOffset RetrievedAt);
     private sealed record DiscoverySearchResult(string Url, string Title, string? Description, string? Username,
