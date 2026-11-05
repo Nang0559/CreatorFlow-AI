@@ -71,14 +71,15 @@ IF COL_LENGTH(N'dbo.DiscoveryTopicProfiles',N'TenantId') IS NULL
     THROW 52903, 'Discovery topic scheduler is not tenant-scoped; apply migration 026 first.', 1;
 
 -- Replace globally unique business keys with tenant-scoped keys.
-DECLARE @Drop TABLE (TableName sysname, ConstraintName sysname, IndexName sysname, CreateIndex nvarchar(max));
+-- IndexName was unused; keep only the values consumed by the migration.
+DECLARE @Drop TABLE (TableName sysname NOT NULL, ConstraintName sysname NOT NULL, CreateIndex nvarchar(max) NOT NULL);
 INSERT @Drop VALUES
-(N'DiscoveryRuns',N'UQ_DiscoveryRuns_RunKey',NULL,N'CREATE UNIQUE INDEX UX_DiscoveryRuns_Tenant_RunKey ON dbo.DiscoveryRuns(TenantId,RunKey);'),
-(N'DiscoveryTopicProfiles',N'UQ_DiscoveryTopicProfiles_Topic',NULL,N'CREATE UNIQUE INDEX UX_DiscoveryTopicProfiles_Tenant_Topic ON dbo.DiscoveryTopicProfiles(TenantId,ContentTopicId);'),
-(N'DiscoverySources',N'UQ_DiscoverySources_Provider',NULL,N'CREATE UNIQUE INDEX UX_DiscoverySources_Tenant_Provider ON dbo.DiscoverySources(TenantId,Platform,Provider);'),
-(N'DiscoveryCandidates',N'UQ_DiscoveryCandidates_Platform_Kind_External',NULL,N'CREATE UNIQUE INDEX UX_DiscoveryCandidates_Tenant_External ON dbo.DiscoveryCandidates(TenantId,Platform,CandidateKind,ExternalId);'),
-(N'DiscoveryPriorityLinks',N'UQ_DiscoveryPriorityLinks_Url',NULL,N'CREATE UNIQUE INDEX UX_DiscoveryPriorityLinks_Tenant_Url ON dbo.DiscoveryPriorityLinks(TenantId,CanonicalUrl);'),
-(N'DiscoveryLearningModelVersions',N'UQ_DiscoveryLearningModelVersions_Version',NULL,N'CREATE UNIQUE INDEX UX_DiscoveryLearningModelVersions_Tenant_Version ON dbo.DiscoveryLearningModelVersions(TenantId,ModelVersion);');
+(N'DiscoveryRuns',N'UQ_DiscoveryRuns_RunKey',N'CREATE UNIQUE INDEX UX_DiscoveryRuns_Tenant_RunKey ON dbo.DiscoveryRuns(TenantId,RunKey);'),
+(N'DiscoveryTopicProfiles',N'UQ_DiscoveryTopicProfiles_Topic',N'CREATE UNIQUE INDEX UX_DiscoveryTopicProfiles_Tenant_Topic ON dbo.DiscoveryTopicProfiles(TenantId,ContentTopicId);'),
+(N'DiscoverySources',N'UQ_DiscoverySources_Provider',N'CREATE UNIQUE INDEX UX_DiscoverySources_Tenant_Provider ON dbo.DiscoverySources(TenantId,Platform,Provider);'),
+(N'DiscoveryCandidates',N'UQ_DiscoveryCandidates_Platform_Kind_External',N'CREATE UNIQUE INDEX UX_DiscoveryCandidates_Tenant_External ON dbo.DiscoveryCandidates(TenantId,Platform,CandidateKind,ExternalId);'),
+(N'DiscoveryPriorityLinks',N'UQ_DiscoveryPriorityLinks_Url',N'CREATE UNIQUE INDEX UX_DiscoveryPriorityLinks_Tenant_Url ON dbo.DiscoveryPriorityLinks(TenantId,CanonicalUrl);'),
+(N'DiscoveryLearningModelVersions',N'UQ_DiscoveryLearningModelVersions_Version',N'CREATE UNIQUE INDEX UX_DiscoveryLearningModelVersions_Tenant_Version ON dbo.DiscoveryLearningModelVersions(TenantId,ModelVersion);');
 
 DECLARE @Constraint sysname, @Create nvarchar(max);
 DECLARE unique_cursor CURSOR LOCAL FAST_FORWARD FOR SELECT TableName,ConstraintName,CreateIndex FROM @Drop;
