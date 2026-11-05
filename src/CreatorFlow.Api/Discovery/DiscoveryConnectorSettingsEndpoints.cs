@@ -55,7 +55,7 @@ public static class DiscoveryConnectorSettingsEndpoints
             foreach (var item in request)
             {
                 if (!Uri.TryCreate(item.Endpoint, UriKind.Absolute, out var uri) ||
-                    uri.Scheme != Uri.UriSchemeHttps || !string.IsNullOrEmpty(uri.UserInfo) ||
+                    uri.Scheme != Uri.UriSchemeHttps || uri.Port != 443 || !string.IsNullOrEmpty(uri.UserInfo) ||
                     !string.IsNullOrEmpty(uri.Fragment))
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Chỉ chấp nhận endpoint HTTPS, không chứa thông tin đăng nhập hoặc fragment."] });
                 if (item.Name.Trim().Equals("Brave Search", StringComparison.OrdinalIgnoreCase) ||
