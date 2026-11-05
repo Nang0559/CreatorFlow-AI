@@ -177,6 +177,7 @@ The Windows worker uses After Effects/aerender to produce a 1080×1920 PNG seque
 All routes require authenticated API access and a resolved active workspace. Connector credentials are never returned by these endpoints.
 
 - `GET /api/v1/discovery/connectors/settings`: returns boolean presence flags for Brave and TikTok Research credentials plus whether workspace storage is in use. Only Owner/Admin may manage/read this settings surface.
+- Web UI: `/settings/discovery-connectors` lets workspace Owner/Admin save, update, test and explicitly clear Brave Search and TikTok Research credentials. The test action submits a bounded live discovery query and displays each provider's actual status; it does not expose stored secrets.
 - `PUT /api/v1/discovery/connectors/settings`: accepts optional Brave API key, TikTok Research Client Key and Client Secret, plus explicit clear flags. Blank secret fields preserve existing values; clearing TikTok credentials clears the pair. TikTok key and secret must be supplied/retained as a pair. The API encrypts secrets with ASP.NET Core Data Protection before storing them in the tenant-owned `dbo.DiscoveryConnectorConfigurations` table.
 - `POST /api/v1/discovery/search`: accepts the bounded AI query plan and invokes configured server-side discovery providers. It returns provider status and validated source URLs/metadata; it does not return secrets or invent metrics.
 
