@@ -282,6 +282,9 @@ public static class DiscoverySearchEndpoints
     {
         client.Timeout = TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45));
         var found = new List<DiscoverySearchResult>();
+        var method = (provider.Method ?? "GET").Trim().ToUpperInvariant();
+        if (method is not ("GET" or "POST"))
+            throw new InvalidOperationException("Provider chỉ hỗ trợ HTTP GET hoặc POST.");
         var queryParameter = string.IsNullOrWhiteSpace(provider.QueryParameter) ? "q" : provider.QueryParameter;
         var resultsPath = string.IsNullOrWhiteSpace(provider.ResultsPath) ? "results" : provider.ResultsPath;
         var urlPath = string.IsNullOrWhiteSpace(provider.UrlPath) ? "url" : provider.UrlPath;
@@ -293,18 +296,46 @@ public static class DiscoverySearchEndpoints
             var searchText = (provider.QueryTemplate ?? "{topic} {query}")
                 .Replace("{topic}", topic, StringComparison.OrdinalIgnoreCase)
                 .Replace("{query}", query, StringComparison.OrdinalIgnoreCase);
-            var requestUrl = QueryHelpers.AddQueryString(provider.Endpoint,
-                new Dictionary<string, string?> { [queryParameter] = searchText });
+            var requestUrl = method == "GET"
+                ? QueryHelpers.AddQueryString(provider.Endpoint,
+                    new Dictionary<string, string?> { [queryParameter] = searchText })
+                : provider.Endpoint;
 
-            using var message = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+            using var message = new HttpRequestMessage(method == "POST" ? HttpMethod.Post : HttpMethod.Get, requestUrl);
             if (!string.IsNullOrWhiteSpace(provider.ApiKey) && !string.IsNullOrWhiteSpace(provider.ApiKeyHeader))
             {
                 var headerValue = (provider.ApiKeyPrefix ?? "") + provider.ApiKey;
                 if (!message.Headers.TryAddWithoutValidation(provider.ApiKeyHeader, headerValue))
                     throw new InvalidOperationException("Không thể thiết lập header xác thực cho provider.");
             }
+            if (!string.IsNullOrWhiteSpace(provider.HeadersJson))
+            {
+                using var headers = JsonDocument.Parse(provider.HeadersJson);
+                if (headers.RootElement.ValueKind != JsonValueKind.Object)
+                    throw new InvalidOperationException("Headers bổ sung phải là một JSON object.");
+                foreach (var header in headers.RootElement.EnumerateObject())
+                {
+                    if (header.Value.ValueKind != JsonValueKind.String)
+                        throw new InvalidOperationException($"Header '{header.Name}' phải có giá trị dạng chuỗi.");
+                    if (!message.Headers.TryAddWithoutValidation(header.Name, header.Value.GetString()))
+                        throw new InvalidOperationException($"Không thể thiết lập header '{header.Name}'.");
+                }
+            }
             if (!string.IsNullOrWhiteSpace(provider.Accept))
                 message.Headers.Accept.ParseAdd(provider.Accept);
+
+            if (method == "POST")
+            {
+                var bodyTemplate = provider.RequestBodyTemplate;
+                if (string.IsNullOrWhiteSpace(bodyTemplate))
+                    throw new InvalidOperationException("POST cần khai báo mẫu JSON body.");
+                var body = bodyTemplate
+                    .Replace("\"{topic}\"", JsonSerializer.Serialize(topic), StringComparison.OrdinalIgnoreCase)
+                    .Replace("\"{query}\"", JsonSerializer.Serialize(searchText), StringComparison.OrdinalIgnoreCase);
+                using var validation = JsonDocument.Parse(body);
+                var contentType = string.IsNullOrWhiteSpace(provider.ContentType) ? "application/json" : provider.ContentType;
+                message.Content = new StringContent(body, Encoding.UTF8, contentType);
+            }
 
             using var response = await client.SendAsync(message, ct);
             if (!response.IsSuccessStatusCode)
@@ -312,6 +343,10 @@ public static class DiscoverySearchEndpoints
 
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            if (provider.Name.Equals("LangSearch", StringComparison.OrdinalIgnoreCase) &&
+                json.RootElement.TryGetProperty("code", out var langSearchCode) &&
+                langSearchCode.ToString() != "200")
+                throw new InvalidOperationException($"LangSearch từ chối truy vấn: {GetString(json.RootElement, "message") ?? "mã phản hồi không thành công"}.");
             if (!TryGetJsonPath(json.RootElement, resultsPath, out var items) || items.ValueKind != JsonValueKind.Array)
                 continue;
 
@@ -409,6 +444,10 @@ public sealed class ConfiguredSearchProvider
     public bool Enabled { get; set; } = true;
     public string Name { get; set; } = "";
     public string Endpoint { get; set; } = "";
+    public string Method { get; set; } = "GET";
+    public string? RequestBodyTemplate { get; set; }
+    public string? ContentType { get; set; } = "application/json";
+    public string? HeadersJson { get; set; }
     public string QueryParameter { get; set; } = "q";
     public string QueryTemplate { get; set; } = "{topic} {query}";
     public string ResultsPath { get; set; } = "results";
