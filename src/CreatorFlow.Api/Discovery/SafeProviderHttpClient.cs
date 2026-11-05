@@ -20,7 +20,7 @@ internal static class SafeProviderHttpClient
             UseCookies = false,
             UseProxy = false,
             ConnectTimeout = TimeSpan.FromSeconds(8),
-            PooledConnectionLifetime = TimeSpan.Zero,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(1),
             ConnectCallback = ConnectToPublicAddressAsync
         };
         return new HttpClient(handler, disposeHandler: true) { Timeout = timeout };
