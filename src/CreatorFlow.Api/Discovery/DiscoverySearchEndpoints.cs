@@ -138,7 +138,7 @@ public static class DiscoverySearchEndpoints
                         g.Max(x => x.Views ?? 0),
                         g.Max(x => x.Followers),
                         g.Where(x => x.Kind == "Video").Select(x => x.Url).Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToArray(),
-                        g.Any(x => x.Source == "TikTok Research API") ? "TikTok Research API" : "Brave Search",
+                        g.Select(x => x.Source).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 1 ? first.Source : "Multiple providers",
                         g.Select(x => x.RetrievedAt).Max());
                 })
                 .OrderByDescending(x => x.Followers ?? 0)
