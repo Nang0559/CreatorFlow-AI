@@ -78,8 +78,10 @@ jobs:
 
           $apiProcesses = Get-CimInstance Win32_Process -Filter "Name = 'dotnet.exe'" |
             Where-Object { $_.CommandLine -and $_.CommandLine -match 'CreatorFlow\.Api\.csproj' }
-          foreach ($proc in $apiProcesses) {
-            Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
+          $listenerPids = @(Get-NetTCPConnection -LocalPort 7001 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique)
+          $stopPids = @($apiProcesses | Select-Object -ExpandProperty ProcessId) + $listenerPids | Select-Object -Unique
+          foreach ($processId in $stopPids) {
+            if ($processId -and $processId -ne $PID) { Stop-Process -Id $processId -Force -ErrorAction Stop }
           }
 
           $env:CREATORFLOW_LOAD_DOTENV = 'true'
