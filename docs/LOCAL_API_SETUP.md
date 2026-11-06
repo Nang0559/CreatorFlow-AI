@@ -46,3 +46,17 @@ Các provider POST cần JSON body hợp lệ. Ví dụ LangSearch:
 JSON path kết quả phải trỏ tới mảng; chỉ URL TikTok HTTPS hợp lệ mới được giữ làm candidate đầu vào. Custom provider hiện vẫn là truy vấn tức thời, chưa tự lưu candidate bền vững hoặc tự chạy lịch.
 
 Không cần migration SQL cho thay đổi transport và cách trả metadata bí mật trong đợt này.
+
+## Scheduled topic discovery
+
+The Windows worker runs both the FFmpeg render queue and the topic scheduler. Start it with:
+
+```powershell
+.\scripts\Start-VideoRenderWorker.ps1
+```
+
+The worker imports the repository `.env` before starting. Scheduled topic discovery currently uses the server-level `BraveSearch__ApiKey` (not workspace-encrypted custom provider credentials). Set that key in the local `.env` without committing it, then restart the worker. For each due active topic it searches Vietnam/ Vietnamese web results using the topic name and up to four comma/semicolon/newline-separated keywords, keeps only canonical TikTok video URLs, and inserts new candidates under the same TenantId and ContentTopicId. Duplicate video IDs in the same workspace are not inserted again.
+
+A successful provider request with no matching video URLs is recorded as Completed with `NoMatchingVideoUrls`; a missing key is Skipped with `BraveSearchNotConfigured`; provider/network errors are Failed. Channel synchronization is not enabled by this worker yet (ChannelCount remains zero). Workspace custom providers configured in Settings are currently used by instant search only and are not consumed by the background worker.
+
+This is discovery only: it stores source URLs and metadata, not video files. Media acquisition remains gated by an explicit rights basis in `DiscoveryVideoDownloadJobs`. A search result alone never authorizes downloading or reuse. To render, an owner-provided, licensed, public-domain, or officially permitted media file must first enter the workspace VideoAssets library.
