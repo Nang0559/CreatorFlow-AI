@@ -25,8 +25,31 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
+      - name: Locate PowerShell 7 for runner
+        shell: cmd
+        run: |
+          @echo off
+          if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" (
+            echo %ProgramFiles%\PowerShell\7>>"%GITHUB_PATH%"
+            "%ProgramFiles%\PowerShell\7\pwsh.exe" -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
+            exit /b %ERRORLEVEL%
+          )
+          where pwsh.exe >nul 2>nul
+          if not errorlevel 1 (
+            for /f "delims=" %%P in ('where pwsh.exe') do (
+              for %%D in ("%%~dpP.") do echo %%~fD>>"%GITHUB_PATH%"
+              goto :found
+            )
+          )
+          echo PowerShell 7 is installed outside the standard path and is not visible to the runner service.
+          echo Add its folder to the runner service PATH or update this workflow with the exact pwsh.exe path.
+          exit /b 1
+          :found
+          pwsh.exe -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
+          exit /b %ERRORLEVEL%
+
       - name: Verify clean checkout and patch
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           if (-not (Test-Path '.\creatorflow-provider-hardening.patch')) {
@@ -39,7 +62,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'git apply --check failed; patch was not applied.' }
 
       - name: Apply patch
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           git apply .\creatorflow-provider-hardening.patch
@@ -48,7 +71,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
 
       - name: Test API and build worker
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           dotnet test .\tests\CreatorFlow.Api.Tests\CreatorFlow.Api.Tests.csproj -c Release
@@ -57,7 +80,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Worker build failed; patch will not be committed.' }
 
       - name: Commit applied patch
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           git config user.name 'github-actions[bot]'
