@@ -25,31 +25,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Locate PowerShell 7 for runner
-        shell: cmd
-        run: |
-          @echo off
-          set "PWSH="
-          if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" set "PWSH=%ProgramFiles%\PowerShell\7\pwsh.exe"
-          if not defined PWSH if exist "%ProgramW6432%\PowerShell\7\pwsh.exe" set "PWSH=%ProgramW6432%\PowerShell\7\pwsh.exe"
-          if not defined PWSH for /f "delims=" %%P in ('where pwsh.exe 2^>nul') do if not defined PWSH set "PWSH=%%P"
-          if not defined PWSH (
-            for /d %%U in ("C:\Users\*") do (
-              if not defined PWSH if exist "%%~fU\AppData\Local\Programs\PowerShell\7\pwsh.exe" set "PWSH=%%~fU\AppData\Local\Programs\PowerShell\7\pwsh.exe"
-              if not defined PWSH if exist "%%~fU\scoop\apps\pwsh\current\pwsh.exe" set "PWSH=%%~fU\scoop\apps\pwsh\current\pwsh.exe"
-            )
-          )
-          if not defined PWSH (
-            echo PowerShell 7 executable was not found in standard machine or user install locations.
-            exit /b 1
-          )
-          echo PowerShell 7 found: %PWSH%
-          for %%D in ("%PWSH%") do echo %%~dpD>>"%GITHUB_PATH%"
-          "%PWSH%" -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
-          exit /b %ERRORLEVEL%
-
       - name: Verify clean checkout and patch
-        shell: pwsh
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
           if (-not (Test-Path '.\creatorflow-provider-hardening.patch')) {
@@ -62,7 +39,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'git apply --check failed; patch was not applied.' }
 
       - name: Apply patch
-        shell: pwsh
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
           git apply .\creatorflow-provider-hardening.patch
@@ -71,7 +48,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
 
       - name: Test API and build worker
-        shell: pwsh
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
           dotnet test .\tests\CreatorFlow.Api.Tests\CreatorFlow.Api.Tests.csproj -c Release
@@ -80,7 +57,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Worker build failed; patch will not be committed.' }
 
       - name: Commit applied patch
-        shell: pwsh
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
           git config user.name 'github-actions[bot]'
