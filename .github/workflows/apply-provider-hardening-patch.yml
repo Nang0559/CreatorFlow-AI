@@ -25,10 +25,19 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Verify clean checkout and patch
+      - name: Detect whether patch is already committed
+        id: patch-state
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
+          $appliedCommit = git log -1 --format=%H --fixed-strings --grep='[provider-patch-applied]'
+          if ($LASTEXITCODE -ne 0) { throw 'Could not inspect patch commit history.' }
+          if ($appliedCommit) {
+            "already=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Host "Patch is already applied in commit $appliedCommit; skipping git apply."
+            exit 0
+          }
+          "already=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           if (-not (Test-Path '.\creatorflow-provider-hardening.patch')) {
             throw 'Patch file is missing from repository root.'
           }
@@ -39,6 +48,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'git apply --check failed; patch was not applied.' }
 
       - name: Apply patch
+        if: steps.patch-state.outputs.already != 'true'
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
@@ -106,6 +116,7 @@ jobs:
           Write-Host "API restarted and healthy. ProcessId=$($api.Id)"
 
       - name: Commit applied patch
+        if: steps.patch-state.outputs.already != 'true'
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
           $ErrorActionPreference = 'Stop'
