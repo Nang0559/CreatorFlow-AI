@@ -1,0 +1,67 @@
+name: Deploy to Z240
+
+# Manual, approval-gated deployment. Configure required reviewers on the "z240-dev" environment
+# (Settings -> Environments) so that no code runs on the Z240 runner without an explicit approval.
+on:
+  workflow_dispatch:
+    inputs:
+      rebuild_web:
+        description: Rebuild and restart the Web container after the API is healthy
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-z240
+  cancel-in-progress: false
+
+env:
+  CREATORFLOW_ENV_FILE: E:\Projects\CreatorFlow-AI\.env
+  CREATORFLOW_DEPLOY_ROOT: E:\CreatorFlowDeploy
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows, X64]
+    environment: z240-dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Test
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet test .\tests\CreatorFlow.Api.Tests\CreatorFlow.Api.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'API tests failed; nothing was deployed.' }
+          dotnet test .\tests\CreatorFlow.Domain.Tests\CreatorFlow.Domain.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Domain tests failed; nothing was deployed.' }
+
+      - name: Build worker and web
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build .\src\CreatorFlow.Workers\CreatorFlow.Workers.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Worker build failed; nothing was deployed.' }
+          dotnet build .\src\CreatorFlow.Web\CreatorFlow.Web.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Web build failed; nothing was deployed.' }
+
+      - name: Deploy API (Scheduled Task, health check, rollback)
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\scripts\deploy\Deploy-CreatorFlowApi.ps1 `
+            -DeployRoot $env:CREATORFLOW_DEPLOY_ROOT `
+            -EnvFile $env:CREATORFLOW_ENV_FILE `
+            -Revision $env:GITHUB_SHA
+
+      - name: Rebuild Web container
+        if: ${{ inputs.rebuild_web }}
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          docker compose --env-file $env:CREATORFLOW_ENV_FILE -f .\compose.dev.yaml up --build -d web
+          if ($LASTEXITCODE -ne 0) { throw 'Web container rebuild failed; the API was already deployed and is healthy.' }
