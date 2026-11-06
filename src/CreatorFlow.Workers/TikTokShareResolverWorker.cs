@@ -80,7 +80,7 @@ internal sealed class TikTokShareResolverWorker(
             }
             var header=new byte[12];
             await using(var f=File.OpenRead(temp)){if(await f.ReadAsync(header,ct)<12 || System.Text.Encoding.ASCII.GetString(header,4,4)!="ftyp")throw new InvalidOperationException("Nguồn trả về không phải tệp MP4 hợp lệ.");}
-            var hash=Convert.ToHexString(await SHA256.HashDataAsync(File.OpenRead(temp),ct));
+            string hash; await using(var hashStream=File.OpenRead(temp)){hash=Convert.ToHexString(await SHA256.HashDataAsync(hashStream,ct));}
             File.Move(temp,finalPath,true); temp=null;
             await SaveAssetAndJobsAsync(item,assetId,title,finalPath,fileName,new FileInfo(finalPath).Length,hash,ct);
             await SetStateAsync(item.Id,"NeedsReview",null,assetId,title,ct);
@@ -167,6 +167,6 @@ internal sealed class TikTokShareResolverWorker(
         cmd.CommandText="UPDATE dbo.SharedLinkInboxItems SET ResolverStatus=@status,ResolverError=@error,ResolvedAssetId=COALESCE(@asset,ResolvedAssetId),ResolvedTitle=COALESCE(@title,ResolvedTitle),ResolverUpdatedAt=SYSUTCDATETIME() WHERE Id=@id";
         Add(cmd,"@status",status);Add(cmd,"@error",error is null?DBNull.Value:error.Length>950?error[..950]:error);Add(cmd,"@asset",asset is null?DBNull.Value:asset.Value);Add(cmd,"@title",title is null?DBNull.Value:title);Add(cmd,"@id",id);await cmd.ExecuteNonQueryAsync(ct);
     }
-    private static void Add(SqlCommand c,string name,object value){var p=c.Parameters.Add(name,System.Data.SqlDbType.Variant);p.Value=value;}
+    private static void Add(SqlCommand c,string name,object value){c.Parameters.AddWithValue(name,value);}
     private sealed record ShareItem(Guid Id,Guid TenantId,string Url);
 }

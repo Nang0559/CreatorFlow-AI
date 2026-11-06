@@ -640,6 +640,21 @@
         finally { busy = false; }
     }
 
+    private async Task ConfirmSharedRightsAsync(Guid id)
+    {
+        try
+        {
+            busy = true; shareMessage = "";
+            var result = await Api.PostAsync<object, RightsConfirmationResponse>($"/api/v1/share-inbox/{id}/confirm-rights", new { });
+            shareMessage = result is null ? "Không nhận được xác nhận từ API." : $"Đã xác nhận quyền sử dụng. {result.RenderJobsQueued} render jobs đã được đưa vào hàng đợi.";
+            await LoadShareInboxAsync();
+        }
+        catch (Exception ex) { shareMessage = "Chưa thể xác nhận: " + ex.Message; }
+        finally { busy = false; }
+    }
+
+    private sealed record RightsConfirmationResponse(Guid AssetId, int RenderJobsQueued, string Status);
+
     private static string KindLabel(string value) => value switch { "Video" => "Video", "CreatorChannel" => "Kênh sáng tạo", "Sound" => "Âm thanh", _ => "Khác" };
     private static string PlatformLabel(string value) => value switch { "TikTokVietnam" => "TikTok Việt Nam", "YouTubeShortsVietnam" => "YouTube Shorts Việt Nam", "FacebookReelsVietnam" => "Facebook Reels Việt Nam", "Douyin" => "Douyin", _ => "Khác" };
     private static string ResolverStatusLabel(string value) => value switch { "Pending" => "Đang chờ phân giải", "Resolving" => "Đang xử lý", "NeedsReview" => "Chờ xác nhận quyền", "RightsConfirmed" => "Đã xác nhận quyền", "Failed" => "Không lấy được media", _ => value };
