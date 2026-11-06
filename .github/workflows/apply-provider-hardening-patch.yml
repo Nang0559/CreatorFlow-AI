@@ -56,6 +56,53 @@ jobs:
           dotnet build .\src\CreatorFlow.Workers\CreatorFlow.Workers.csproj -c Release
           if ($LASTEXITCODE -ne 0) { throw 'Worker build failed; patch will not be committed.' }
 
+      - name: Build API and Web
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet build .\src\CreatorFlow.Api\CreatorFlow.Api.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'API build failed; deployment was not started.' }
+          dotnet build .\src\CreatorFlow.Web\CreatorFlow.Web.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Web build failed; deployment was not started.' }
+          $localEnv = 'E:\Projects\CreatorFlow-AI\.env'
+          if (-not (Test-Path $localEnv)) { throw "Required local .env file was not found at $localEnv; refusing to stop the running API." }
+          Copy-Item -LiteralPath $localEnv -Destination '.\.env' -Force
+
+      - name: Rebuild Web container and restart API
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $localEnv = 'E:\Projects\CreatorFlow-AI\.env'
+          docker compose --env-file $localEnv -f .\compose.dev.yaml up --build -d web
+          if ($LASTEXITCODE -ne 0) { throw 'Web container rebuild/restart failed; the existing API process was left running.' }
+
+          $apiProcesses = Get-CimInstance Win32_Process -Filter "Name = 'dotnet.exe'" |
+            Where-Object { $_.CommandLine -and $_.CommandLine -match 'CreatorFlow\.Api\.csproj' }
+          foreach ($proc in $apiProcesses) {
+            Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop
+          }
+
+          $env:CREATORFLOW_LOAD_DOTENV = 'true'
+          $stdout = Join-Path $env:RUNNER_TEMP 'creatorflow-api.stdout.log'
+          $stderr = Join-Path $env:RUNNER_TEMP 'creatorflow-api.stderr.log'
+          $api = Start-Process -FilePath 'dotnet' -ArgumentList @('run','--no-build','--configuration','Release','--project','src\CreatorFlow.Api\CreatorFlow.Api.csproj','--no-launch-profile') -WorkingDirectory $PWD -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          if (-not $api) { throw 'Could not start the API process.' }
+
+          $healthy = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 2
+            try {
+              $response = Invoke-WebRequest -Uri 'http://127.0.0.1:7001/health' -TimeoutSec 3
+              if ($response.StatusCode -eq 200) { $healthy = $true; break }
+            } catch { }
+            if ($api.HasExited) { break }
+          }
+          if (-not $healthy) {
+            $tail = if (Test-Path $stderr) { Get-Content $stderr -Tail 60 } else { 'No API stderr log was created.' }
+            throw "API did not become healthy on port 7001. ProcessId=$($api.Id). $tail"
+          }
+          Write-Host "API restarted and healthy. ProcessId=$($api.Id)"
+
       - name: Commit applied patch
         shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: |
