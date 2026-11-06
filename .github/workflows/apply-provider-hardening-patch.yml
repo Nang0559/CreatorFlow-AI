@@ -29,23 +29,23 @@ jobs:
         shell: cmd
         run: |
           @echo off
-          if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" (
-            echo %ProgramFiles%\PowerShell\7>>"%GITHUB_PATH%"
-            "%ProgramFiles%\PowerShell\7\pwsh.exe" -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
-            exit /b %ERRORLEVEL%
-          )
-          where pwsh.exe >nul 2>nul
-          if not errorlevel 1 (
-            for /f "delims=" %%P in ('where pwsh.exe') do (
-              for %%D in ("%%~dpP.") do echo %%~fD>>"%GITHUB_PATH%"
-              goto :found
+          set "PWSH="
+          if exist "%ProgramFiles%\PowerShell\7\pwsh.exe" set "PWSH=%ProgramFiles%\PowerShell\7\pwsh.exe"
+          if not defined PWSH if exist "%ProgramW6432%\PowerShell\7\pwsh.exe" set "PWSH=%ProgramW6432%\PowerShell\7\pwsh.exe"
+          if not defined PWSH for /f "delims=" %%P in ('where pwsh.exe 2^>nul') do if not defined PWSH set "PWSH=%%P"
+          if not defined PWSH (
+            for /d %%U in ("C:\Users\*") do (
+              if not defined PWSH if exist "%%~fU\AppData\Local\Programs\PowerShell\7\pwsh.exe" set "PWSH=%%~fU\AppData\Local\Programs\PowerShell\7\pwsh.exe"
+              if not defined PWSH if exist "%%~fU\scoop\apps\pwsh\current\pwsh.exe" set "PWSH=%%~fU\scoop\apps\pwsh\current\pwsh.exe"
             )
           )
-          echo PowerShell 7 is installed outside the standard path and is not visible to the runner service.
-          echo Add its folder to the runner service PATH or update this workflow with the exact pwsh.exe path.
-          exit /b 1
-          :found
-          pwsh.exe -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
+          if not defined PWSH (
+            echo PowerShell 7 executable was not found in standard machine or user install locations.
+            exit /b 1
+          )
+          echo PowerShell 7 found: %PWSH%
+          for %%D in ("%PWSH%") do echo %%~dpD>>"%GITHUB_PATH%"
+          "%PWSH%" -NoProfile -Command "$PSVersionTable.PSVersion.ToString()"
           exit /b %ERRORLEVEL%
 
       - name: Verify clean checkout and patch
