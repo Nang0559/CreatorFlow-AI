@@ -163,15 +163,18 @@ internal sealed class DiscoveryTopicSchedulerWorker(
         {
             try
             {
-                var discovered = await SearchVideosAsync(apiKey, topicName, topicKeywords, ct);
+                var (discovered, rateLimited) = await SearchVideosAsync(apiKey, topicName, topicKeywords, ct);
                 candidateCount = await SaveCandidatesAsync(connection, tenantId, topicId, discovered, ct);
                 status = "Completed";
-                if (discovered.Count == 0) errorCode = "NoMatchingVideoUrls";
+                if (discovered.Count == 0) errorCode = rateLimited ? "BraveSearchRateLimited" : "NoMatchingVideoUrls";
+                else if (rateLimited) errorCode = "BraveSearchRateLimited"; // partial results were still saved
             }
-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+            catch (Exception ex) when (!ct.IsCancellationRequested &&
+                (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or SqlException))
             {
                 status = "Failed";
-                errorCode = ex is TaskCanceledException ? "BraveSearchTimeout" : "BraveSearchFailed";
+                errorCode = ex is TaskCanceledException ? "BraveSearchTimeout"
+                    : ex is SqlException ? "CandidateSaveFailed" : "BraveSearchFailed";
                 logger.LogWarning(ex, "Tìm video theo lịch cho chủ đề {TopicName} thất bại.", topicName);
             }
         }
@@ -207,7 +210,7 @@ internal sealed class DiscoveryTopicSchedulerWorker(
             topicName, profileId, status, candidateCount);
         return true;
     }
-    private static async Task<List<DiscoveredVideo>> SearchVideosAsync(
+    private static async Task<(List<DiscoveredVideo> Videos, bool RateLimited)> SearchVideosAsync(
         string apiKey, string topic, string keywords, CancellationToken ct)
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(25) };
@@ -217,8 +220,12 @@ internal sealed class DiscoveryTopicSchedulerWorker(
         if (terms.Length == 0) terms = [topic];
 
         var results = new Dictionary<string, DiscoveredVideo>(StringComparer.OrdinalIgnoreCase);
-        foreach (var term in terms)
+        var rateLimited = false;
+        for (var termIndex = 0; termIndex < terms.Length; termIndex++)
         {
+            var term = terms[termIndex];
+            // Brave's entry plans allow about one request per second; space the queries out.
+            if (termIndex > 0) await Task.Delay(TimeSpan.FromMilliseconds(1100), ct);
             var query = $"site:tiktok.com/@ {topic} {term}";
             var url = "https://api.search.brave.com/res/v1/web/search?q=" +
                 Uri.EscapeDataString(query) + "&country=VN&search_lang=vi&count=20&safesearch=moderate";
@@ -226,6 +233,12 @@ internal sealed class DiscoveryTopicSchedulerWorker(
             request.Headers.Add("X-Subscription-Token", apiKey);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+            {
+                // Keep what earlier queries found instead of discarding the whole run.
+                rateLimited = true;
+                break;
+            }
             if (!response.IsSuccessStatusCode)
                 throw new HttpRequestException($"Brave Search HTTP {(int)response.StatusCode}.");
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
@@ -241,7 +254,7 @@ internal sealed class DiscoveryTopicSchedulerWorker(
                 results.TryAdd(id, new DiscoveredVideo(id, urlValue!, title ?? topic));
             }
         }
-        return results.Values.Take(100).ToList();
+        return (results.Values.Take(100).ToList(), rateLimited);
     }
 
     private static bool TryGetTikTokVideoId(string? value, out string videoId)

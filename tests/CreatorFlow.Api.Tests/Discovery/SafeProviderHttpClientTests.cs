@@ -25,6 +25,12 @@ public sealed class SafeProviderHttpClientTests
     [InlineData("ff02::1")]
     [InlineData("::ffff:192.168.1.10")]
     [InlineData("2001:db8::1")]
+    [InlineData("2001::1")]            // Teredo / IETF protocol assignments
+    [InlineData("2002:c0a8:0101::1")]  // 6to4 embedding 192.168.1.1
+    [InlineData("2002:0a00:0001::1")]  // 6to4 embedding 10.0.0.1
+    [InlineData("3fff::1")]            // documentation
+    [InlineData("64:ff9b::a00:1")]     // NAT64 embedding 10.0.0.1
+    [InlineData("::ffff:169.254.169.254")]
     public void Rejects_non_public_addresses(string value)
     {
         Assert.False(SafeProviderHttpClient.IsPublicAddress(IPAddress.Parse(value)));
@@ -53,5 +59,28 @@ public sealed class SafeProviderHttpClientTests
         using var content = new StringContent("ok");
         var bytes = await SafeProviderHttpClient.ReadBoundedAsync(content, CancellationToken.None);
         Assert.Equal("ok", System.Text.Encoding.UTF8.GetString(bytes));
+    }
+
+    [Theory]
+    [InlineData("https://localhost/search")]
+    [InlineData("https://127.0.0.1/search")]
+    [InlineData("https://[::1]/search")]
+    [InlineData("https://169.254.169.254/latest/meta-data")]
+    [InlineData("https://10.1.2.3/search")]
+    [InlineData("https://intranet/search")]
+    [InlineData("https://printer.local/search")]
+    [InlineData("https://db.internal/search")]
+    public void Flags_obviously_internal_hosts(string url)
+    {
+        Assert.True(SafeProviderHttpClient.IsObviouslyInternalHost(new Uri(url)));
+    }
+
+    [Theory]
+    [InlineData("https://api.langsearch.com/v1/web-search")]
+    [InlineData("https://search.example.org/api")]
+    [InlineData("https://8.8.8.8/search")]
+    public void Does_not_flag_public_hosts(string url)
+    {
+        Assert.False(SafeProviderHttpClient.IsObviouslyInternalHost(new Uri(url)));
     }
 }

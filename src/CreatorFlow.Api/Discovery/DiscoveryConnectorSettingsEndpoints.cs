@@ -58,6 +58,8 @@ public static class DiscoveryConnectorSettingsEndpoints
                     uri.Scheme != Uri.UriSchemeHttps || uri.Port != 443 || !string.IsNullOrEmpty(uri.UserInfo) ||
                     !string.IsNullOrEmpty(uri.Fragment))
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Chỉ chấp nhận endpoint HTTPS, không chứa thông tin đăng nhập hoặc fragment."] });
+                if (SafeProviderHttpClient.IsObviouslyInternalHost(uri))
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Endpoint phải trỏ tới máy chủ công khai, không phải localhost hoặc địa chỉ nội bộ."] });
                 if (item.Name.Trim().Equals("Brave Search", StringComparison.OrdinalIgnoreCase) ||
                     item.Name.Trim().Equals("TikTok Research API", StringComparison.OrdinalIgnoreCase))
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Tên này dành riêng cho nguồn tích hợp hệ thống."] });
@@ -72,17 +74,9 @@ public static class DiscoveryConnectorSettingsEndpoints
                     try { using var body = JsonDocument.Parse(requestBody); }
                     catch (JsonException) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["requestBodyTemplate"] = ["Mẫu body phải là JSON hợp lệ."] }); }
                 }
-                if (!string.IsNullOrWhiteSpace(item.HeadersJson))
-                {
-                    try
-                    {
-                        using var headers = JsonDocument.Parse(item.HeadersJson);
-                        if (headers.RootElement.ValueKind != JsonValueKind.Object ||
-                            headers.RootElement.EnumerateObject().Any(x => x.Value.ValueKind != JsonValueKind.String))
-                            return Results.ValidationProblem(new Dictionary<string, string[]> { ["headersJson"] = ["Headers phải là JSON object với các giá trị chuỗi."] });
-                    }
-                    catch (JsonException) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["headersJson"] = ["Headers phải là JSON hợp lệ."] }); }
-                }
+                var headerError = ProviderHeaderPolicy.Validate(item.HeadersJson, item.ApiKeyHeader);
+                if (headerError is not null)
+                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["headersJson"] = [headerError] });
             }
 
             var row = await db.DiscoveryConnectorConfigurations

@@ -86,15 +86,26 @@ public static class DiscoverySearchEndpoints
                 .SingleOrDefaultAsync(x => x.TenantId == tenant.TenantId, cancellationToken);
             var configuredProviders = configuration.GetSection("DiscoverySearch:Providers").Get<ConfiguredSearchProvider[]>() ?? [];
             var workspaceProviders = DiscoveryConnectorSettingsEndpoints.ReadCustomProviders(workspaceConnector, protection);
+            // Bound the total time spent on tenant-configured providers so that up to 20 providers x
+            // several queries x per-request timeouts cannot hold one API request open indefinitely.
+            using var customProviderBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            customProviderBudget.CancelAfter(TimeSpan.FromSeconds(60));
             foreach (var provider in workspaceProviders.Concat(configuredProviders))
             {
                 if (!provider.Enabled || string.IsNullOrWhiteSpace(provider.Name) ||
                     string.IsNullOrWhiteSpace(provider.Endpoint))
                     continue;
 
+                if (customProviderBudget.IsCancellationRequested)
+                {
+                    providerStates.Add(new("Custom: " + provider.Name, "Skipped", 0,
+                        "Đã hết ngân sách thời gian 60 giây cho các nguồn tùy chỉnh."));
+                    continue;
+                }
+
                 if (!IsAllowedProviderEndpoint(provider.Endpoint))
                 {
-                    providerStates.Add(new(provider.Name, "Failed", 0, "Endpoint phải là URL HTTP(S) hợp lệ."));
+                    providerStates.Add(new("Custom: " + provider.Name, "Failed", 0, "Endpoint phải là URL HTTPS công khai hợp lệ."));
                     continue;
                 }
 
@@ -102,13 +113,13 @@ public static class DiscoverySearchEndpoints
                 {
                     using var providerClient = SafeProviderHttpClient.Create(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45)));
                     var providerResults = await SearchConfiguredProviderAsync(
-                        providerClient, provider, topic, queries, cancellationToken);
+                        providerClient, provider, topic, queries, customProviderBudget.Token);
                     results.AddRange(providerResults);
                     providerStates.Add(new("Custom: " + provider.Name, "Completed", providerResults.Count, null));
                 }
                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or FormatException)
                 {
-                    providerStates.Add(new("Custom provider", "Failed", 0,
+                    providerStates.Add(new("Custom: " + provider.Name, "Failed", 0,
                         ex is TaskCanceledException ? "Nguồn tìm kiếm hết thời gian chờ." : "Không thể truy cập hoặc phân tích phản hồi của provider."));
                 }
             }
@@ -136,22 +147,41 @@ public static class DiscoverySearchEndpoints
                 if (!topicExists)
                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["contentTopicId"] = ["Chủ đề không tồn tại hoặc không còn hoạt động trong workspace hiện tại."] });
 
+                // The same video can be returned by several providers or queries; the unique index is
+                // (TenantId, DouyinVideoId), so de-duplicate within the batch before touching the database.
+                var seenVideoIds = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var video in videosOnly)
                 {
                     if (!TryNormalizeTikTokUrl(video.Url, out _, out _, out var videoId) ||
-                        string.IsNullOrWhiteSpace(videoId))
+                        string.IsNullOrWhiteSpace(videoId) || !seenVideoIds.Add(videoId))
                         continue;
                     var exists = await db.DouyinVideoCandidates.AnyAsync(
                         x => x.DouyinVideoId == videoId, cancellationToken);
                     if (exists) continue;
+                    var title = video.Title?.Trim() ?? string.Empty;
+                    if (title.Length > 500) title = title[..500];
                     var candidate = DouyinVideoCandidate.Create(
-                        videoId, null, video.Url, video.Title, VideoDiscoveryMethod.TopicExplore,
+                        videoId, null, video.Url, title, VideoDiscoveryMethod.TopicExplore,
                         video.PublishedAt, DateTimeOffset.UtcNow, request.ContentTopicId);
                     db.DouyinVideoCandidates.Add(candidate);
                     savedCandidateCount++;
                 }
                 if (savedCandidateCount > 0)
-                    await db.SaveChangesAsync(cancellationToken);
+                {
+                    try
+                    {
+                        await db.SaveChangesAsync(cancellationToken);
+                    }
+                    catch (DbUpdateException)
+                    {
+                        // A concurrent search or the scheduler saved the same video first. Keep the
+                        // search results usable instead of failing the whole request after provider calls.
+                        foreach (var entry in db.ChangeTracker.Entries<DouyinVideoCandidate>()
+                                     .Where(x => x.State == EntityState.Added).ToList())
+                            entry.State = EntityState.Detached;
+                        savedCandidateCount = 0;
+                    }
+                }
             }
 
             var channels = unique
@@ -352,16 +382,9 @@ public static class DiscoverySearchEndpoints
         var descriptionPath = string.IsNullOrWhiteSpace(provider.DescriptionPath) ? "content" : provider.DescriptionPath;
         if (!IsAllowedProviderEndpoint(provider.Endpoint))
             throw new InvalidOperationException("Endpoint không được phép.");
-        if (!string.IsNullOrWhiteSpace(provider.HeadersJson))
-        {
-            using var headerValidation = JsonDocument.Parse(provider.HeadersJson);
-            if (headerValidation.RootElement.ValueKind != JsonValueKind.Object)
-                throw new InvalidOperationException("Headers bổ sung không hợp lệ.");
-            var blockedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-                { "Host", "Connection", "Content-Length", "Transfer-Encoding", "Proxy-Authorization", "Proxy-Connection", "Cookie", "Set-Cookie", "Upgrade", "TE", "Trailer" };
-            if (headerValidation.RootElement.EnumerateObject().Any(x => blockedHeaders.Contains(x.Name)))
-                throw new InvalidOperationException("Provider sử dụng header bị cấm.");
-        }
+        var headerError = ProviderHeaderPolicy.Validate(provider.HeadersJson, provider.ApiKeyHeader);
+        if (headerError is not null)
+            throw new InvalidOperationException(headerError);
 
         foreach (var query in queries.Take(Math.Clamp(provider.MaxQueries, 1, 6)))
         {

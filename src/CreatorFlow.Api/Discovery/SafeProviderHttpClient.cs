@@ -81,6 +81,23 @@ public static class SafeProviderHttpClient
         throw new HttpRequestException("Không thể kết nối provider.", lastError);
     }
 
+    /// <summary>
+    /// Early, DNS-free rejection of endpoints whose host is obviously internal (localhost,
+    /// single-label names, or a literal non-public IP). The connection-time check in
+    /// <see cref="ConnectToPublicAddressAsync"/> remains the authoritative control.
+    /// </summary>
+    public static bool IsObviouslyInternalHost(Uri uri)
+    {
+        var host = uri.DnsSafeHost;
+        if (string.IsNullOrWhiteSpace(host)) return true;
+        if (IPAddress.TryParse(host, out var literal)) return !IsPublicAddress(literal);
+        return host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+               host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) ||
+               host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+               host.EndsWith(".internal", StringComparison.OrdinalIgnoreCase) ||
+               !host.Contains('.');
+    }
+
     public static bool IsPublicAddress(IPAddress address)
     {
         if (address.IsIPv4MappedToIPv6)
@@ -112,6 +129,12 @@ public static class SafeProviderHttpClient
             if ((bytes[0] & 0xE0) != 0x20) return false;
             if (bytes[0] == 0x20 && bytes[1] == 0x01 &&
                 bytes[2] == 0x0D && bytes[3] == 0xB8) return false;
+            // 2001::/23 (IETF protocol assignments, includes Teredo 2001::/32) and 6to4 2002::/16
+            // can embed or tunnel to arbitrary IPv4 addresses, including private ones.
+            if (bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] <= 0x01) return false;
+            if (bytes[0] == 0x20 && bytes[1] == 0x02) return false;
+            // 3fff::/20 is the newer documentation allocation.
+            if (bytes[0] == 0x3F && bytes[1] == 0xFF && (bytes[2] & 0xF0) == 0x00) return false;
             return true;
         }
         return false;
