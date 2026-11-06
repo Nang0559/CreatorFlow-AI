@@ -26,7 +26,7 @@ jobs:
           persist-credentials: true
 
       - name: Verify clean checkout and patch
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           if (-not (Test-Path '.\creatorflow-provider-hardening.patch')) {
@@ -39,7 +39,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'git apply --check failed; patch was not applied.' }
 
       - name: Apply patch
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           git apply .\creatorflow-provider-hardening.patch
@@ -48,7 +48,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
 
       - name: Test API and build worker
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           dotnet test .\tests\CreatorFlow.Api.Tests\CreatorFlow.Api.Tests.csproj -c Release
@@ -57,7 +57,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Worker build failed; patch will not be committed.' }
 
       - name: Commit applied patch
-        shell: pwsh
+        shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           git config user.name 'github-actions[bot]'
