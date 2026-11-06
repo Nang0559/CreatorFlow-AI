@@ -17,6 +17,13 @@ public sealed class SharedLinkInboxItem
     public SharedLinkStatus Status { get; private set; }
     public string? ReviewNote { get; private set; }
     public Guid? LinkedChannelId { get; private set; }
+    public string ResolverStatus { get; private set; } = "Pending";
+    public string? ResolverError { get; private set; }
+    public Guid? ResolvedAssetId { get; private set; }
+    public string? ResolvedTitle { get; private set; }
+    public byte ResolverAttemptCount { get; private set; }
+    public DateTimeOffset? ResolverUpdatedAt { get; private set; }
+    public DateTimeOffset? RightsConfirmedAt { get; private set; }
 
     public static SharedLinkInboxItem Create(string sharedUrl, DateTimeOffset now)
     {

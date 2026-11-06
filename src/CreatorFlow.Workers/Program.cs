@@ -8,5 +8,6 @@ if (!string.Equals(engineName, "ffmpeg", StringComparison.OrdinalIgnoreCase))
 
 builder.Services.AddSingleton<IVideoRenderEngine, FfmpegVideoRenderEngine>();
 builder.Services.AddHostedService<VideoRenderWorker>();
+builder.Services.AddHostedService<TikTokShareResolverWorker>();
 builder.Services.AddHostedService<DiscoveryTopicSchedulerWorker>();
 await builder.Build().RunAsync();

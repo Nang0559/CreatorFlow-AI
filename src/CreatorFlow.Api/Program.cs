@@ -359,7 +359,7 @@ shareInbox.MapGet("/", async (string? status, int? take, CreatorFlowDbContext? d
     }
     var items = await query.OrderByDescending(x => x.SharedAt).Take(size)
         .Select(x => new SharedLinkInboxResponse(x.Id, x.Platform, x.SharedUrl, x.SharedAt,
-            x.Status.ToString(), x.ReviewNote, x.LinkedChannelId)).ToArrayAsync(ct);
+            x.Status.ToString(), x.ReviewNote, x.LinkedChannelId, x.ResolverStatus, x.ResolverError, x.ResolvedAssetId, x.ResolvedTitle)).ToArrayAsync(ct);
     return Results.Ok(items);
 });
 shareInbox.MapPost("/", async (CreateSharedLinkRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
@@ -371,12 +371,12 @@ shareInbox.MapPost("/", async (CreateSharedLinkRequest request, CreatorFlowDbCon
         var existing = await db.SharedLinkInboxItems.AsNoTracking().SingleOrDefaultAsync(x => x.UrlHash == item.UrlHash, ct);
         if (existing is not null)
             return Results.Ok(new SharedLinkInboxResponse(existing.Id, existing.Platform, existing.SharedUrl,
-                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId));
+                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId, existing.ResolverStatus, existing.ResolverError, existing.ResolvedAssetId, existing.ResolvedTitle));
         db.SharedLinkInboxItems.Add(item);
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/share-inbox/{item.Id}",
             new SharedLinkInboxResponse(item.Id, item.Platform, item.SharedUrl, item.SharedAt,
-                item.Status.ToString(), item.ReviewNote, item.LinkedChannelId));
+                item.Status.ToString(), item.ReviewNote, item.LinkedChannelId, item.ResolverStatus, item.ResolverError, item.ResolvedAssetId, item.ResolvedTitle));
     }
     catch (ArgumentException ex)
     {
@@ -1167,7 +1167,8 @@ public sealed record VideoCandidateResponse(Guid Id, string DouyinVideoId, Guid?
 public sealed record CreateSharedLinkRequest(string SharedUrl);
 public sealed record ReviewSharedLinkRequest(string? Note);
 public sealed record SharedLinkInboxResponse(Guid Id, string Platform, string SharedUrl,
-    DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId);
+    DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId,
+    string ResolverStatus, string? ResolverError, Guid? ResolvedAssetId, string? ResolvedTitle);
 
 public partial class Program;
 
