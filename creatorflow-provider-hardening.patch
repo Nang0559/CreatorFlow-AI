@@ -1,0 +1,704 @@
+From 018822ea765d0d46f802a31b66195c8b06443056 Mon Sep 17 00:00:00 2001
+From: Review <review@example.invalid>
+Date: Fri, 6 Nov 2026 10:46:13 +0000
+Subject: [PATCH] Harden custom discovery providers and scheduled discovery
+
+- Add shared ProviderHeaderPolicy (save-time and send-time), including API key header
+- Reject obviously internal endpoint hosts when saving providers
+- Block 6to4/Teredo/NAT64/documentation IPv6 ranges in address policy
+- Add 60s total budget for custom providers per search
+- De-duplicate candidates per batch, truncate titles, tolerate concurrent inserts
+- Scheduler: keep partial results on Brave 429, space queries, handle SqlException
+- Add endpoint, header policy and address policy tests; update AS_BUILT
+---
+ docs/design/AS_BUILT_STATUS.md                |   6 +
+ .../DiscoveryConnectorSettingsEndpoints.cs    |  16 +-
+ .../Discovery/DiscoverySearchEndpoints.cs     |  55 +++--
+ .../Discovery/ProviderHeaderPolicy.cs         |  70 ++++++
+ .../Discovery/SafeProviderHttpClient.cs       |  23 ++
+ .../DiscoveryTopicSchedulerWorker.cs          |  27 ++-
+ .../CustomDiscoveryProviderEndpointTests.cs   | 205 ++++++++++++++++++
+ .../Discovery/ProviderHeaderPolicyTests.cs    |  62 ++++++
+ .../Discovery/SafeProviderHttpClientTests.cs  |  29 +++
+ 9 files changed, 459 insertions(+), 34 deletions(-)
+ create mode 100644 src/CreatorFlow.Api/Discovery/ProviderHeaderPolicy.cs
+ create mode 100644 tests/CreatorFlow.Api.Tests/CustomDiscoveryProviderEndpointTests.cs
+ create mode 100644 tests/CreatorFlow.Api.Tests/Discovery/ProviderHeaderPolicyTests.cs
+
+diff --git a/docs/design/AS_BUILT_STATUS.md b/docs/design/AS_BUILT_STATUS.md
+index 3a1802c..d57c584 100644
+--- a/docs/design/AS_BUILT_STATUS.md
++++ b/docs/design/AS_BUILT_STATUS.md
+@@ -127,3 +127,9 @@ Forwarded headers are processed for one hop only and only from IPs configured in
+ The API integration-test factory now configures the actual ASP.NET Core JwtBearer handler with a deterministic test issuer, HMAC signing key and the production API audience value. Requests carry signed bearer JWTs and pass through the normal authentication, tenant-context, role-guard and authorization middleware. Tests cover: an active issuer+subject membership resolving the selected workspace; the membership's Editor role overriding the API-key bootstrap Owner configuration; a caller selecting a different workspace without membership being denied; and a suspended membership being denied.
+ 
+ **Evidence boundary:** the general endpoint tests use EF Core InMemory for the membership store. A separate live Keycloak CI job now obtains a token from the checked-in `creatorflow-web` client and passes the same token through the real API JwtBearer handler, issuer+subject membership lookup, and a protected API request. This verifies the live identity-provider-to-API authentication path, but not SQL Server query/transaction parity. SQL Server migration 029 and host acceptance remain pending until the Z240 QC workflow completes successfully.
++
++## Custom discovery provider egress boundary and scheduler limits (2026-11-06)
++
++Custom discovery providers are tenant-configured outbound HTTP calls and are treated as untrusted egress. Controls in this branch: HTTPS on port 443 only, no embedded credentials or fragments, early rejection of obviously internal hosts when saving, authoritative DNS resolution and address validation at connection time (loopback, private, link-local, shared, documentation, multicast, 6to4/Teredo/NAT64 ranges refused), no redirects, no proxy, a 2 MB response cap, a 60-second total budget per search for custom providers, and one shared header policy (`ProviderHeaderPolicy`) applied when saving and again before every request. Secrets (API key and additional headers) are encrypted per tenant and never returned.
++
++Known limits: the scheduled worker uses the platform-wide `BraveSearch:ApiKey` configuration and does **not** read the tenant's encrypted connector credentials, so scheduled discovery cost is not attributed to a tenant; it also needs a shared Data Protection key ring before it can decrypt tenant keys. Scheduled runs keep partial results and record `BraveSearchRateLimited` when Brave returns HTTP 429. Custom-provider endpoint tests run on EF InMemory and make no outbound calls; SQL Server behaviour (unique indexes, migration 029) still requires the QC run.
+diff --git a/src/CreatorFlow.Api/Discovery/DiscoveryConnectorSettingsEndpoints.cs b/src/CreatorFlow.Api/Discovery/DiscoveryConnectorSettingsEndpoints.cs
+index 60ee041..4654afc 100644
+--- a/src/CreatorFlow.Api/Discovery/DiscoveryConnectorSettingsEndpoints.cs
++++ b/src/CreatorFlow.Api/Discovery/DiscoveryConnectorSettingsEndpoints.cs
+@@ -58,6 +58,8 @@ public static class DiscoveryConnectorSettingsEndpoints
+                     uri.Scheme != Uri.UriSchemeHttps || uri.Port != 443 || !string.IsNullOrEmpty(uri.UserInfo) ||
+                     !string.IsNullOrEmpty(uri.Fragment))
+                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Chỉ chấp nhận endpoint HTTPS, không chứa thông tin đăng nhập hoặc fragment."] });
++                if (SafeProviderHttpClient.IsObviouslyInternalHost(uri))
++                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["endpoint"] = ["Endpoint phải trỏ tới máy chủ công khai, không phải localhost hoặc địa chỉ nội bộ."] });
+                 if (item.Name.Trim().Equals("Brave Search", StringComparison.OrdinalIgnoreCase) ||
+                     item.Name.Trim().Equals("TikTok Research API", StringComparison.OrdinalIgnoreCase))
+                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Tên này dành riêng cho nguồn tích hợp hệ thống."] });
+@@ -72,17 +74,9 @@ public static class DiscoveryConnectorSettingsEndpoints
+                     try { using var body = JsonDocument.Parse(requestBody); }
+                     catch (JsonException) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["requestBodyTemplate"] = ["Mẫu body phải là JSON hợp lệ."] }); }
+                 }
+-                if (!string.IsNullOrWhiteSpace(item.HeadersJson))
+-                {
+-                    try
+-                    {
+-                        using var headers = JsonDocument.Parse(item.HeadersJson);
+-                        if (headers.RootElement.ValueKind != JsonValueKind.Object ||
+-                            headers.RootElement.EnumerateObject().Any(x => x.Value.ValueKind != JsonValueKind.String))
+-                            return Results.ValidationProblem(new Dictionary<string, string[]> { ["headersJson"] = ["Headers phải là JSON object với các giá trị chuỗi."] });
+-                    }
+-                    catch (JsonException) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["headersJson"] = ["Headers phải là JSON hợp lệ."] }); }
+-                }
++                var headerError = ProviderHeaderPolicy.Validate(item.HeadersJson, item.ApiKeyHeader);
++                if (headerError is not null)
++                    return Results.ValidationProblem(new Dictionary<string, string[]> { ["headersJson"] = [headerError] });
+             }
+ 
+             var row = await db.DiscoveryConnectorConfigurations
+diff --git a/src/CreatorFlow.Api/Discovery/DiscoverySearchEndpoints.cs b/src/CreatorFlow.Api/Discovery/DiscoverySearchEndpoints.cs
+index 01c9802..94f2e07 100644
+--- a/src/CreatorFlow.Api/Discovery/DiscoverySearchEndpoints.cs
++++ b/src/CreatorFlow.Api/Discovery/DiscoverySearchEndpoints.cs
+@@ -86,15 +86,26 @@ public static class DiscoverySearchEndpoints
+                 .SingleOrDefaultAsync(x => x.TenantId == tenant.TenantId, cancellationToken);
+             var configuredProviders = configuration.GetSection("DiscoverySearch:Providers").Get<ConfiguredSearchProvider[]>() ?? [];
+             var workspaceProviders = DiscoveryConnectorSettingsEndpoints.ReadCustomProviders(workspaceConnector, protection);
++            // Bound the total time spent on tenant-configured providers so that up to 20 providers x
++            // several queries x per-request timeouts cannot hold one API request open indefinitely.
++            using var customProviderBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
++            customProviderBudget.CancelAfter(TimeSpan.FromSeconds(60));
+             foreach (var provider in workspaceProviders.Concat(configuredProviders))
+             {
+                 if (!provider.Enabled || string.IsNullOrWhiteSpace(provider.Name) ||
+                     string.IsNullOrWhiteSpace(provider.Endpoint))
+                     continue;
+ 
++                if (customProviderBudget.IsCancellationRequested)
++                {
++                    providerStates.Add(new("Custom: " + provider.Name, "Skipped", 0,
++                        "Đã hết ngân sách thời gian 60 giây cho các nguồn tùy chỉnh."));
++                    continue;
++                }
++
+                 if (!IsAllowedProviderEndpoint(provider.Endpoint))
+                 {
+-                    providerStates.Add(new(provider.Name, "Failed", 0, "Endpoint phải là URL HTTP(S) hợp lệ."));
++                    providerStates.Add(new("Custom: " + provider.Name, "Failed", 0, "Endpoint phải là URL HTTPS công khai hợp lệ."));
+                     continue;
+                 }
+ 
+@@ -102,13 +113,13 @@ public static class DiscoverySearchEndpoints
+                 {
+                     using var providerClient = SafeProviderHttpClient.Create(TimeSpan.FromSeconds(Math.Clamp(provider.TimeoutSeconds, 3, 45)));
+                     var providerResults = await SearchConfiguredProviderAsync(
+-                        providerClient, provider, topic, queries, cancellationToken);
++                        providerClient, provider, topic, queries, customProviderBudget.Token);
+                     results.AddRange(providerResults);
+                     providerStates.Add(new("Custom: " + provider.Name, "Completed", providerResults.Count, null));
+                 }
+                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or FormatException)
+                 {
+-                    providerStates.Add(new("Custom provider", "Failed", 0,
++                    providerStates.Add(new("Custom: " + provider.Name, "Failed", 0,
+                         ex is TaskCanceledException ? "Nguồn tìm kiếm hết thời gian chờ." : "Không thể truy cập hoặc phân tích phản hồi của provider."));
+                 }
+             }
+@@ -136,22 +147,41 @@ public static class DiscoverySearchEndpoints
+                 if (!topicExists)
+                     return Results.ValidationProblem(new Dictionary<string, string[]> { ["contentTopicId"] = ["Chủ đề không tồn tại hoặc không còn hoạt động trong workspace hiện tại."] });
+ 
++                // The same video can be returned by several providers or queries; the unique index is
++                // (TenantId, DouyinVideoId), so de-duplicate within the batch before touching the database.
++                var seenVideoIds = new HashSet<string>(StringComparer.Ordinal);
+                 foreach (var video in videosOnly)
+                 {
+                     if (!TryNormalizeTikTokUrl(video.Url, out _, out _, out var videoId) ||
+-                        string.IsNullOrWhiteSpace(videoId))
++                        string.IsNullOrWhiteSpace(videoId) || !seenVideoIds.Add(videoId))
+                         continue;
+                     var exists = await db.DouyinVideoCandidates.AnyAsync(
+                         x => x.DouyinVideoId == videoId, cancellationToken);
+                     if (exists) continue;
++                    var title = video.Title?.Trim() ?? string.Empty;
++                    if (title.Length > 500) title = title[..500];
+                     var candidate = DouyinVideoCandidate.Create(
+-                        videoId, null, video.Url, video.Title, VideoDiscoveryMethod.TopicExplore,
++                        videoId, null, video.Url, title, VideoDiscoveryMethod.TopicExplore,
+                         video.PublishedAt, DateTimeOffset.UtcNow, request.ContentTopicId);
+                     db.DouyinVideoCandidates.Add(candidate);
+                     savedCandidateCount++;
+                 }
+                 if (savedCandidateCount > 0)
+-                    await db.SaveChangesAsync(cancellationToken);
++                {
++                    try
++                    {
++                        await db.SaveChangesAsync(cancellationToken);
++                    }
++                    catch (DbUpdateException)
++                    {
++                        // A concurrent search or the scheduler saved the same video first. Keep the
++                        // search results usable instead of failing the whole request after provider calls.
++                        foreach (var entry in db.ChangeTracker.Entries<DouyinVideoCandidate>()
++                                     .Where(x => x.State == EntityState.Added).ToList())
++                            entry.State = EntityState.Detached;
++                        savedCandidateCount = 0;
++                    }
++                }
+             }
+ 
+             var channels = unique
+@@ -352,16 +382,9 @@ public static class DiscoverySearchEndpoints
+         var descriptionPath = string.IsNullOrWhiteSpace(provider.DescriptionPath) ? "content" : provider.DescriptionPath;
+         if (!IsAllowedProviderEndpoint(provider.Endpoint))
+             throw new InvalidOperationException("Endpoint không được phép.");
+-        if (!string.IsNullOrWhiteSpace(provider.HeadersJson))
+-        {
+-            using var headerValidation = JsonDocument.Parse(provider.HeadersJson);
+-            if (headerValidation.RootElement.ValueKind != JsonValueKind.Object)
+-                throw new InvalidOperationException("Headers bổ sung không hợp lệ.");
+-            var blockedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+-                { "Host", "Connection", "Content-Length", "Transfer-Encoding", "Proxy-Authorization", "Proxy-Connection", "Cookie", "Set-Cookie", "Upgrade", "TE", "Trailer" };
+-            if (headerValidation.RootElement.EnumerateObject().Any(x => blockedHeaders.Contains(x.Name)))
+-                throw new InvalidOperationException("Provider sử dụng header bị cấm.");
+-        }
++        var headerError = ProviderHeaderPolicy.Validate(provider.HeadersJson, provider.ApiKeyHeader);
++        if (headerError is not null)
++            throw new InvalidOperationException(headerError);
+ 
+         foreach (var query in queries.Take(Math.Clamp(provider.MaxQueries, 1, 6)))
+         {
+diff --git a/src/CreatorFlow.Api/Discovery/ProviderHeaderPolicy.cs b/src/CreatorFlow.Api/Discovery/ProviderHeaderPolicy.cs
+new file mode 100644
+index 0000000..2c86a28
+--- /dev/null
++++ b/src/CreatorFlow.Api/Discovery/ProviderHeaderPolicy.cs
+@@ -0,0 +1,70 @@
++using System.Text.Json;
++
++namespace CreatorFlow.Api.Discovery;
++
++/// <summary>
++/// Single policy for headers that a workspace may attach to a custom discovery provider.
++/// It is applied both when the provider is saved and again immediately before each outbound
++/// request, so configuration persisted earlier (or supplied through appsettings) cannot bypass it.
++/// </summary>
++public static class ProviderHeaderPolicy
++{
++    private const int MaxHeaderNameLength = 100;
++    private const int MaxHeaderValueLength = 2000;
++
++    private static readonly HashSet<string> Blocked = new(StringComparer.OrdinalIgnoreCase)
++    {
++        "Host", "Connection", "Content-Length", "Content-Type", "Transfer-Encoding",
++        "Proxy-Authorization", "Proxy-Connection", "Cookie", "Set-Cookie", "Upgrade",
++        "TE", "Trailer", "Expect", "Forwarded", "X-Forwarded-For", "X-Forwarded-Host",
++        "X-Forwarded-Proto", "X-Real-IP"
++    };
++
++    /// <summary>Returns true when <paramref name="name"/> is a valid, permitted HTTP header name.</summary>
++    public static bool IsAllowedName(string? name)
++    {
++        if (string.IsNullOrWhiteSpace(name) || name.Length > MaxHeaderNameLength) return false;
++        foreach (var c in name)
++        {
++            var token = (c is >= 'a' and <= 'z') || (c is >= 'A' and <= 'Z') || (c is >= '0' and <= '9') ||
++                        "!#$%&'*+-.^_`|~".Contains(c);
++            if (!token) return false;
++        }
++        return !Blocked.Contains(name);
++    }
++
++    /// <summary>
++    /// Validates the additional-headers JSON object and the API key header name.
++    /// Returns a user-facing error message, or null when everything is acceptable.
++    /// </summary>
++    public static string? Validate(string? headersJson, string? apiKeyHeader)
++    {
++        if (!string.IsNullOrWhiteSpace(apiKeyHeader) && !IsAllowedName(apiKeyHeader.Trim()))
++            return "Tên header xác thực không hợp lệ hoặc bị cấm.";
++
++        if (string.IsNullOrWhiteSpace(headersJson)) return null;
++        try
++        {
++            using var headers = JsonDocument.Parse(headersJson);
++            if (headers.RootElement.ValueKind != JsonValueKind.Object)
++                return "Headers phải là JSON object với các giá trị chuỗi.";
++            foreach (var header in headers.RootElement.EnumerateObject())
++            {
++                if (header.Value.ValueKind != JsonValueKind.String)
++                    return "Headers phải là JSON object với các giá trị chuỗi.";
++                if (!IsAllowedName(header.Name))
++                    return $"Header '{Truncate(header.Name)}' không hợp lệ hoặc bị cấm.";
++                var value = header.Value.GetString() ?? "";
++                if (value.Length > MaxHeaderValueLength || value.Any(c => c is (< ' ' and not '\t') or '\u007f'))
++                    return $"Giá trị của header '{Truncate(header.Name)}' không hợp lệ.";
++            }
++        }
++        catch (JsonException)
++        {
++            return "Headers phải là JSON hợp lệ.";
++        }
++        return null;
++    }
++
++    private static string Truncate(string value) => value.Length <= 40 ? value : value[..40] + "…";
++}
+diff --git a/src/CreatorFlow.Api/Discovery/SafeProviderHttpClient.cs b/src/CreatorFlow.Api/Discovery/SafeProviderHttpClient.cs
+index ab0b1e7..f6e9f0b 100644
+--- a/src/CreatorFlow.Api/Discovery/SafeProviderHttpClient.cs
++++ b/src/CreatorFlow.Api/Discovery/SafeProviderHttpClient.cs
+@@ -81,6 +81,23 @@ public static class SafeProviderHttpClient
+         throw new HttpRequestException("Không thể kết nối provider.", lastError);
+     }
+ 
++    /// <summary>
++    /// Early, DNS-free rejection of endpoints whose host is obviously internal (localhost,
++    /// single-label names, or a literal non-public IP). The connection-time check in
++    /// <see cref="ConnectToPublicAddressAsync"/> remains the authoritative control.
++    /// </summary>
++    public static bool IsObviouslyInternalHost(Uri uri)
++    {
++        var host = uri.DnsSafeHost;
++        if (string.IsNullOrWhiteSpace(host)) return true;
++        if (IPAddress.TryParse(host, out var literal)) return !IsPublicAddress(literal);
++        return host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
++               host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) ||
++               host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
++               host.EndsWith(".internal", StringComparison.OrdinalIgnoreCase) ||
++               !host.Contains('.');
++    }
++
+     public static bool IsPublicAddress(IPAddress address)
+     {
+         if (address.IsIPv4MappedToIPv6)
+@@ -112,6 +129,12 @@ public static class SafeProviderHttpClient
+             if ((bytes[0] & 0xE0) != 0x20) return false;
+             if (bytes[0] == 0x20 && bytes[1] == 0x01 &&
+                 bytes[2] == 0x0D && bytes[3] == 0xB8) return false;
++            // 2001::/23 (IETF protocol assignments, includes Teredo 2001::/32) and 6to4 2002::/16
++            // can embed or tunnel to arbitrary IPv4 addresses, including private ones.
++            if (bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] <= 0x01) return false;
++            if (bytes[0] == 0x20 && bytes[1] == 0x02) return false;
++            // 3fff::/20 is the newer documentation allocation.
++            if (bytes[0] == 0x3F && bytes[1] == 0xFF && (bytes[2] & 0xF0) == 0x00) return false;
+             return true;
+         }
+         return false;
+diff --git a/src/CreatorFlow.Workers/DiscoveryTopicSchedulerWorker.cs b/src/CreatorFlow.Workers/DiscoveryTopicSchedulerWorker.cs
+index b351a69..f344db3 100644
+--- a/src/CreatorFlow.Workers/DiscoveryTopicSchedulerWorker.cs
++++ b/src/CreatorFlow.Workers/DiscoveryTopicSchedulerWorker.cs
+@@ -163,15 +163,18 @@ internal sealed class DiscoveryTopicSchedulerWorker(
+         {
+             try
+             {
+-                var discovered = await SearchVideosAsync(apiKey, topicName, topicKeywords, ct);
++                var (discovered, rateLimited) = await SearchVideosAsync(apiKey, topicName, topicKeywords, ct);
+                 candidateCount = await SaveCandidatesAsync(connection, tenantId, topicId, discovered, ct);
+                 status = "Completed";
+-                if (discovered.Count == 0) errorCode = "NoMatchingVideoUrls";
++                if (discovered.Count == 0) errorCode = rateLimited ? "BraveSearchRateLimited" : "NoMatchingVideoUrls";
++                else if (rateLimited) errorCode = "BraveSearchRateLimited"; // partial results were still saved
+             }
+-            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
++            catch (Exception ex) when (!ct.IsCancellationRequested &&
++                (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException or SqlException))
+             {
+                 status = "Failed";
+-                errorCode = ex is TaskCanceledException ? "BraveSearchTimeout" : "BraveSearchFailed";
++                errorCode = ex is TaskCanceledException ? "BraveSearchTimeout"
++                    : ex is SqlException ? "CandidateSaveFailed" : "BraveSearchFailed";
+                 logger.LogWarning(ex, "Tìm video theo lịch cho chủ đề {TopicName} thất bại.", topicName);
+             }
+         }
+@@ -207,7 +210,7 @@ internal sealed class DiscoveryTopicSchedulerWorker(
+             topicName, profileId, status, candidateCount);
+         return true;
+     }
+-    private static async Task<List<DiscoveredVideo>> SearchVideosAsync(
++    private static async Task<(List<DiscoveredVideo> Videos, bool RateLimited)> SearchVideosAsync(
+         string apiKey, string topic, string keywords, CancellationToken ct)
+     {
+         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(25) };
+@@ -217,8 +220,12 @@ internal sealed class DiscoveryTopicSchedulerWorker(
+         if (terms.Length == 0) terms = [topic];
+ 
+         var results = new Dictionary<string, DiscoveredVideo>(StringComparer.OrdinalIgnoreCase);
+-        foreach (var term in terms)
++        var rateLimited = false;
++        for (var termIndex = 0; termIndex < terms.Length; termIndex++)
+         {
++            var term = terms[termIndex];
++            // Brave's entry plans allow about one request per second; space the queries out.
++            if (termIndex > 0) await Task.Delay(TimeSpan.FromMilliseconds(1100), ct);
+             var query = $"site:tiktok.com/@ {topic} {term}";
+             var url = "https://api.search.brave.com/res/v1/web/search?q=" +
+                 Uri.EscapeDataString(query) + "&country=VN&search_lang=vi&count=20&safesearch=moderate";
+@@ -226,6 +233,12 @@ internal sealed class DiscoveryTopicSchedulerWorker(
+             request.Headers.Add("X-Subscription-Token", apiKey);
+             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
++            if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
++            {
++                // Keep what earlier queries found instead of discarding the whole run.
++                rateLimited = true;
++                break;
++            }
+             if (!response.IsSuccessStatusCode)
+                 throw new HttpRequestException($"Brave Search HTTP {(int)response.StatusCode}.");
+             await using var stream = await response.Content.ReadAsStreamAsync(ct);
+@@ -241,7 +254,7 @@ internal sealed class DiscoveryTopicSchedulerWorker(
+                 results.TryAdd(id, new DiscoveredVideo(id, urlValue!, title ?? topic));
+             }
+         }
+-        return results.Values.Take(100).ToList();
++        return (results.Values.Take(100).ToList(), rateLimited);
+     }
+ 
+     private static bool TryGetTikTokVideoId(string? value, out string videoId)
+diff --git a/tests/CreatorFlow.Api.Tests/CustomDiscoveryProviderEndpointTests.cs b/tests/CreatorFlow.Api.Tests/CustomDiscoveryProviderEndpointTests.cs
+new file mode 100644
+index 0000000..14dbec7
+--- /dev/null
++++ b/tests/CreatorFlow.Api.Tests/CustomDiscoveryProviderEndpointTests.cs
+@@ -0,0 +1,205 @@
++using System.Net;
++using System.Net.Http.Json;
++using System.Text.Json;
++using CreatorFlow.Domain.Identity;
++using CreatorFlow.Infrastructure.Persistence;
++using Xunit;
++
++namespace CreatorFlow.Api.Tests;
++
++/// <summary>
++/// Endpoint-level tests for workspace custom discovery providers: validation, secret handling,
++/// role policy and tenant isolation. They run on EF InMemory (no SQL Server parity) and do not
++/// perform outbound network calls.
++/// </summary>
++public sealed class CustomDiscoveryProviderEndpointTests
++{
++    private const string Route = "/api/v1/discovery/connectors/custom-providers";
++
++    private static HttpClient CreateClient(CreatorFlowApiFactory factory)
++    {
++        var client = factory.CreateClient();
++        client.DefaultRequestHeaders.Add("X-CreatorFlow-Api-Key", CreatorFlowApiFactory.ApiKey);
++        return client;
++    }
++
++    private static object Provider(
++        string name = "Example Search",
++        string endpoint = "https://search.example.org/api",
++        string? headersJson = null,
++        string? apiKey = null,
++        string? apiKeyHeader = null) => new
++        {
++            name,
++            enabled = true,
++            endpoint,
++            method = "GET",
++            headersJson,
++            apiKey,
++            apiKeyHeader,
++            apiKeyPrefix = (string?)null
++        };
++
++    [Theory]
++    [InlineData("http://search.example.org/api")]       // not HTTPS
++    [InlineData("https://search.example.org:8443/api")] // non-standard port
++    [InlineData("https://user:pass@search.example.org/api")]
++    [InlineData("https://localhost/api")]
++    [InlineData("https://127.0.0.1/api")]
++    [InlineData("https://169.254.169.254/latest/meta-data")]
++    [InlineData("https://10.0.0.5/api")]
++    [InlineData("https://intranet/api")]
++    public async Task Rejects_unsafe_endpoints_when_saving(string endpoint)
++    {
++        using var factory = new CreatorFlowApiFactory();
++        using var client = CreateClient(factory);
++
++        var response = await client.PutAsJsonAsync(Route, new[] { Provider(endpoint: endpoint) });
++
++        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
++    }
++
++    [Theory]
++    [InlineData("Brave Search")]
++    [InlineData("tiktok research api")]
++    public async Task Rejects_names_reserved_for_system_sources(string name)
++    {
++        using var factory = new CreatorFlowApiFactory();
++        using var client = CreateClient(factory);
++
++        var response = await client.PutAsJsonAsync(Route, new[] { Provider(name: name) });
++
++        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
++    }
++
++    [Theory]
++    [InlineData("{\"Host\":\"internal.example\"}", null)]
++    [InlineData("{\"Content-Length\":\"0\"}", null)]
++    [InlineData(null, "Host")]
++    [InlineData("{\"X-Test\":\"a\\r\\nInjected: yes\"}", null)]
++    public async Task Rejects_forbidden_headers_when_saving(string? headersJson, string? apiKeyHeader)
++    {
++        using var factory = new CreatorFlowApiFactory();
++        using var client = CreateClient(factory);
++
++        var response = await client.PutAsJsonAsync(Route,
++            new[] { Provider(headersJson: headersJson, apiKey: apiKeyHeader is null ? null : "k", apiKeyHeader: apiKeyHeader) });
++
++        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
++    }
++
++    [Fact]
++    public async Task Saved_secrets_are_never_returned_to_the_client()
++    {
++        using var factory = new CreatorFlowApiFactory();
++        using var client = CreateClient(factory);
++        const string apiKey = "SUPER-SECRET-PROVIDER-KEY-123";
++        const string headerSecret = "HEADER-SECRET-VALUE-456";
++
++        var put = await client.PutAsJsonAsync(Route, new[]
++        {
++            Provider(headersJson: $"{{\"X-Client-Token\":\"{headerSecret}\"}}", apiKey: apiKey, apiKeyHeader: "X-API-Key")
++        });
++        var putBody = await put.Content.ReadAsStringAsync();
++        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
++        Assert.DoesNotContain(apiKey, putBody, StringComparison.Ordinal);
++        Assert.DoesNotContain(headerSecret, putBody, StringComparison.Ordinal);
++
++        var get = await client.GetAsync(Route);
++        var getBody = await get.Content.ReadAsStringAsync();
++        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
++        Assert.DoesNotContain(apiKey, getBody, StringComparison.Ordinal);
++        Assert.DoesNotContain(headerSecret, getBody, StringComparison.Ordinal);
++
++        using var document = JsonDocument.Parse(getBody);
++        var item = Assert.Single(document.RootElement.EnumerateArray());
++        Assert.True(item.GetProperty("hasApiKey").GetBoolean());
++        Assert.True(item.GetProperty("hasHeaders").GetBoolean());
++    }
++
++    [Fact]
++    public async Task Updating_without_resending_secrets_keeps_the_stored_ones()
++    {
++        using var factory = new CreatorFlowApiFactory();
++        using var client = CreateClient(factory);
++
++        var created = await client.PutAsJsonAsync(Route, new[]
++        {
++            Provider(headersJson: "{\"X-Client\":\"creatorflow\"}", apiKey: "stored-key", apiKeyHeader: "X-API-Key")
++        });
++        using var createdJson = JsonDocument.Parse(await created.Content.ReadAsStringAsync());
++        var id = createdJson.RootElement[0].GetProperty("id").GetGuid();
++
++        var update = await client.PutAsJsonAsync(Route, new[]
++        {
++            new { id, name = "Renamed Search", enabled = true, endpoint = "https://search.example.org/api",
++                  method = "GET", apiKeyHeader = "X-API-Key" }
++        });
++        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
++
++        using var listed = JsonDocument.Parse(await (await client.GetAsync(Route)).Content.ReadAsStringAsync());
++        var item = Assert.Single(listed.RootElement.EnumerateArray());
++        Assert.Equal("Renamed Search", item.GetProperty("name").GetString());
++        Assert.True(item.GetProperty("hasApiKey").GetBoolean());
++        Assert.True(item.GetProperty("hasHeaders").GetBoolean());
++    }
++
++    [Fact]
++    public async Task Rejects_duplicate_provider_names_and_oversized_lists()
++    {
++        using var factory = new CreatorFlowApiFactory();
++        using var client = CreateClient(factory);
++
++        var duplicate = await client.PutAsJsonAsync(Route, new[] { Provider(), Provider(name: "example search") });
++        Assert.Equal(HttpStatusCode.BadRequest, duplicate.StatusCode);
++
++        var tooMany = Enumerable.Range(0, 21).Select(i => Provider(name: $"Provider {i}")).ToArray();
++        var oversized = await client.PutAsJsonAsync(Route, tooMany);
++        Assert.Equal(HttpStatusCode.BadRequest, oversized.StatusCode);
++    }
++
++    [Fact]
++    public async Task Editor_cannot_read_or_change_custom_providers()
++    {
++        using var factory = new CreatorFlowApiFactory("Editor");
++        using var client = CreateClient(factory);
++
++        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync(Route)).StatusCode);
++        Assert.Equal(HttpStatusCode.Forbidden,
++            (await client.PutAsJsonAsync(Route, new[] { Provider() })).StatusCode);
++        Assert.Equal(HttpStatusCode.Forbidden,
++            (await client.PostAsJsonAsync("/api/v1/discovery/search/provider-test",
++                new { providerId = Guid.NewGuid() })).StatusCode);
++    }
++
++    [Fact]
++    public async Task Provider_test_returns_not_found_for_a_provider_of_another_workspace()
++    {
++        using var factory = new CreatorFlowApiFactory();
++        var foreignTenantId = Guid.NewGuid();
++        await factory.SeedAsync(async (db, tenantContext) =>
++        {
++            var foreign = Tenant.Create("Foreign workspace", $"foreign-{foreignTenantId:N}", DateTimeOffset.UtcNow);
++            db.Entry(foreign).Property(x => x.Id).CurrentValue = foreignTenantId;
++            db.Tenants.Add(foreign);
++            tenantContext.Set(foreignTenantId, "Owner");
++            db.DiscoveryConnectorConfigurations.Add(new DiscoveryConnectorConfiguration
++            {
++                TenantId = foreignTenantId,
++                EncryptedCustomProvidersJson = "ciphertext-from-another-workspace"
++            });
++            await db.SaveChangesAsync();
++        });
++
++        using var client = CreateClient(factory);
++
++        var list = await client.GetAsync(Route);
++        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
++        using var listed = JsonDocument.Parse(await list.Content.ReadAsStringAsync());
++        Assert.Empty(listed.RootElement.EnumerateArray());
++
++        var test = await client.PostAsJsonAsync("/api/v1/discovery/search/provider-test",
++            new { providerId = Guid.NewGuid() });
++        Assert.Equal(HttpStatusCode.NotFound, test.StatusCode);
++    }
++}
+diff --git a/tests/CreatorFlow.Api.Tests/Discovery/ProviderHeaderPolicyTests.cs b/tests/CreatorFlow.Api.Tests/Discovery/ProviderHeaderPolicyTests.cs
+new file mode 100644
+index 0000000..16ad6d0
+--- /dev/null
++++ b/tests/CreatorFlow.Api.Tests/Discovery/ProviderHeaderPolicyTests.cs
+@@ -0,0 +1,62 @@
++using CreatorFlow.Api.Discovery;
++using Xunit;
++
++namespace CreatorFlow.Api.Tests.Discovery;
++
++public sealed class ProviderHeaderPolicyTests
++{
++    [Theory]
++    [InlineData("Host")]
++    [InlineData("host")]
++    [InlineData("Content-Length")]
++    [InlineData("Content-Type")]
++    [InlineData("Transfer-Encoding")]
++    [InlineData("Cookie")]
++    [InlineData("X-Forwarded-For")]
++    [InlineData("Bad Header")]
++    [InlineData("Bad:Header")]
++    [InlineData("")]
++    public void Rejects_forbidden_or_malformed_header_names(string name)
++    {
++        Assert.False(ProviderHeaderPolicy.IsAllowedName(name));
++        Assert.NotNull(ProviderHeaderPolicy.Validate(null, name.Length == 0 ? "bad name" : name));
++    }
++
++    [Theory]
++    [InlineData("Authorization")]
++    [InlineData("X-API-Key")]
++    [InlineData("Ocp-Apim-Subscription-Key")]
++    public void Allows_normal_authentication_header_names(string name)
++    {
++        Assert.True(ProviderHeaderPolicy.IsAllowedName(name));
++        Assert.Null(ProviderHeaderPolicy.Validate(null, name));
++    }
++
++    [Fact]
++    public void Rejects_forbidden_name_inside_additional_headers()
++    {
++        Assert.NotNull(ProviderHeaderPolicy.Validate("{\"Host\":\"internal.example\"}", null));
++    }
++
++    [Fact]
++    public void Rejects_non_string_and_non_object_headers()
++    {
++        Assert.NotNull(ProviderHeaderPolicy.Validate("{\"X-Test\":1}", null));
++        Assert.NotNull(ProviderHeaderPolicy.Validate("[\"X-Test\"]", null));
++        Assert.NotNull(ProviderHeaderPolicy.Validate("not-json", null));
++    }
++
++    [Fact]
++    public void Rejects_control_characters_in_header_values()
++    {
++        Assert.NotNull(ProviderHeaderPolicy.Validate("{\"X-Test\":\"a\\r\\nInjected: yes\"}", null));
++    }
++
++    [Fact]
++    public void Accepts_well_formed_additional_headers()
++    {
++        Assert.Null(ProviderHeaderPolicy.Validate("{\"X-Client\":\"creatorflow\",\"Accept-Language\":\"vi\"}", "X-API-Key"));
++        Assert.Null(ProviderHeaderPolicy.Validate(null, null));
++        Assert.Null(ProviderHeaderPolicy.Validate("   ", "  "));
++    }
++}
+diff --git a/tests/CreatorFlow.Api.Tests/Discovery/SafeProviderHttpClientTests.cs b/tests/CreatorFlow.Api.Tests/Discovery/SafeProviderHttpClientTests.cs
+index b41130a..299c808 100644
+--- a/tests/CreatorFlow.Api.Tests/Discovery/SafeProviderHttpClientTests.cs
++++ b/tests/CreatorFlow.Api.Tests/Discovery/SafeProviderHttpClientTests.cs
+@@ -25,6 +25,12 @@ public sealed class SafeProviderHttpClientTests
+     [InlineData("ff02::1")]
+     [InlineData("::ffff:192.168.1.10")]
+     [InlineData("2001:db8::1")]
++    [InlineData("2001::1")]            // Teredo / IETF protocol assignments
++    [InlineData("2002:c0a8:0101::1")]  // 6to4 embedding 192.168.1.1
++    [InlineData("2002:0a00:0001::1")]  // 6to4 embedding 10.0.0.1
++    [InlineData("3fff::1")]            // documentation
++    [InlineData("64:ff9b::a00:1")]     // NAT64 embedding 10.0.0.1
++    [InlineData("::ffff:169.254.169.254")]
+     public void Rejects_non_public_addresses(string value)
+     {
+         Assert.False(SafeProviderHttpClient.IsPublicAddress(IPAddress.Parse(value)));
+@@ -54,4 +60,27 @@ public sealed class SafeProviderHttpClientTests
+         var bytes = await SafeProviderHttpClient.ReadBoundedAsync(content, CancellationToken.None);
+         Assert.Equal("ok", System.Text.Encoding.UTF8.GetString(bytes));
+     }
++
++    [Theory]
++    [InlineData("https://localhost/search")]
++    [InlineData("https://127.0.0.1/search")]
++    [InlineData("https://[::1]/search")]
++    [InlineData("https://169.254.169.254/latest/meta-data")]
++    [InlineData("https://10.1.2.3/search")]
++    [InlineData("https://intranet/search")]
++    [InlineData("https://printer.local/search")]
++    [InlineData("https://db.internal/search")]
++    public void Flags_obviously_internal_hosts(string url)
++    {
++        Assert.True(SafeProviderHttpClient.IsObviouslyInternalHost(new Uri(url)));
++    }
++
++    [Theory]
++    [InlineData("https://api.langsearch.com/v1/web-search")]
++    [InlineData("https://search.example.org/api")]
++    [InlineData("https://8.8.8.8/search")]
++    public void Does_not_flag_public_hosts(string url)
++    {
++        Assert.False(SafeProviderHttpClient.IsObviouslyInternalHost(new Uri(url)));
++    }
+ }
+-- 
+2.43.0
+
