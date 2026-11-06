@@ -1,0 +1,69 @@
+name: Apply provider hardening patch on Z240
+
+on:
+  push:
+    branches:
+      - feature/keycloak-oidc-local
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: provider-hardening-patch-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[provider-patch-applied]')
+    runs-on: [self-hosted, Windows, X64]
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/keycloak-oidc-local
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify clean checkout and patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path '.\creatorflow-provider-hardening.patch')) {
+            throw 'Patch file is missing from repository root.'
+          }
+          $status = git status --porcelain
+          if ($LASTEXITCODE -ne 0) { throw 'git status failed.' }
+          if ($status) { throw "Working tree is not clean; refusing to apply patch: $status" }
+          git apply --check .\creatorflow-provider-hardening.patch
+          if ($LASTEXITCODE -ne 0) { throw 'git apply --check failed; patch was not applied.' }
+
+      - name: Apply patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git apply .\creatorflow-provider-hardening.patch
+          if ($LASTEXITCODE -ne 0) { throw 'git apply failed.' }
+          git diff --check
+          if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
+
+      - name: Test API and build worker
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet test .\tests\CreatorFlow.Api.Tests\CreatorFlow.Api.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'API tests failed; patch will not be committed.' }
+          dotnet build .\src\CreatorFlow.Workers\CreatorFlow.Workers.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Worker build failed; patch will not be committed.' }
+
+      - name: Commit applied patch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/design/AS_BUILT_STATUS.md src/CreatorFlow.Api/Discovery/DiscoveryConnectorSettingsEndpoints.cs src/CreatorFlow.Api/Discovery/DiscoverySearchEndpoints.cs src/CreatorFlow.Api/Discovery/ProviderHeaderPolicy.cs src/CreatorFlow.Api/Discovery/SafeProviderHttpClient.cs src/CreatorFlow.Workers/DiscoveryTopicSchedulerWorker.cs tests/CreatorFlow.Api.Tests/CustomDiscoveryProviderEndpointTests.cs tests/CreatorFlow.Api.Tests/Discovery/ProviderHeaderPolicyTests.cs tests/CreatorFlow.Api.Tests/Discovery/SafeProviderHttpClientTests.cs
+          git commit -m "Harden custom discovery providers and scheduled discovery [provider-patch-applied]"
+          if ($LASTEXITCODE -ne 0) { throw 'git commit failed.' }
+          git push origin HEAD:feature/keycloak-oidc-local
+          if ($LASTEXITCODE -ne 0) { throw 'git push failed.' }
