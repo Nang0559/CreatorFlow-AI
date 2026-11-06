@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Data.SqlClient;
 
@@ -55,6 +56,7 @@ internal sealed class DiscoveryTopicSchedulerWorker(
         Guid tenantId;
         Guid topicId;
         string topicName;
+        string topicKeywords;
         string platformsJson;
         int refreshMinutes;
         string scheduleMode;
@@ -118,10 +120,14 @@ internal sealed class DiscoveryTopicSchedulerWorker(
         await using (var topic = connection.CreateCommand())
         {
             topic.Transaction = transaction;
-            topic.CommandText = "SELECT Name FROM dbo.ContentTopics WHERE Id=@TopicId AND TenantId=@TenantId AND IsActive=1;";
+            topic.CommandText = "SELECT Name,Keywords FROM dbo.ContentTopics WHERE Id=@TopicId AND TenantId=@TenantId AND IsActive=1;";
             topic.Parameters.AddWithValue("@TopicId", topicId);
             topic.Parameters.AddWithValue("@TenantId", tenantId);
-            topicName = (string?)await topic.ExecuteScalarAsync(ct) ?? string.Empty;
+            await using var topicReader = await topic.ExecuteReaderAsync(ct);
+            if (!await topicReader.ReadAsync(ct))
+                throw new InvalidOperationException("Chủ đề không còn hoạt động trong workspace.");
+            topicName = topicReader.GetString(0);
+            topicKeywords = topicReader.GetString(1);
         }
 
         await using (var history = connection.CreateCommand())
@@ -145,18 +151,41 @@ internal sealed class DiscoveryTopicSchedulerWorker(
 
         await transaction.CommitAsync(ct);
 
-        // Do not represent an AI query plan as collected trend data. A source adapter
-        // must be explicitly approved and installed before this worker can fetch candidates.
-        const string connectorMissing = "NoApprovedSourceConnector";
+        var apiKey = config["BraveSearch:ApiKey"];
+        var candidateCount = 0;
+        var status = "Skipped";
+        string? errorCode = null;
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            errorCode = "BraveSearchNotConfigured";
+        }
+        else
+        {
+            try
+            {
+                var discovered = await SearchVideosAsync(apiKey, topicName, topicKeywords, ct);
+                candidateCount = await SaveCandidatesAsync(connection, tenantId, topicId, discovered, ct);
+                status = "Completed";
+                if (discovered.Count == 0) errorCode = "NoMatchingVideoUrls";
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidOperationException)
+            {
+                status = "Failed";
+                errorCode = ex is TaskCanceledException ? "BraveSearchTimeout" : "BraveSearchFailed";
+                logger.LogWarning(ex, "Tìm video theo lịch cho chủ đề {TopicName} thất bại.", topicName);
+            }
+        }
+
         await using var finish = connection.CreateCommand();
         finish.CommandText = """
             SET XACT_ABORT ON;
             BEGIN TRANSACTION;
             UPDATE dbo.DiscoveryTopicRunHistory
-               SET Status=N'Skipped',CompletedAt=SYSUTCDATETIME(),ErrorCode=@ErrorCode
+               SET Status=@Status,CompletedAt=SYSUTCDATETIME(),CandidateCount=@CandidateCount,
+                   ChannelCount=0,ErrorCode=@ErrorCode
              WHERE Id=@RunId AND TenantId=@TenantId AND Status=N'Running';
             UPDATE dbo.DiscoveryTopicProfiles
-               SET LastRunAt=SYSUTCDATETIME(),LastRunStatus=N'Skipped',
+               SET LastRunAt=SYSUTCDATETIME(),LastRunStatus=@Status,
                    LastErrorCode=@ErrorCode,LeaseUntil=NULL,
                    NextRunAt=CASE WHEN IsEnabled=1 THEN @NextRunAt ELSE NULL END,
                    UpdatedAt=SYSUTCDATETIME()
@@ -165,17 +194,105 @@ internal sealed class DiscoveryTopicSchedulerWorker(
             """;
         var nextRunAt = CalculateNextRun(DateTimeOffset.UtcNow, scheduleMode, refreshMinutes, localTimeText, daysOfWeekJson, timeZoneId);
         finish.Parameters.AddWithValue("@NextRunAt", nextRunAt);
-        finish.Parameters.AddWithValue("@ErrorCode", connectorMissing);
+        finish.Parameters.AddWithValue("@Status", status);
+        finish.Parameters.AddWithValue("@CandidateCount", candidateCount);
+        finish.Parameters.AddWithValue("@ErrorCode", (object?)errorCode ?? DBNull.Value);
         finish.Parameters.AddWithValue("@RunId", runId);
         finish.Parameters.AddWithValue("@ProfileId", profileId);
         finish.Parameters.AddWithValue("@TenantId", tenantId);
         await finish.ExecuteNonQueryAsync(ct);
 
-        logger.LogWarning(
-            "Đã xử lý lịch chủ đề {TopicName} ({ProfileId}) nhưng bỏ qua thu thập: chưa có connector nguồn được phê duyệt. Kiểu lịch {ScheduleMode}; chu kỳ {RefreshMinutes} phút.",
-            topicName, profileId, scheduleMode, refreshMinutes);
+        logger.LogInformation(
+            "Lịch chủ đề {TopicName} ({ProfileId}) có trạng thái {Status}; lưu mới {CandidateCount} video. Kênh: 0 (connector kênh chưa được bật).",
+            topicName, profileId, status, candidateCount);
         return true;
     }
+    private static async Task<List<DiscoveredVideo>> SearchVideosAsync(
+        string apiKey, string topic, string keywords, CancellationToken ct)
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(25) };
+        var terms = keywords.Split(new[] { '\r', '\n', ',', ';' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase).Take(4).ToArray();
+        if (terms.Length == 0) terms = [topic];
+
+        var results = new Dictionary<string, DiscoveredVideo>(StringComparer.OrdinalIgnoreCase);
+        foreach (var term in terms)
+        {
+            var query = $"site:tiktok.com/@ {topic} {term}";
+            var url = "https://api.search.brave.com/res/v1/web/search?q=" +
+                Uri.EscapeDataString(query) + "&country=VN&search_lang=vi&count=20&safesearch=moderate";
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("X-Subscription-Token", apiKey);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"Brave Search HTTP {(int)response.StatusCode}.");
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var json = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            if (!json.RootElement.TryGetProperty("web", out var web) ||
+                !web.TryGetProperty("results", out var items) || items.ValueKind != JsonValueKind.Array)
+                continue;
+            foreach (var item in items.EnumerateArray())
+            {
+                var urlValue = item.TryGetProperty("url", out var u) ? u.GetString() : null;
+                if (!TryGetTikTokVideoId(urlValue, out var id)) continue;
+                var title = item.TryGetProperty("title", out var t) ? t.GetString() : null;
+                results.TryAdd(id, new DiscoveredVideo(id, urlValue!, title ?? topic));
+            }
+        }
+        return results.Values.Take(100).ToList();
+    }
+
+    private static bool TryGetTikTokVideoId(string? value, out string videoId)
+    {
+        videoId = string.Empty;
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            uri.Scheme != Uri.UriSchemeHttps ||
+            !(uri.Host.Equals("tiktok.com", StringComparison.OrdinalIgnoreCase) ||
+              uri.Host.EndsWith(".tiktok.com", StringComparison.OrdinalIgnoreCase)))
+            return false;
+        var parts = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        var video = Array.FindIndex(parts, p => p.Equals("video", StringComparison.OrdinalIgnoreCase));
+        if (video < 1 || video + 1 >= parts.Length || !parts[video - 1].StartsWith('@')) return false;
+        var handle = Uri.UnescapeDataString(parts[video - 1][1..]);
+        var id = Uri.UnescapeDataString(parts[video + 1]);
+        if (handle.Length is < 1 or > 64 || !handle.All(ch => char.IsLetterOrDigit(ch) || ch is '_' or '.') ||
+            id.Length is < 1 or > 160 || !id.All(char.IsLetterOrDigit)) return false;
+        videoId = id;
+        return true;
+    }
+
+    private static async Task<int> SaveCandidatesAsync(
+        SqlConnection connection, Guid tenantId, Guid topicId, IReadOnlyCollection<DiscoveredVideo> videos,
+        CancellationToken ct)
+    {
+        var inserted = 0;
+        foreach (var video in videos)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT dbo.DouyinVideoCandidates
+                    (Id,TenantId,DouyinVideoId,SourceChannelId,ContentTopicId,SourceUrl,Title,
+                     DiscoveryMethod,Status,PublishedAt,DiscoveredAt,UpdatedAt)
+                SELECT NEWID(),@TenantId,@VideoId,NULL,@TopicId,@SourceUrl,@Title,
+                       N'TopicExplore',N'Candidate',NULL,SYSUTCDATETIME(),SYSUTCDATETIME()
+                 WHERE NOT EXISTS
+                    (SELECT 1 FROM dbo.DouyinVideoCandidates WITH (UPDLOCK,HOLDLOCK)
+                      WHERE TenantId=@TenantId AND DouyinVideoId=@VideoId);
+                """;
+            command.Parameters.AddWithValue("@TenantId", tenantId);
+            command.Parameters.AddWithValue("@TopicId", topicId);
+            command.Parameters.AddWithValue("@VideoId", video.VideoId);
+            command.Parameters.AddWithValue("@SourceUrl", video.Url);
+            command.Parameters.AddWithValue("@Title", video.Title.Length > 500 ? video.Title[..500] : video.Title);
+            inserted += await command.ExecuteNonQueryAsync(ct);
+        }
+        return inserted;
+    }
+
+    private sealed record DiscoveredVideo(string VideoId, string Url, string Title);
+
     private static DateTimeOffset CalculateNextRun(DateTimeOffset nowUtc, string mode, int refreshMinutes,
         string localTimeText, string daysOfWeekJson, string timeZoneId)
     {
