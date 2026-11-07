@@ -93,7 +93,6 @@ internal sealed class TikTokShareResolverWorker(
             File.Move(temp,finalPath,true); temp=null;
             await SaveAssetAndJobsAsync(item,assetId,title,finalPath,fileName,new FileInfo(finalPath).Length,hash,ct);
             assetPersisted=true;
-            await SetStateAsync(item.TenantId,item.Id,"NeedsReview",null,assetId,title,ct);
             logger.LogInformation("Resolved public TikTok share {ShareId} into asset {AssetId}; jobs await rights review.",item.Id,assetId);
         }
         catch(Exception ex)
@@ -171,6 +170,13 @@ internal sealed class TikTokShareResolverWorker(
             Add(job,"@id",id);Add(job,"@tenant",item.TenantId);Add(job,"@asset",assetId);Add(job,"@style",style);
             Add(job,"@title",title.Length>180?title[..180]:title);Add(job,"@hook","Video nguồn được chia sẻ; vui lòng biên tập lại nội dung sau khi xác nhận quyền.");Add(job,"@source",path);Add(job,"@output",output);
             await job.ExecuteNonQueryAsync(ct);
+        }
+        await using (var inbox=c.CreateCommand())
+        {
+            inbox.Transaction=tx;
+            inbox.CommandText="UPDATE dbo.SharedLinkInboxItems SET ResolverStatus=N'NeedsReview',ResolverError=NULL,ResolvedAssetId=@asset,ResolvedTitle=@title,ResolverUpdatedAt=SYSUTCDATETIME() WHERE Id=@id AND TenantId=@tenant AND ResolverStatus=N'Resolving'";
+            Add(inbox,"@asset",assetId);Add(inbox,"@title",title.Length>180?title[..180]:title);Add(inbox,"@id",item.Id);Add(inbox,"@tenant",item.TenantId);
+            if(await inbox.ExecuteNonQueryAsync(ct)!=1) throw new InvalidOperationException("Share Inbox item is no longer in the expected Resolving state.");
         }
         await tx.CommitAsync(ct);
     }
