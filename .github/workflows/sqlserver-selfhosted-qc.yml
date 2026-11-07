@@ -1,17 +1,7 @@
 name: SQL Server self-hosted QC
 
 on:
-  push:
-    branches: [main, "feature/**"]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "database/**"
-      - "tools/sql-qc/**"
-      - ".github/workflows/sqlserver-selfhosted-qc.yml"
-      - "CreatorFlow.sln"
-      - "*.props"
-      - "*.targets"
+  # Explicit operator action only: this workflow applies database migrations.
   workflow_dispatch:
 
 permissions:
