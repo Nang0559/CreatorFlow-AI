@@ -393,6 +393,34 @@ shareInbox.MapPost("/", async (CreateSharedLinkRequest request, CreatorFlowDbCon
         throw;
     }
 });
+shareInbox.MapPost("/{id:guid}/confirm-rights", async (Guid id, CreatorFlowDbContext? db, ITenantContext tenant, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (!tenant.TenantId.HasValue) return Results.Forbid();
+    var connection = db.Database.GetDbConnection();
+    if (connection.State != System.Data.ConnectionState.Open) await connection.OpenAsync(ct);
+    await using var tx = await connection.BeginTransactionAsync(ct);
+    await using var check = connection.CreateCommand();
+    check.Transaction = tx;
+    check.CommandText = "SELECT ResolvedAssetId FROM dbo.SharedLinkInboxItems WHERE Id=@id AND TenantId=@tenant AND ResolverStatus=N'NeedsReview'";
+    var p1=check.CreateParameter(); p1.ParameterName="@id"; p1.Value=id; check.Parameters.Add(p1);
+    var p2=check.CreateParameter(); p2.ParameterName="@tenant"; p2.Value=tenant.TenantId.Value; check.Parameters.Add(p2);
+    var assetValue=await check.ExecuteScalarAsync(ct);
+    if (assetValue is null || assetValue is DBNull) return Results.Conflict(new { error="Video chưa được phân giải hoặc đã xử lý." });
+    var assetId=(Guid)assetValue;
+    await using var update=connection.CreateCommand(); update.Transaction=tx;
+    update.CommandText="UPDATE dbo.VideoRenderJobs SET Status=N'Queued' WHERE TenantId=@tenant AND AssetId=@asset AND Status=N'AwaitingRightsReview'; SELECT @@ROWCOUNT;";
+    var p3=update.CreateParameter();p3.ParameterName="@tenant";p3.Value=tenant.TenantId.Value;update.Parameters.Add(p3);
+    var p4=update.CreateParameter();p4.ParameterName="@asset";p4.Value=assetId;update.Parameters.Add(p4);
+    var count=Convert.ToInt32(await update.ExecuteScalarAsync(ct));
+    if(count!=3) return Results.Conflict(new { error="Không tìm thấy đủ ba render jobs đang chờ xác nhận.", updated=count });
+    await using var mark=connection.CreateCommand();mark.Transaction=tx;
+    mark.CommandText="UPDATE dbo.SharedLinkInboxItems SET ResolverStatus=N'RightsConfirmed', RightsConfirmedAt=SYSUTCDATETIME() WHERE Id=@id AND TenantId=@tenant";
+    var p5=mark.CreateParameter();p5.ParameterName="@id";p5.Value=id;mark.Parameters.Add(p5);
+    var p6=mark.CreateParameter();p6.ParameterName="@tenant";p6.Value=tenant.TenantId.Value;mark.Parameters.Add(p6);
+    await mark.ExecuteNonQueryAsync(ct); await tx.CommitAsync(ct);
+    return Results.Ok(new { assetId, renderJobsQueued=count, status="Queued" });
+});
 shareInbox.MapPost("/{id:guid}/review", async (Guid id, ReviewSharedLinkRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
