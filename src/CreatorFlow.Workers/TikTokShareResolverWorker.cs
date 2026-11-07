@@ -92,8 +92,14 @@ internal sealed class TikTokShareResolverWorker(
             await using(var f=File.OpenRead(temp)){if(await f.ReadAsync(header,ct)<12 || System.Text.Encoding.ASCII.GetString(header,4,4)!="ftyp")throw new InvalidOperationException("Nguồn trả về không phải tệp MP4 hợp lệ.");}
             string hash; await using(var hashStream=File.OpenRead(temp)){hash=Convert.ToHexString(await SHA256.HashDataAsync(hashStream,ct));}
             File.Move(temp,finalPath,true); temp=null;
-            await SaveAssetAndJobsAsync(item,assetId,title,finalPath,fileName,new FileInfo(finalPath).Length,hash,ct);
+            var saved=await SaveAssetAndJobsAsync(item,assetId,title,finalPath,fileName,new FileInfo(finalPath).Length,hash,ct);
+            assetId=saved.AssetId;
             assetPersisted=true;
+            if(saved.Reused && finalPath is not null)
+            {
+                try{File.Delete(finalPath);}catch{}
+                finalPath=null;
+            }
             logger.LogInformation("Resolved public TikTok share {ShareId} into asset {AssetId}; jobs await rights review.",item.Id,assetId);
         }
         catch(Exception ex)
@@ -169,13 +175,33 @@ internal sealed class TikTokShareResolverWorker(
         return null;
     }
 
-    private async Task SaveAssetAndJobsAsync(ShareItem item,Guid assetId,string title,string path,string name,long size,string hash,CancellationToken ct)
+    private async Task<(Guid AssetId,string StoragePath,bool Reused)> SaveAssetAndJobsAsync(ShareItem item,Guid assetId,string title,string path,string name,long size,string hash,CancellationToken ct)
     {
         await using var c=new SqlConnection(connectionString);await c.OpenAsync(ct);await using SqlTransaction tx=(SqlTransaction)await c.BeginTransactionAsync(ct);
-        await using(var asset=c.CreateCommand())
+        var effectiveAssetId=assetId;
+        var effectivePath=path;
+        var reused=false;
+        await using (var find=c.CreateCommand())
         {
+            find.Transaction=tx;
+            find.CommandText="SELECT TOP(1) Id,StoragePath FROM dbo.VideoAssets WITH(UPDLOCK,HOLDLOCK) WHERE TenantId=@tenant AND Sha256=@hash";
+            Add(find,"@tenant",item.TenantId);Add(find,"@hash",hash);
+            await using var reader=await find.ExecuteReaderAsync(ct);
+            if(await reader.ReadAsync(ct))
+            {
+                effectiveAssetId=reader.GetGuid(0);
+                effectivePath=reader.GetString(1);
+                reused=true;
+            }
+        }
+        if(reused && !File.Exists(effectivePath))
+            throw new InvalidOperationException("Tệp media trùng SHA-256 đã có bản ghi nhưng tệp lưu trữ không còn tồn tại; cần kiểm tra kho video.");
+
+        if(!reused)
+        {
+            await using var asset=c.CreateCommand();
             asset.Transaction=tx;asset.CommandText="INSERT dbo.VideoAssets(Id,TenantId,OriginalFileName,StoredFileName,StoragePath,ContentType,FileSizeBytes,Sha256,RightsNote,CreatedAt) VALUES(@id,@tenant,@name,@stored,@path,N'video/mp4',@size,@hash,N'Nguồn TikTok công khai; quyền tái sử dụng CHƯA được xác minh.',SYSUTCDATETIME())";
-            Add(asset,"@id",assetId);Add(asset,"@tenant",item.TenantId);Add(asset,"@name",title.Length>260?title[..260]:title);Add(asset,"@stored",name);Add(asset,"@path",path);Add(asset,"@size",size);Add(asset,"@hash",hash);
+            Add(asset,"@id",effectiveAssetId);Add(asset,"@tenant",item.TenantId);Add(asset,"@name",title.Length>260?title[..260]:title);Add(asset,"@stored",name);Add(asset,"@path",effectivePath);Add(asset,"@size",size);Add(asset,"@hash",hash);
             await asset.ExecuteNonQueryAsync(ct);
         }
         var styles=new[]{"Tự nhiên","Kể chuyện","Đánh giá sản phẩm"};
@@ -183,19 +209,20 @@ internal sealed class TikTokShareResolverWorker(
         {
             var id=Guid.NewGuid();var output=Path.Combine(root,"renders",item.TenantId.ToString("N"),id.ToString("N")+".mp4");
             await using var job=c.CreateCommand();job.Transaction=tx;
-            job.CommandText="INSERT dbo.VideoRenderJobs(Id,TenantId,AssetId,StyleKey,Title,Hook,CallToAction,Status,ProgressPercent,SourcePath,OutputPath,CreatedAt) VALUES(@id,@tenant,@asset,@style,@title,@hook,NULL,N'AwaitingRightsReview',0,@source,@output,SYSUTCDATETIME())";
-            Add(job,"@id",id);Add(job,"@tenant",item.TenantId);Add(job,"@asset",assetId);Add(job,"@style",style);
-            Add(job,"@title",title.Length>180?title[..180]:title);Add(job,"@hook","Video nguồn được chia sẻ; vui lòng biên tập lại nội dung sau khi xác nhận quyền.");Add(job,"@source",path);Add(job,"@output",output);
+            job.CommandText="INSERT dbo.VideoRenderJobs(Id,TenantId,AssetId,SharedLinkInboxItemId,StyleKey,Title,Hook,CallToAction,Status,ProgressPercent,SourcePath,OutputPath,CreatedAt) VALUES(@id,@tenant,@asset,@share,@style,@title,@hook,NULL,N'AwaitingRightsReview',0,@source,@output,SYSUTCDATETIME())";
+            Add(job,"@id",id);Add(job,"@tenant",item.TenantId);Add(job,"@asset",effectiveAssetId);Add(job,"@share",item.Id);Add(job,"@style",style);
+            Add(job,"@title",title.Length>180?title[..180]:title);Add(job,"@hook","Video nguồn được chia sẻ; vui lòng biên tập lại nội dung sau khi xác nhận quyền.");Add(job,"@source",effectivePath);Add(job,"@output",output);
             await job.ExecuteNonQueryAsync(ct);
         }
         await using (var inbox=c.CreateCommand())
         {
             inbox.Transaction=tx;
             inbox.CommandText="UPDATE dbo.SharedLinkInboxItems SET ResolverStatus=N'NeedsReview',ResolverError=NULL,ResolvedAssetId=@asset,ResolvedTitle=@title,ResolverUpdatedAt=SYSUTCDATETIME() WHERE Id=@id AND TenantId=@tenant AND ResolverStatus=N'Resolving'";
-            Add(inbox,"@asset",assetId);Add(inbox,"@title",title.Length>180?title[..180]:title);Add(inbox,"@id",item.Id);Add(inbox,"@tenant",item.TenantId);
+            Add(inbox,"@asset",effectiveAssetId);Add(inbox,"@title",title.Length>180?title[..180]:title);Add(inbox,"@id",item.Id);Add(inbox,"@tenant",item.TenantId);
             if(await inbox.ExecuteNonQueryAsync(ct)!=1) throw new InvalidOperationException("Share Inbox item is no longer in the expected Resolving state.");
         }
         await tx.CommitAsync(ct);
+        return (effectiveAssetId,effectivePath,reused);
     }
 
     private async Task SetStateAsync(Guid tenantId,Guid id,string status,string? error,Guid? asset,string? title,CancellationToken ct)
