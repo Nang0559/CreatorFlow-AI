@@ -100,6 +100,7 @@ SELECT
           AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'ResolverAttemptCount') IS NOT NULL
           AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'ResolverUpdatedAt') IS NOT NULL
           AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'RightsConfirmedAt') IS NOT NULL
+          AND COL_LENGTH(N'dbo.VideoRenderJobs',N'SharedLinkInboxItemId') IS NOT NULL
          THEN 1 ELSE 0 END AS ResolverColumnsPresent,
     CASE WHEN EXISTS
     (
@@ -123,6 +124,34 @@ SELECT
           )
     )
          THEN 1 ELSE 0 END AS ResolvedAssetForeignKeyTrusted,
+    CASE WHEN EXISTS
+    (
+        SELECT 1 FROM sys.foreign_keys fk
+        WHERE fk.name=N'FK_VideoRenderJobs_Tenant_ShareInbox'
+          AND fk.is_disabled=0 AND fk.is_not_trusted=0
+          AND (SELECT COUNT(*) FROM sys.foreign_key_columns fkc WHERE fkc.constraint_object_id=fk.object_id)=2
+          AND EXISTS
+          (
+              SELECT 1 FROM sys.foreign_key_columns fkc
+              INNER JOIN sys.columns child ON child.object_id=fkc.parent_object_id AND child.column_id=fkc.parent_column_id
+              INNER JOIN sys.columns parent ON parent.object_id=fkc.referenced_object_id AND parent.column_id=fkc.referenced_column_id
+              WHERE fkc.constraint_object_id=fk.object_id AND child.name=N'TenantId' AND parent.name=N'TenantId'
+          )
+          AND EXISTS
+          (
+              SELECT 1 FROM sys.foreign_key_columns fkc
+              INNER JOIN sys.columns child ON child.object_id=fkc.parent_object_id AND child.column_id=fkc.parent_column_id
+              INNER JOIN sys.columns parent ON parent.object_id=fkc.referenced_object_id AND parent.column_id=fkc.referenced_column_id
+              WHERE fkc.constraint_object_id=fk.object_id AND child.name=N'SharedLinkInboxItemId' AND parent.name=N'Id'
+          )
+    )
+         THEN 1 ELSE 0 END AS ShareInboxRenderForeignKeyTrusted,
+    CASE WHEN EXISTS (SELECT 1 FROM sys.indexes
+        WHERE object_id=OBJECT_ID(N'dbo.VideoRenderJobs') AND name=N'IX_VideoRenderJobs_ShareInbox')
+         THEN 1 ELSE 0 END AS ShareInboxRenderIndexPresent,
+    CASE WHEN EXISTS (SELECT 1 FROM sys.indexes
+        WHERE object_id=OBJECT_ID(N'dbo.SharedLinkInboxItems') AND name=N'UX_SharedLinkInboxItems_Tenant_Id')
+         THEN 1 ELSE 0 END AS ShareInboxTenantKeyPresent,
     CASE WHEN EXISTS (SELECT 1 FROM sys.check_constraints
         WHERE name=N'CK_SharedLinkInbox_ResolverStatus' AND is_disabled=0 AND is_not_trusted=0)
          THEN 1 ELSE 0 END AS ResolverStatusConstraintTrusted,
@@ -133,6 +162,9 @@ SELECT
 "@)
     if ($resolverCheck.Count -ne 1 -or $resolverCheck[0].ResolverColumnsPresent -ne 1 -or
         $resolverCheck[0].ResolvedAssetForeignKeyTrusted -ne 1 -or
+        $resolverCheck[0].ShareInboxRenderForeignKeyTrusted -ne 1 -or
+        $resolverCheck[0].ShareInboxRenderIndexPresent -ne 1 -or
+        $resolverCheck[0].ShareInboxTenantKeyPresent -ne 1 -or
         $resolverCheck[0].ResolverStatusConstraintTrusted -ne 1 -or
         $resolverCheck[0].RightsReviewJobStatusAllowed -ne 1) {
         throw 'Public TikTok resolver migration 031 is missing or its rights-gating constraints are not trusted.'
