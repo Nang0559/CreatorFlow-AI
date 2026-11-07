@@ -1,0 +1,382 @@
+@page "/settings/discovery-connectors"
+@inject CreatorFlow.Web.Services.CreatorFlowApiClient Api
+
+<PageTitle>Nguồn tìm kiếm · CreatorFlow</PageTitle>
+<header class="page-header">
+    <div>
+        <p class="eyebrow">CẤU HÌNH KHÁM PHÁ</p>
+        <h1>Nguồn tìm kiếm</h1>
+        <p class="muted">Quản lý Brave Search, TikTok Research API và các provider GET/POST tùy chỉnh ngay trong workspace. Khóa API được mã hóa phía máy chủ.</p>
+    </div>
+    <button class="primary" @onclick="ReloadAsync" disabled="@busy">Làm mới</button>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <section class="@(hasError ? "notice validation-summary" : "success-notice")" role="status" aria-live="polite"><strong>@message</strong></section>
+}
+@if (!string.IsNullOrWhiteSpace(loadError))
+{
+    <section class="notice validation-summary" role="alert"><strong>@loadError</strong></section>
+}
+
+<section class="panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">BRAVE SEARCH</p><h2>Tìm kiếm web công khai</h2>
+            <p class="muted">Dùng chỉ mục web để tìm các trang TikTok công khai theo chủ đề tại Việt Nam. Kết quả là đầu mối khám phá, không đảm bảo đầy đủ hoặc còn hoạt động.</p>
+        </div>
+        <span class="status">@Presence(hasBrave)</span>
+    </div>
+    <label>Brave Search API Key
+        <input type="password" autocomplete="new-password" @bind="braveKey" placeholder="Nhập API key · để trống nếu giữ khóa hiện tại" />
+    </label>
+    <div class="form-actions">
+        <button class="primary" @onclick="SaveBraveAsync" disabled="@busy">Lưu Brave Search</button>
+        <button class="secondary" @onclick="TestAsync" disabled="@(busy || !hasBrave)">Kiểm tra nguồn</button>
+        <button class="secondary" @onclick="ClearBraveAsync" disabled="@(busy || !hasBrave)">Xóa khóa</button>
+    </div>
+    @if (braveState is not null) { <p class="muted"><strong>@braveState.Status</strong> · @braveState.ResultCount kết quả · @(braveState.Error ?? "Không có lỗi")</p> }
+</section>
+
+<section class="panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">TIKTOK RESEARCH API</p><h2>Dữ liệu nghiên cứu TikTok</h2>
+            <p class="muted">Yêu cầu dự án được TikTok phê duyệt Research API. Thông tin ứng dụng thông thường hoặc quyền Display API không thay thế quyền Research API.</p>
+        </div>
+        <span class="status">@Presence(hasTikTok)</span>
+    </div>
+    <div class="form-grid">
+        <label>Client Key
+            <input type="password" autocomplete="new-password" @bind="tikTokKey" placeholder="Nhập Client Key · để trống nếu giữ khóa hiện tại" />
+        </label>
+        <label>Client Secret
+            <input type="password" autocomplete="new-password" @bind="tikTokSecret" placeholder="Nhập Client Secret · để trống nếu giữ khóa hiện tại" />
+        </label>
+    </div>
+    <div class="form-actions">
+        <button class="primary" @onclick="SaveTikTokAsync" disabled="@busy">Lưu TikTok Research API</button>
+        <button class="secondary" @onclick="TestAsync" disabled="@(busy || !hasTikTok)">Kiểm tra kết nối</button>
+        <button class="secondary" @onclick="ClearTikTokAsync" disabled="@(busy || !hasTikTok)">Xóa thông tin</button>
+    </div>
+    @if (tikTokState is not null) { <p class="muted"><strong>@tikTokState.Status</strong> · @tikTokState.ResultCount kết quả · @(tikTokState.Error ?? "Không có lỗi")</p> }
+</section>
+
+<section class="panel">
+    <div class="panel-heading">
+        <div><p class="eyebrow">NHÀ CUNG CẤP TÙY CHỈNH</p><h2>Thêm nguồn tìm kiếm</h2>
+            <p class="muted">Khai báo dịch vụ GET hoặc POST + JSON ngay tại đây. API key được mã hóa phía máy chủ; để trống key khi sửa để giữ key đã lưu.</p>
+        </div>
+        <button class="secondary" @onclick="AddProvider" disabled="@(busy || customProviders.Count >= 20)">+ Thêm provider</button>
+    </div>
+    @if (customProviders.Count == 0) { <p class="muted">Chưa có provider tùy chỉnh. Bấm “Thêm provider” để khai báo.</p> }
+    @foreach (var item in customProviders)
+    {
+        <div class="variant-stats" style="display:block;padding:14px 0;border-bottom:1px solid var(--border,#ddd)">
+            <div class="form-grid">
+                <label>Tên hiển thị
+                    <input @bind="item.Name" placeholder="Ví dụ: SearXNG" />
+                </label>
+                <label>Endpoint (HTTP/HTTPS)
+                    <input @bind="item.Endpoint" placeholder="https://api.example.com/search" />
+                </label>
+                <label>Phương thức HTTP
+                    <select @bind="item.Method">
+                        <option value="GET">GET · Query string</option>
+                        <option value="POST">POST · JSON body</option>
+                    </select>
+                </label>
+                @if (item.Method == "POST")
+                {
+                    <label>Content-Type
+                        <input @bind="item.ContentType" placeholder="application/json" />
+                    </label>
+                    <label>JSON body (hỗ trợ {topic} và {query})
+                        <textarea rows="4" @bind="item.RequestBodyTemplate" placeholder="{ &quot;query&quot;: &quot;{query}&quot; }"></textarea>
+                    </label>
+                    <label>Headers bổ sung (JSON object, tùy chọn)
+                        <textarea rows="3" @bind="item.HeadersJson" placeholder="{ &quot;X-Custom-Header&quot;: &quot;value&quot; }"></textarea>
+                    </label>
+                }
+                <label>Tham số truy vấn
+                    <input @bind="item.QueryParameter" placeholder="q" />
+                </label>
+                <label>Mẫu truy vấn
+                    <input @bind="item.QueryTemplate" placeholder="{topic} {query}" />
+                </label>
+                <label>JSON path danh sách kết quả
+                    <input @bind="item.ResultsPath" placeholder="results hoặc data.results" />
+                </label>
+                <label>JSON path URL
+                    <input @bind="item.UrlPath" placeholder="url" />
+                </label>
+                <label>JSON path tiêu đề
+                    <input @bind="item.TitlePath" placeholder="title" />
+                </label>
+                <label>JSON path mô tả
+                    <input @bind="item.DescriptionPath" placeholder="content" />
+                </label>
+                <label>API Key (để trống nếu giữ key cũ)
+                    <input type="password" autocomplete="new-password" @bind="item.ApiKey" placeholder="@(item.HasApiKey ? "Đã lưu key · nhập mới để thay" : "Không bắt buộc")" />
+                </label>
+                <label>Tên header chứa key
+                    <input @bind="item.ApiKeyHeader" placeholder="Authorization hoặc X-API-Key" />
+                </label>
+                <label>Tiền tố key
+                    <input @bind="item.ApiKeyPrefix" placeholder="Bearer " />
+                </label>
+                <label>Accept
+                    <input @bind="item.Accept" placeholder="application/json" />
+                </label>
+                <label>Timeout (giây)
+                    <input type="number" min="3" max="45" @bind="item.TimeoutSeconds" />
+                </label>
+                <label>Số truy vấn tối đa
+                    <input type="number" min="1" max="6" @bind="item.MaxQueries" />
+                </label>
+            </div>
+            <div class="form-actions">
+                <label><input type="checkbox" @bind="item.Enabled" /> Bật provider</label>
+                <button class="secondary" @onclick="() => TestProviderAsync(item)" disabled="@(busy || !item.Id.HasValue)">Kiểm tra provider</button>
+                <button class="secondary" @onclick="() => UseLangSearchTemplate(item)" disabled="@busy">Mẫu LangSearch</button>
+                <button class="secondary" @onclick="() => RemoveProvider(item)" disabled="@busy">Xóa provider</button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(item.TestStatus))
+            {
+                <p class="muted"><strong>@item.TestStatus</strong> · @item.TestResultCount kết quả · @(item.TestError ?? "API đã chấp nhận truy vấn")</p>
+            }
+        </div>
+    }
+    <div class="form-actions">
+        <button class="primary" @onclick="SaveCustomProvidersAsync" disabled="@busy">Lưu danh sách provider</button>
+        <button class="secondary" @onclick="TestAsync" disabled="@busy">Kiểm tra tất cả nguồn</button>
+    </div>
+</section>
+
+<section class="panel">
+    <p class="eyebrow">TRẠNG THÁI NGUỒN</p>
+    <h2>Kiểm tra nguồn thực tế</h2>
+    <p class="muted">Nút kiểm tra thực hiện truy vấn thật qua tất cả connector đã cấu hình, gồm provider bổ sung khai báo trong DiscoverySearch:Providers. Trạng thái Connected chỉ xác nhận API chấp nhận yêu cầu tại thời điểm kiểm tra; không bảo đảm độ phủ dữ liệu. Nếu TikTok trả lỗi quyền, cần hoàn tất phê duyệt Research API với TikTok.</p>
+    <div class="form-actions">
+        <button class="primary" @onclick="TestAsync" disabled="@busy">@(busy ? "Đang kiểm tra…" : "Kiểm tra tất cả nguồn")</button>
+    </div>
+    @if (lastChecked is not null)
+    {
+        <p class="muted">Kiểm tra lúc @lastChecked.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</p>
+        @foreach (var state in providerStates)
+        {
+            <div class="variant-stats" style="padding:10px 0;border-bottom:1px solid var(--border,#ddd)">
+                <div><strong>@state.Provider</strong><div class="muted">@StatusLabel(state.Status) · @state.ResultCount kết quả</div>
+                    @if (!string.IsNullOrWhiteSpace(state.Error)) { <small class="muted">@state.Error</small> }
+                </div>
+            </div>
+        }
+    }
+</section>
+
+<p class="muted">Provider tùy chỉnh được quản lý trực tiếp trong workspace bằng biểu mẫu phía trên. Hệ thống hỗ trợ endpoint HTTP GET hoặc POST trả JSON; OAuth đặc thù vẫn cần adapter riêng. Khóa Brave/TikTok trên trang này được gửi tới API đã xác thực và lưu mã hóa bằng ASP.NET Core Data Protection. Chỉ Owner/Admin được phép quản lý.</p>
+
+@code {
+    private bool busy, hasBrave, hasTikTok, hasError;
+    private string braveKey = "", tikTokKey = "", tikTokSecret = "";
+    private string message = "", loadError = "";
+    private DateTimeOffset? lastChecked;
+    private List<ProviderState> providerStates = [];
+    private ProviderState? braveState, tikTokState;
+    private List<CustomProviderEdit> customProviders = [];
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        try
+        {
+            busy = true; loadError = "";
+            var result = await Api.GetAsync<SettingsResponse>("/api/v1/discovery/connectors/settings");
+            hasBrave = result?.HasBraveApiKey == true;
+            hasTikTok = result?.HasTikTokResearchClientKey == true && result?.HasTikTokResearchClientSecret == true;
+            customProviders = (await Api.GetAsync<CustomProviderEdit[]>("/api/v1/discovery/connectors/custom-providers"))?.ToList() ?? [];
+        }
+        catch (Exception ex) { loadError = FriendlyError(ex, "Không thể tải cấu hình nguồn. Kiểm tra kết nối API và quyền Owner/Admin."); }
+        finally { busy = false; }
+    }
+
+    private async Task SaveBraveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(braveKey)) { message = "Hãy nhập Brave API Key trước khi lưu."; hasError = true; return; }
+        await SaveAsync(new SettingsWrite(braveKey.Trim(), null, null));
+        if (!hasError) { braveKey = ""; await ReloadAsync(); }
+    }
+
+    private async Task SaveTikTokAsync()
+    {
+        if (string.IsNullOrWhiteSpace(tikTokKey) && string.IsNullOrWhiteSpace(tikTokSecret))
+        { message = "Hãy nhập ít nhất một trường cần thay đổi."; hasError = true; return; }
+        if (!hasTikTok && (string.IsNullOrWhiteSpace(tikTokKey) || string.IsNullOrWhiteSpace(tikTokSecret)))
+        { message = "Khi thêm mới, cần nhập cả Client Key và Client Secret."; hasError = true; return; }
+        await SaveAsync(new SettingsWrite(null, tikTokKey.Trim(), tikTokSecret.Trim()));
+        if (!hasError) { tikTokKey = ""; tikTokSecret = ""; await ReloadAsync(); }
+    }
+
+    private async Task SaveAsync(SettingsWrite body)
+    {
+        try
+        {
+            busy = true; hasError = false;
+            await Api.PutAsync<SettingsWrite, SettingsResponse>("/api/v1/discovery/connectors/settings", body);
+            message = "Đã lưu cấu hình nguồn trong workspace.";
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể lưu cấu hình nguồn."); hasError = true; }
+        finally { busy = false; }
+    }
+
+    private async Task ClearBraveAsync()
+    {
+        try
+        {
+            busy = true; hasError = false;
+            await Api.PutAsync<SettingsWrite, SettingsResponse>("/api/v1/discovery/connectors/settings", new(null, null, null, true, false));
+            hasBrave = false; braveKey = ""; braveState = null; message = "Đã xóa khóa Brave được lưu trong workspace.";
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể xóa khóa Brave."); hasError = true; }
+        finally { busy = false; }
+    }
+
+    private async Task ClearTikTokAsync()
+    {
+        try
+        {
+            busy = true; hasError = false;
+            await Api.PutAsync<SettingsWrite, SettingsResponse>("/api/v1/discovery/connectors/settings", new(null, null, null, false, true));
+            hasTikTok = false; tikTokKey = ""; tikTokSecret = ""; tikTokState = null; message = "Đã xóa Client Key và Client Secret khỏi workspace.";
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể xóa thông tin TikTok."); hasError = true; }
+        finally { busy = false; }
+    }
+
+    private void AddProvider()
+    {
+        if (customProviders.Count >= 20) return;
+        customProviders.Add(new CustomProviderEdit { Name = "Nhà cung cấp mới", Endpoint = "https://", Method = "GET", QueryParameter = "q",
+            QueryTemplate = "{topic} {query}", RequestBodyTemplate = "{\n  \"query\": \"{query}\"\n}", ContentType = "application/json",
+            ResultsPath = "results", UrlPath = "url", TitlePath = "title",
+            DescriptionPath = "content", Accept = "application/json" });
+    }
+
+    private void UseLangSearchTemplate(CustomProviderEdit item)
+    {
+        item.Name = "LangSearch";
+        item.Endpoint = "https://api.langsearch.com/v1/web-search";
+        item.Method = "POST";
+        item.QueryTemplate = "{query}";
+        item.RequestBodyTemplate = "{\n  \"query\": \"{query}\",\n  \"count\": 10\n}";
+        item.ContentType = "application/json";
+        item.HeadersJson = "";
+        item.ResultsPath = "data.webPages.value";
+        item.UrlPath = "url";
+        item.TitlePath = "name";
+        item.DescriptionPath = "snippet";
+        item.ApiKeyHeader = "Authorization";
+        item.ApiKeyPrefix = "Bearer ";
+        item.Accept = "application/json";
+        item.Enabled = true;
+    }
+
+    private void RemoveProvider(CustomProviderEdit item) => customProviders.Remove(item);
+
+    private async Task TestProviderAsync(CustomProviderEdit item)
+    {
+        if (!item.Id.HasValue)
+        {
+            item.TestStatus = "Chưa lưu";
+            item.TestError = "Hãy lưu provider trước khi kiểm tra.";
+            return;
+        }
+        try
+        {
+            busy = true;
+            var result = await Api.PostAsync<ProviderTestRequest, ProviderTestResponse>(
+                "/api/v1/discovery/search/provider-test", new ProviderTestRequest(item.Id.Value));
+            item.TestStatus = result?.Status ?? "Failed";
+            item.TestResultCount = result?.ResultCount ?? 0;
+            item.TestError = result?.Error;
+        }
+        catch (Exception ex)
+        {
+            item.TestStatus = "Failed";
+            item.TestResultCount = 0;
+            item.TestError = FriendlyError(ex, "Không thể kiểm tra provider.");
+        }
+        finally { busy = false; }
+    }
+
+    private async Task SaveCustomProvidersAsync()
+    {
+        try
+        {
+            busy = true; hasError = false;
+            var payload = customProviders.Select(x => new CustomProviderWrite(x.Id, x.Name, x.Enabled, x.Endpoint,
+                x.Method, x.RequestBodyTemplate, x.ContentType, x.HeadersJson,
+                x.QueryParameter, x.QueryTemplate, x.ResultsPath, x.UrlPath, x.TitlePath, x.DescriptionPath,
+                x.ApiKey, x.ApiKeyHeader, x.ApiKeyPrefix, x.Accept, x.TimeoutSeconds, x.MaxQueries)).ToArray();
+            var saved = await Api.PutAsync<CustomProviderWrite[], CustomProviderEdit[]>("/api/v1/discovery/connectors/custom-providers", payload);
+            customProviders = saved?.ToList() ?? [];
+            message = "Đã lưu danh sách nhà cung cấp cho workspace. Bí mật được giữ ở máy chủ.";
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể lưu provider."); hasError = true; }
+        finally { busy = false; }
+    }
+
+    private async Task TestAsync()
+    {
+        try
+        {
+            busy = true; hasError = false; message = "";
+            var result = await Api.PostAsync<SearchRequest, SearchResponse>("/api/v1/discovery/search",
+                new SearchRequest("Kiểm tra kết nối nguồn", ["creatorflow connector verification"]));
+            providerStates = result?.Providers?.ToList() ?? [];
+            braveState = providerStates.FirstOrDefault(x => x.Provider.Contains("Brave", StringComparison.OrdinalIgnoreCase));
+            tikTokState = providerStates.FirstOrDefault(x => x.Provider.Contains("TikTok", StringComparison.OrdinalIgnoreCase));
+            lastChecked = DateTimeOffset.Now;
+            var connected = providerStates.Count(x => x.Status == "Completed");
+            message = connected > 0 ? $"Kiểm tra hoàn tất: {connected} nguồn đã phản hồi." : "Chưa có nguồn nào kết nối thành công. Xem trạng thái và hướng xử lý bên dưới.";
+            hasError = connected == 0;
+        }
+        catch (Exception ex) { message = FriendlyError(ex, "Không thể kiểm tra nguồn."); hasError = true; }
+        finally { busy = false; }
+    }
+
+    private static string Presence(bool value) => value ? "Đã cấu hình" : "NotConfigured";
+    private static string StatusLabel(string status) => status switch { "Completed" => "Connected", "NotConfigured" => "NotConfigured", "Failed" => "Failed", _ => status };
+    private static string FriendlyError(Exception ex, string fallback) => ex is HttpRequestException ? ex.Message : fallback;
+
+
+    private sealed class CustomProviderEdit
+    {
+        public Guid? Id { get; set; } public string Name { get; set; } = ""; public bool Enabled { get; set; } = true;
+        public string Endpoint { get; set; } = ""; public string Method { get; set; } = "GET";
+        public string? RequestBodyTemplate { get; set; } = "{\n  \"query\": \"{query}\"\n}";
+        public string? ContentType { get; set; } = "application/json"; public string? HeadersJson { get; set; }
+        public string? QueryParameter { get; set; } = "q";
+        public string? QueryTemplate { get; set; } = "{topic} {query}"; public string? ResultsPath { get; set; } = "results";
+        public string? UrlPath { get; set; } = "url"; public string? TitlePath { get; set; } = "title";
+        public string? DescriptionPath { get; set; } = "content"; public string? ApiKey { get; set; }
+        public bool HasApiKey { get; set; } public string? ApiKeyHeader { get; set; }
+        public string? TestStatus { get; set; } public int TestResultCount { get; set; } public string? TestError { get; set; }
+        public string? ApiKeyPrefix { get; set; } public string? Accept { get; set; } = "application/json";
+        public int TimeoutSeconds { get; set; } = 15; public int MaxQueries { get; set; } = 4;
+    }
+    private sealed record CustomProviderWrite(Guid? Id, string Name, bool Enabled, string Endpoint,
+        string? Method, string? RequestBodyTemplate, string? ContentType, string? HeadersJson,
+        string? QueryParameter, string? QueryTemplate, string? ResultsPath, string? UrlPath,
+        string? TitlePath, string? DescriptionPath, string? ApiKey, string? ApiKeyHeader,
+        string? ApiKeyPrefix, string? Accept, int TimeoutSeconds, int MaxQueries);
+
+    private sealed record SettingsWrite(string? BraveApiKey, string? TikTokResearchClientKey, string? TikTokResearchClientSecret,
+        bool ClearBraveApiKey = false, bool ClearTikTokResearchCredentials = false);
+    private sealed class SettingsResponse { public bool HasBraveApiKey { get; set; } public bool HasTikTokResearchClientKey { get; set; } public bool HasTikTokResearchClientSecret { get; set; } public bool IsStoredInWorkspace { get; set; } }
+    private sealed record SearchRequest(string Topic, string[] Queries);
+    private sealed record ProviderTestRequest(Guid ProviderId);
+    private sealed class ProviderTestResponse { public Guid ProviderId { get; set; } public string Status { get; set; } = ""; public int ResultCount { get; set; } public string? Error { get; set; } }
+    private sealed class SearchResponse { public ProviderState[] Providers { get; set; } = []; }
+    private sealed class ProviderState { public string Provider { get; set; } = ""; public string Status { get; set; } = ""; public int ResultCount { get; set; } public string? Error { get; set; } }
+}

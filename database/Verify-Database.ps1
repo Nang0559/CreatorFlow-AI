@@ -13,7 +13,7 @@ if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { 
 Import-Module SqlServer -ErrorAction Stop
 
 $prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_')
-if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_') }
+if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_', '021_', '022_', '023_', '024_', '025_', '026_', '027_', '028_', '029_') }
 $schemaPath = Join-Path $PSScriptRoot 'schema'
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
     $name = $_.Name
@@ -42,9 +42,9 @@ $requiredTables = @(
     'DiscoveryMetricSnapshots', 'DiscoveryRankings', 'DiscoveryPriorityLinks',
     'DiscoveryFeedback', 'DiscoveryModelEvaluations', 'DiscoveryFeedbackEvents',
     'DiscoveryCandidateFeatureSnapshots', 'DiscoveryLearningInsights',
-    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions'
+    'DiscoveryPreferenceRules', 'DiscoveryLearningModelVersions', 'DiscoveryTopicRunHistory'
 )
-if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs') }
+if ($RequireTenantMigrations) { $requiredTables += @('Tenants', 'TenantMemberships', 'TenantInvitations', 'TenantSecurityAudit', 'SharedLinkInboxItems', 'VideoAssets', 'VideoRenderJobs', 'CreatorFlowPlans') }
 $tableValues = ($requiredTables | ForEach-Object { "(N'$_')" }) -join ','
 $missingTables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
 DECLARE @Required TABLE (TableName sysname NOT NULL);
@@ -218,6 +218,91 @@ WHERE NOT EXISTS
 );
 "@)
     if ($integrityCheck.Count -gt 0) { throw "Tenant relationship/index definition mismatch: $(($integrityCheck | ForEach-Object { $_.Problem }) -join ', ')" }
+    $discoveryTenantTables = @(
+        'DiscoveryRuns','DiscoveryTopicProfiles','DiscoverySources','DiscoveryCandidates',
+        'DiscoveryMetricSnapshots','DiscoveryRankings','DiscoveryPriorityLinks','DiscoveryFeedback',
+        'DiscoveryModelEvaluations','DiscoveryFeedbackEvents','DiscoveryCandidateFeatureSnapshots',
+        'DiscoveryLearningInsights','DiscoveryPreferenceRules','DiscoveryLearningModelVersions',
+        'DiscoveryTopicRunHistory'
+    )
+    $discoveryTenantValues = ($discoveryTenantTables | ForEach-Object { "(N'$_')" }) -join ','
+    $discoveryTenantCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+DECLARE @DiscoveryTables TABLE (TableName sysname NOT NULL);
+INSERT @DiscoveryTables(TableName) VALUES $discoveryTenantValues;
+SELECT t.TableName
+FROM @DiscoveryTables t
+WHERE COL_LENGTH(N'dbo.' + t.TableName, N'TenantId') IS NULL
+   OR EXISTS
+      (SELECT 1 FROM sys.default_constraints dc
+       JOIN sys.columns c ON c.object_id=dc.parent_object_id AND c.column_id=dc.parent_column_id
+       WHERE dc.parent_object_id=OBJECT_ID(N'dbo.' + QUOTENAME(t.TableName))
+         AND c.name=N'TenantId')
+   OR NOT EXISTS
+      (SELECT 1 FROM sys.foreign_keys fk
+       WHERE fk.parent_object_id=OBJECT_ID(N'dbo.' + QUOTENAME(t.TableName))
+         AND fk.referenced_object_id=OBJECT_ID(N'dbo.Tenants')
+         AND fk.is_disabled=0 AND fk.is_not_trusted=0
+         AND EXISTS (SELECT 1 FROM sys.foreign_key_columns fkc
+                     JOIN sys.columns c ON c.object_id=fkc.parent_object_id AND c.column_id=fkc.parent_column_id
+                     WHERE fkc.constraint_object_id=fk.object_id AND c.name=N'TenantId'));
+"@)
+    if ($discoveryTenantCheck.Count -gt 0) { throw "Discovery tenant isolation is incomplete (014/015/025 tables missing TenantId or trusted tenant FK): $(($discoveryTenantCheck | ForEach-Object { $_.TableName }) -join ', ')" }
+
+    $discoveryRelationships = @(
+        'FK_DiscoveryCandidates_Tenant_Source',
+        'FK_DiscoveryMetricSnapshots_Tenant_Candidate','FK_DiscoveryMetricSnapshots_Tenant_Run',
+        'FK_DiscoveryRankings_Tenant_Candidate','FK_DiscoveryRankings_Tenant_Run',
+        'FK_DiscoveryPriorityLinks_Tenant_Candidate','FK_DiscoveryFeedback_Tenant_Candidate',
+        'FK_DiscoveryFeedbackEvents_Tenant_Candidate','FK_DiscoveryCandidateFeatureSnapshots_Tenant_Candidate',
+        'FK_DiscoveryLearningInsights_Tenant_Feedback','FK_DiscoveryPreferenceRules_Tenant_Insight',
+        'FK_DiscoveryTopicProfiles_Tenant_Topic','FK_DiscoveryTopicRunHistory_Tenant_Profile'
+    )
+    $relationshipValues = ($discoveryRelationships | ForEach-Object { "(N'$_')" }) -join ','
+    $relationshipCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+DECLARE @Expected TABLE (ConstraintName sysname NOT NULL);
+INSERT @Expected(ConstraintName) VALUES $relationshipValues;
+SELECT e.ConstraintName
+FROM @Expected e
+WHERE NOT EXISTS
+(
+    SELECT 1 FROM sys.foreign_keys fk
+    WHERE fk.name=e.ConstraintName AND fk.is_disabled=0 AND fk.is_not_trusted=0
+      AND (SELECT COUNT(*) FROM sys.foreign_key_columns fkc WHERE fkc.constraint_object_id=fk.object_id)=2
+      AND EXISTS
+      (
+        SELECT 1 FROM sys.foreign_key_columns fkc
+        JOIN sys.columns c ON c.object_id=fkc.parent_object_id AND c.column_id=fkc.parent_column_id
+        WHERE fkc.constraint_object_id=fk.object_id AND fkc.constraint_column_id=1 AND c.name=N'TenantId'
+      )
+      AND EXISTS
+      (
+        SELECT 1 FROM sys.foreign_key_columns fkc
+        JOIN sys.columns c ON c.object_id=fkc.parent_object_id AND c.column_id=fkc.parent_column_id
+        WHERE fkc.constraint_object_id=fk.object_id AND fkc.constraint_column_id=2
+      )
+);
+"@)
+    if ($relationshipCheck.Count -gt 0) { throw "Discovery tenant-composite relationships are missing or untrusted: $(($relationshipCheck | ForEach-Object { $_.ConstraintName }) -join ', ')" }
+
+    $newTenantTables = @('TenantSubscriptions','TenantUsageEvents','TenantStorageObjects','AIProviders','DiscoveryChannelSyncStates','DiscoveryVideoDownloadJobs','DiscoveryTopicProfiles','DiscoveryTopicRunHistory','DiscoveryConnectorConfigurations')
+    $newTenantValues = ($newTenantTables | ForEach-Object { "(N'$_')" }) -join ','
+    $newTenantCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+DECLARE @NewTenantTables TABLE (TableName sysname NOT NULL);
+INSERT @NewTenantTables(TableName) VALUES $newTenantValues;
+SELECT t.TableName
+FROM @NewTenantTables t
+WHERE COL_LENGTH(N'dbo.' + t.TableName, N'TenantId') IS NULL
+   OR NOT EXISTS
+      (SELECT 1 FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id=i.object_id AND ic.index_id=i.index_id JOIN sys.columns c ON c.object_id=ic.object_id AND c.column_id=ic.column_id WHERE i.object_id=OBJECT_ID(N'dbo.'+QUOTENAME(t.TableName)) AND c.name=N'TenantId' AND ic.key_ordinal=1 AND i.is_disabled=0)
+   OR NOT EXISTS
+      (SELECT 1 FROM sys.foreign_key_columns fkc
+       JOIN sys.foreign_keys fk ON fk.object_id=fkc.constraint_object_id
+       JOIN sys.columns c ON c.object_id=fkc.parent_object_id AND c.column_id=fkc.parent_column_id
+       WHERE fk.parent_object_id=OBJECT_ID(N'dbo.'+QUOTENAME(t.TableName))
+         AND c.name=N'TenantId' AND fk.is_disabled=0 AND fk.is_not_trusted=0);
+"@)
+    if ($newTenantCheck.Count -gt 0) { throw "New tenant-owned tables lack TenantId or a trusted TenantId foreign key: $(($newTenantCheck | ForEach-Object { $_.TableName }) -join ', ')" }
+
     $tenant = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query "SELECT COUNT(*) AS TenantCount FROM dbo.Tenants WHERE Id='00000000-0000-4000-8000-000000000001' AND Slug=N'legacy-workspace';")
     if ($tenant[0].TenantCount -ne 1) { throw 'The explicit legacy-workspace tenant is missing.' }
 }

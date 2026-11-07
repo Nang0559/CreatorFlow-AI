@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$RepositoryPath = 'E:\Projects\CreatorFlow-AI',
-    [string]$Branch = 'feature/trend-selection-safety-intelligence',
+    [string]$Branch = 'feature/keycloak-oidc-local',
     [string]$SqlInstance = 'localhost',
     [string]$Database = 'CreatorFlow_QC',
     [switch]$SkipGitPull,

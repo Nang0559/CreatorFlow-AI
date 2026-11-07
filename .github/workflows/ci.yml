@@ -34,6 +34,175 @@ jobs:
       - run: python -m pip install -e ./ai pytest httpx
       - run: pytest ai/tests -q
 
+
+  keycloak-live-contract:
+    name: Keycloak live OIDC and signed-token contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start Keycloak with the checked-in realm export
+        shell: bash
+        run: |
+          docker run -d --name creatorflow-keycloak \
+            -p 8180:8180 -p 9000:9000 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=ci-admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD='ci-only-admin-password-12345' \
+            -e KC_HTTP_PORT=8180 \
+            -e KC_HOSTNAME=http://localhost:8180 \
+            -e KC_HEALTH_ENABLED=true \
+            -v "$PWD/docker/keycloak/realm-import:/opt/keycloak/data/import:ro" \
+            quay.io/keycloak/keycloak:26.8.1 start-dev --import-realm
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:9000/health/ready >/dev/null; then
+              break
+            fi
+            sleep 5
+          done
+          curl -fsS http://127.0.0.1:9000/health/ready >/dev/null
+          curl -fsS http://127.0.0.1:8180/realms/creatorflow/.well-known/openid-configuration >/tmp/creatorflow-oidc.json
+          python - <<'PY'
+          import json
+          metadata = json.load(open('/tmp/creatorflow-oidc.json', encoding='utf-8'))
+          expected = 'http://localhost:8180/realms/creatorflow'
+          assert metadata['issuer'] == expected, metadata.get('issuer')
+          for key in ('authorization_endpoint', 'token_endpoint', 'jwks_uri'):
+              assert metadata.get(key), key
+          print('PASS imported realm OIDC discovery:', metadata['issuer'])
+          PY
+      - name: Validate signed token from the actual creatorflow-web client
+        shell: bash
+        run: |
+          python -m pip install --quiet 'PyJWT[crypto]' requests
+          python - <<'PY'
+          import os
+          import requests
+          import jwt
+
+          base = 'http://127.0.0.1:8180'
+          issuer = 'http://localhost:8180/realms/creatorflow'
+
+          def admin_request(method, path, data=None, token=None):
+              headers = {'Authorization': 'Bearer ' + token} if token else {}
+              response = requests.request(method, base + path, json=data, headers=headers, timeout=20)
+              response.raise_for_status()
+              return response.json() if response.content else None
+
+          admin = requests.post(base + '/realms/master/protocol/openid-connect/token', data={
+              'client_id': 'admin-cli', 'grant_type': 'password',
+              'username': 'ci-admin', 'password': 'ci-only-admin-password-12345'
+          }, timeout=20)
+          admin.raise_for_status()
+          admin_token = admin.json()['access_token']
+
+          clients = admin_request('GET', '/admin/realms/creatorflow/clients?clientId=creatorflow-web', token=admin_token)
+          assert clients, 'checked-in creatorflow-web client is missing'
+          web_client = clients[0]
+          client_uuid = web_client['id']
+          assert web_client.get('standardFlowEnabled') is True, 'authorization-code flow is disabled'
+          assert web_client.get('directAccessGrantsEnabled') is False, 'password grant must be disabled in the realm export'
+          assert web_client.get('publicClient') is False, 'creatorflow-web must remain confidential'
+          attributes = web_client.get('attributes') or {}
+          assert attributes.get('pkce.code.challenge.method') == 'S256', 'PKCE S256 is not configured'
+          client_secret = admin_request(
+              'GET', f'/admin/realms/creatorflow/clients/{client_uuid}/client-secret', token=admin_token
+          )['value']
+
+          mappers = admin_request(
+              'GET', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models',
+              token=admin_token
+          )
+          if not any(item.get('protocolMapper') == 'oidc-sub-mapper' for item in mappers):
+              admin_request('POST', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', {
+                  'name': 'creatorflow-access-token-subject',
+                  'protocol': 'openid-connect',
+                  'protocolMapper': 'oidc-sub-mapper',
+                  'consentRequired': False,
+                  'config': {
+                      'access.token.claim': 'true',
+                      'id.token.claim': 'true',
+                      'introspection.token.claim': 'true'
+                  }
+              }, admin_token)
+          if not any(
+              item.get('protocolMapper') == 'oidc-audience-mapper' and
+              (item.get('config') or {}).get('included.custom.audience') == 'creatorflow-api'
+              for item in mappers
+          ):
+              admin_request('POST', f'/admin/realms/creatorflow/clients/{client_uuid}/protocol-mappers/models', {
+                  'name': 'creatorflow-api-audience',
+                  'protocol': 'openid-connect',
+                  'protocolMapper': 'oidc-audience-mapper',
+                  'consentRequired': False,
+                  'config': {
+                      'included.custom.audience': 'creatorflow-api',
+                      'id.token.claim': 'false',
+                      'access.token.claim': 'true',
+                      'introspection.token.claim': 'true'
+                  }
+              }, admin_token)
+
+          users = admin_request(
+              'GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin_token
+          )
+          if not users:
+              admin_request('POST', '/admin/realms/creatorflow/users', {
+                  'username': 'ci-oidc-contract', 'enabled': True,
+                  'email': 'ci-oidc-contract@example.invalid', 'emailVerified': True,
+                  'firstName': 'CI', 'lastName': 'Contract', 'requiredActions': []
+              }, admin_token)
+              users = admin_request(
+                  'GET', '/admin/realms/creatorflow/users?username=ci-oidc-contract&exact=true', token=admin_token
+              )
+          user_id = users[0]['id']
+          admin_request('PUT', f'/admin/realms/creatorflow/users/{user_id}/reset-password', {
+              'type': 'password', 'value': 'ci-only-user-password-123456', 'temporary': False
+          }, admin_token)
+
+          # Enable password grant only in this disposable CI realm to avoid browser automation.
+          # The committed creatorflow realm continues to require authorization code + PKCE.
+          web_client['directAccessGrantsEnabled'] = True
+          admin_request('PUT', f'/admin/realms/creatorflow/clients/{client_uuid}', web_client, admin_token)
+          token_response = requests.post(
+              base + '/realms/creatorflow/protocol/openid-connect/token',
+              data={
+                  'client_id': 'creatorflow-web',
+                  'client_secret': client_secret,
+                  'grant_type': 'password',
+                  'username': 'ci-oidc-contract',
+                  'password': 'ci-only-user-password-123456',
+                  'scope': 'openid creatorflow-api'
+              },
+              timeout=20
+          )
+          token_response.raise_for_status()
+          access_token = token_response.json()['access_token']
+          metadata = requests.get(
+              base + '/realms/creatorflow/.well-known/openid-configuration', timeout=20
+          ).json()
+          signing_key = jwt.PyJWKClient(metadata['jwks_uri']).get_signing_key_from_jwt(access_token)
+          claims = jwt.decode(
+              access_token, signing_key.key, algorithms=['RS256'],
+              audience='creatorflow-api', issuer=issuer
+          )
+          assert claims.get('sub'), 'subject claim missing'
+          assert 'creatorflow-api' in claims.get('scope', '').split(), claims.get('scope')
+          assert 'creatorflow-api' in claims.get('aud', []), claims.get('aud')
+          print('::add-mask::' + access_token)
+          with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as env_file:
+              env_file.write('CREATORFLOW_LIVE_OIDC_TOKEN=' + access_token + '\n')
+          print('PASS signed access token from actual creatorflow-web client:', claims['iss'], 'aud=creatorflow-api')
+          PY
+      - name: Set up .NET for live API JWT acceptance test
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Verify Keycloak token through API JwtBearer and tenant membership
+        run: dotnet test tests/CreatorFlow.Api.Tests/CreatorFlow.Api.Tests.csproj --configuration Release --filter FullyQualifiedName~LiveKeycloakJwtAcceptanceTests
+      - name: Stop Keycloak
+        if: always()
+        run: docker rm -f creatorflow-keycloak || true
+
   powershell:
     name: PowerShell script validation
     runs-on: windows-latest
@@ -48,6 +217,11 @@ jobs:
             'scripts/Test-VideoRenderer.ps1',
             'database/Apply-Migrations.ps1',
             'database/Verify-Database.ps1',
+            'tools/sql-qc/Invoke-SqlServerQc.ps1',
+            'tools/sql-qc/Protect-QcDatabase.ps1',
+            'tools/sql-qc/Test-SqlQcPreflight.ps1',
+            'scripts/Test-KeycloakRealmContract.ps1',
+            'scripts/Initialize-KeycloakLocal.ps1',
             'scripts/docker/Import-LocalPilotEnv.ps1'
           )
           foreach ($file in $files) {
@@ -62,3 +236,4 @@ jobs:
             }
             Write-Host "PASS $file"
           }
+          ./scripts/Test-KeycloakRealmContract.ps1

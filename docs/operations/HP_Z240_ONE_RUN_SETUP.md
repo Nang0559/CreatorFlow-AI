@@ -2,7 +2,7 @@
 
 ## Preconditions
 - Windows PowerShell 7 or Windows PowerShell 5.1.
-- Repository cloned at `E:\Projects\CreatorFlow-AI`, branch `feature/trend-selection-safety-intelligence`.
+- Repository cloned at `E:\Projects\CreatorFlow-AI`, branch `feature/keycloak-oidc-local`.
 - Existing local SQL Server database `CreatorFlow_QC` is ONLINE and writable, and already tagged as CreatorFlow-AI QC.
 - Docker Desktop is running.
 - A valid local `.env` exists. Do not commit it or share its secrets.
@@ -16,7 +16,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\Setup-HPZ240.ps1
 ```
 
-The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies only missing non-tenant SQL migrations 001–010 and 014–015, then tenant migrations 011–013 only after explicit confirmation and tenant-dependent migrations 016–020 when the tenant schema is verified, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, starts or reuses the native API on port 7001, and reports CPU/RAM/GPU plus whether CapCut Desktop and After Effects are installed. It then probes the local Web UI at port 8080. By default, Web is accessible only from the HP itself.
+The script checks the branch and clean working tree, fast-forward pulls the branch, validates local configuration without printing secrets, applies the repository's missing migrations according to the migration ledger: non-tenant migrations 001–010 and 014–015, plus tenant-dependent migrations 011–013 and 016–028 only when the tenant schema is already installed or the operator explicitly confirms the legacy-workspace ownership safeguards, verifies the QC database, restores/builds/tests .NET, builds/starts Docker AI and Web, waits for AI health/readiness, starts or reuses the native API on port 7001, and reports CPU/RAM/GPU plus whether CapCut Desktop and After Effects are installed. It then probes the local Web UI at port 8080. By default, Web is accessible only from the HP itself.
 
 ## Safe reruns
 - Already-applied SQL migrations are skipped only if their stored SHA-256 matches the repository file.
@@ -48,21 +48,21 @@ The setup preserves the phone-only Douyin rule. It does not log in to Douyin/Tik
 Review `docs/operations/GO_LIVE_READINESS.md` before calling this a production release. A successful local setup is still a Local Pilot / Pre-Go-live until every applicable acceptance gate has evidence.
 
 ## Important boundary
-A successful local setup proves database migrations, builds, container startup and health endpoints. It does not prove that live Douyin/TikTok discovery providers are connected or that feedback is already persisted end-to-end; those require their own integration and acceptance tests.
+A successful local setup proves database migrations, builds, container startup and health endpoints. It does not prove that workspace discovery credentials are configured, Brave returns live indexed results, TikTok Research API approval is active, connector results are persisted, or feedback is already learned end-to-end. Brave/TikTok Research currently run on demand only; verify them separately after setup.
 
 ## Share links from iPhone
 The Trends page accepts pasted links. For one-action share-sheet handoff, create the iOS Shortcut described in `docs/operations/IOS_SHARE_TO_CREATORFLOW.md`; iOS Safari does not support PWA share-target registration. The shortcut opens the HP's LAN URL with the shared link, which the page stores in Share Inbox.
 
 ## Video editing applications
-The setup script detects CapCut Desktop and After Effects but does not install them or sign into any editor account. Install CapCut from [the official Desktop page](https://www.capcut.com/tools/desktop-video-editor). After Effects is optional and requires an Adobe license; see [Adobe After Effects](https://www.adobe.com/products/aftereffects.html). Style Lab can export a CapCut/After Effects handoff ZIP containing the script, shot list, edit plan and an editable After Effects starter composition. Separately, the Assets page can create finished MP4 files through the automated AE+FFmpeg worker. The render workflow is not a native CapCut project and does not yet provide advanced effects, B-roll, STT/TTS or beat-synced music. See `docs/operations/VIDEO_RENDERING_AE_FFMPEG.md`.
+The setup script detects CapCut Desktop and After Effects but does not install them or sign into any editor account. Install CapCut from [the official Desktop page](https://www.capcut.com/tools/desktop-video-editor). After Effects is optional and requires an Adobe license; see [Adobe After Effects](https://www.adobe.com/products/aftereffects.html). Style Lab can export a CapCut/After Effects handoff ZIP containing the script, shot list, edit plan and an editable After Effects starter composition. Separately, the Assets page can create finished MP4 files through the FFmpeg-only local worker. The render workflow is not a native CapCut project and does not yet provide advanced effects, B-roll, STT/TTS or beat-synced music. See `docs/operations/VIDEO_RENDERING_AE_FFMPEG.md`.
 
 ## Mobile-first interface
 The same setup pulls the responsive Web UI. On phone-sized screens it switches to a compact top bar and five-item bottom navigation: Overview, Discover, Studio, Performance, Settings. Desktop retains the sidebar and secondary management links. Touch targets, input sizing, safe-area spacing for iPhone, compact cards and reduced-motion preferences are included. The home page prioritizes three common actions: discover content, create style variants, and review performance. The interface does not claim that unimplemented integrations are connected.
 
 
-## Dựng video tự động (After Effects + FFmpeg)
+## Dựng video tự động (FFmpeg-only)
 
-Bộ dựng chạy bằng tiến trình Windows riêng trên HP Z240; không chạy trong container Web/AI. Hệ thống tạo nhóm 2–3 tác vụ trong một transaction SQL, tránh tạo dở một phần khi gửi nhóm phong cách. API và Worker phải dùng cùng VideoRendering__StorageRoot. Sao chép các biến VideoRendering__* từ .env.example vào .env, rồi sửa đường dẫn đúng với phiên bản After Effects, FFmpeg và FFprobe đang cài. Không commit .env.
+Bộ dựng FFmpeg-only chạy bằng tiến trình Windows riêng trên HP Z240; không chạy trong container Web/AI. Hệ thống tạo nhóm 2–3 tác vụ trong một transaction SQL, tránh tạo dở một phần khi gửi nhóm phong cách. API và Worker phải dùng cùng VideoRendering__StorageRoot. Cấu hình đường dẫn FFmpeg và FFprobe theo bản cài trên Z240; After Effects không phải dependency của renderer hiện tại. Không commit .env.
 
 Sau khi migrations 017–020 đã được áp dụng và Verify-Database.ps1 xác nhận đủ bảng cùng khóa ngoại tenant, chạy kiểm tra công cụ:
 
@@ -78,4 +78,4 @@ Khởi động worker bằng cùng tài khoản Windows có quyền truy cập S
 .\scripts\Start-VideoRenderWorker.ps1
 ```
 
-Sau đó mở Thư viện video trong CreatorFlow, tải MP4/MOV/M4V lên, xác nhận quyền sử dụng, tạo tác vụ và chờ video hoàn tất. Trang sẽ tự cập nhật tiến độ, phát video và cung cấp liên kết tải MP4. Nghiệm thu render thật 15–30 giây trước khi sử dụng nội dung kinh doanh; CI chỉ kiểm tra biên dịch, không chứng minh After Effects đã render thành công trên máy.
+Sau đó mở Thư viện video trong CreatorFlow, tải MP4/MOV/M4V lên, xác nhận quyền sử dụng, tạo tác vụ và chờ video hoàn tất. Trang sẽ tự cập nhật tiến độ, phát video và cung cấp liên kết tải MP4. Nghiệm thu render thật 15–30 giây trước khi sử dụng nội dung kinh doanh; CI chỉ kiểm tra biên dịch, không chứng minh FFmpeg đã tạo MP4 phát được trên máy.

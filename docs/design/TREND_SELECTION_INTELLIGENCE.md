@@ -62,3 +62,64 @@ Migration tests on empty and schema-009 databases; decision validation and empty
 ## Current Discovery ranking boundary
 
 The Python service exposes a transparent heuristic candidate ranker and an LLM query planner. The ranker can score candidates supplied to it without a user-shared link; a shared URL is only an optional bounded priority signal. The query planner returns permitted search queries and exclusions but does not collect data. No verified live Douyin/TikTok provider, candidate ingestion worker, persistent ranking orchestration or feedback-to-next-ranking loop is active. Do not describe the current baseline as trained ML or automatic live trend crawling.
+
+
+## Topic-driven channel discovery — implementation status
+
+The Trends page now offers a topic-driven discovery entry point:
+- The creator selects an active saved topic and may add product and audience context.
+- The authenticated API reads the topic from the current tenant, derives a bounded keyword list, and forwards a query-plan request to the AI service.
+- The AI service returns bounded queries, adjacent topics, purchase-intent signals and exclusions. Human review remains required.
+- This is a query plan only. It does not claim that channels were fetched, does not follow accounts, and does not create fabricated channel metrics.
+
+### Provider and commercial evidence gates
+
+Automatic channel acquisition is intentionally not enabled until a provider adapter is approved and configured. A provider must declare its platform, permitted search/profile/video capabilities, authorization model, rate limits, geographic coverage, retention rules and allowed commercial use. Disabled or unconfigured providers must fail closed and must never be replaced by browser-cookie extraction, private endpoints or generic scraping.
+
+Commercial ranking must keep separate evidence classes:
+1. Verified sales evidence: orders, units sold, GMV or affiliate conversion metrics returned by an authorized seller/affiliate integration, with the authorization scope and reporting window recorded.
+2. Creator-authorized performance evidence: creator profile/video/shop metrics available only after that creator authorizes the application.
+3. Public content evidence: views, likes, comments, shares, posting cadence and engagement velocity. These can indicate audience traction but are not proof of sales.
+4. Unknown: absent or unauthorized metrics. Unknown is not zero and cannot increase a commercial-sales score.
+
+TikTok Shop Affiliate API is approval-gated; Seller Analytics APIs are scoped to the authorized seller's shop and require the relevant scopes. Douyin Open Platform permissions are separately applied for and may be disabled by default. Therefore neither platform currently provides a universal, unrestricted cross-creator sales lookup for this application.
+
+### Remaining release gates
+
+- Implement and test an approved provider adapter for topic search and public/authorized channel discovery.
+- Persist discovery runs, candidate source provenance, coverage, timestamps and tenant ownership using a tenant-safe schema.
+- Deduplicate candidates by platform + stable external creator ID and preserve source URLs.
+- Add channel metric snapshots with nullable values and explicit source/authorization provenance.
+- Rank commercial potential only from verified sales evidence; expose public-content traction as a separate score.
+- Add scheduled worker execution, bounded retries, rate limiting, idempotency and a human review queue.
+- Verify API/Web builds, tenant isolation, migration checksums and connector contract tests before enabling automatic collection.
+
+
+## Public discovery connectors — current implementation (migration 028)
+
+The topic-driven Trends flow now has a bounded, on-demand connector path in addition to the AI query planner:
+
+1. The authenticated Web UI requests an AI query plan from the Python service through the .NET API.
+2. After the plan is returned, the Web flow calls `POST /api/v1/discovery/search` automatically.
+3. The .NET API resolves connector credentials for the active workspace and calls enabled providers server-side.
+4. Results are returned with provider status, source attribution and validated canonical TikTok links. Only provider-supplied metrics are shown; the AI plan is never treated as evidence that a channel/video exists.
+
+Current providers:
+- **Brave Search Web API** searches indexed public web pages with Vietnam-oriented query hints and accepts only validated HTTPS TikTok profile paths. Coverage depends on Brave's index and is not a complete TikTok directory.
+- **TikTok Research API** can query public video metadata for Vietnam only when the project has the required Research API approval and valid client credentials. A normal developer app or Display API access is not equivalent approval.
+
+### Workspace credential model
+
+Migration `028_discovery_connector_configuration.sql` adds one `dbo.DiscoveryConnectorConfigurations` row per tenant. Brave API key and TikTok Research Client Key/Secret are encrypted with ASP.NET Core Data Protection before persistence. The settings API exposes presence flags only, never plaintext or ciphertext. Only workspace Owner/Admin can manage the credentials. Blank update fields preserve existing values; explicit clear flags remove the corresponding credential. TikTok client key and secret must be configured or cleared as a pair. Environment configuration remains a server-side fallback when a workspace credential is absent.
+
+The Data Protection key ring is operationally critical: it must persist across API restarts and be protected/backed up by the host operator. Losing or changing the key ring can make stored credentials undecryptable. Do not store the key ring in Git, a browser, or a container image. Confirm the actual host key-ring persistence and backup policy before production use.
+
+### Explicit scope and non-goals
+
+- Connector execution is currently on demand from the Trends UI. The topic scheduler and calendar schedules do not yet execute connector searches on a recurring basis.
+- This implementation returns search results; it does not persist discovered channels/videos into the candidate tables, download media, follow accounts, or interact with TikTok.
+- No scraping, browser automation, QR/session extraction, cookies, likes, comments, follows, or publishing are used.
+- Empty results and provider-unavailable states must remain visible; never synthesize placeholder channel cards or metrics.
+- Brave indexed results are discovery leads, not proof of creator location, account ownership, current availability, rights, or commercial performance.
+
+Operational setup and provider limitations: [Discovery connector runbook](../operations/DISCOVERY_CONNECTORS.md). The design deliberately separates AI inference from external data retrieval: the LLM proposes bounded queries; a permitted provider supplies actual links and metadata.

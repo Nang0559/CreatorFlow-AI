@@ -170,3 +170,17 @@ Feedback and outcome routes require authenticated tenant context and validate th
 - `GET /api/v1/video/render-jobs/{id}/preview` and `GET /api/v1/video/render-jobs/{id}/download`: authenticated MP4 streaming/download with HTTP Range support.
 
 The Windows worker uses After Effects/aerender to produce a 1080×1920 PNG sequence and FFmpeg/FFprobe to validate and encode H.264/AAC MP4. It is a local pilot renderer; advanced effects, B-roll, speech transcription, TTS, music analysis and publishing are not part of this endpoint contract. See [video rendering runbook](operations/VIDEO_RENDERING_AE_FFMPEG.md).
+
+
+## Public discovery connector endpoints (migration 028)
+
+All routes require authenticated API access and a resolved active workspace. Connector credentials are never returned by these endpoints.
+
+- `GET /api/v1/discovery/connectors/settings`: returns boolean presence flags for Brave and TikTok Research credentials plus whether workspace storage is in use. Only Owner/Admin may manage/read this settings surface.
+- Web UI: `/settings/discovery-connectors` lets workspace Owner/Admin save, update, test and explicitly clear Brave Search and TikTok Research credentials. The test action submits a bounded live discovery query and displays each provider's actual status; it does not expose stored secrets.
+- `PUT /api/v1/discovery/connectors/settings`: accepts optional Brave API key, TikTok Research Client Key and Client Secret, plus explicit clear flags. Blank secret fields preserve existing values; clearing TikTok credentials clears the pair. TikTok key and secret must be supplied/retained as a pair. The API encrypts secrets with ASP.NET Core Data Protection before storing them in the tenant-owned `dbo.DiscoveryConnectorConfigurations` table.
+- `POST /api/v1/discovery/search`: accepts the bounded AI query plan and invokes configured server-side discovery providers. It returns provider status and validated source URLs/metadata; it does not return secrets or invent metrics.
+
+Brave Search uses its public web index and can return incomplete/stale indexed TikTok pages. TikTok Research API requires separate Research API project approval; ordinary Display API access is not sufficient. If no provider is configured/approved, the response must report that state rather than fabricate results.
+
+Migration `028_discovery_connector_configuration.sql` is tenant-dependent and is included by `database/Apply-Migrations.ps1` only after tenant migrations 011–013 are present (or the operator explicitly confirms tenant migration installation under the script's safeguards). See [connector operations](operations/DISCOVERY_CONNECTORS.md) and [connector design](design/TREND_SELECTION_INTELLIGENCE.md).

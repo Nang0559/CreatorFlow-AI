@@ -1,9 +1,14 @@
 using CreatorFlow.Api.Identity;
+using CreatorFlow.Api.Discovery;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text.Json;
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 using System.IO.Compression;
 using CreatorFlow.Api.Security;
 using CreatorFlow.Api.Video;
@@ -20,11 +25,86 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 524_288_000);
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
+
+// Trust forwarded client/proto information only from explicitly configured proxy IPs.
+// Do not enable unrestricted X-Forwarded-* processing on an internet-facing listener.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownProxies.Clear();
+    options.KnownNetworks.Clear();
+    var trustedProxyIps = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [];
+    foreach (var value in trustedProxyIps)
+        if (IPAddress.TryParse(value, out var address))
+            options.KnownProxies.Add(address);
+});
+
+var allowedCorsOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
+{
+    // No browser origins are trusted unless explicitly configured by the deployment.
+    if (allowedCorsOrigins.Length > 0)
+        policy.WithOrigins(allowedCorsOrigins).AllowAnyHeader().AllowAnyMethod();
+}));
+var rateLimitingEnabled = builder.Configuration.GetValue<bool?>("RateLimiting:Enabled") ?? true;
+// Cheap pre-authentication IP limiter: abusive requests are rejected before JWT validation
+// and before the database-backed tenant membership lookup.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = rateLimitingEnabled
+        ? PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        {
+            if (httpContext.Request.Path.StartsWithSegments("/health"))
+                return RateLimitPartition.GetNoLimiter("health");
+            var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            return RateLimitPartition.GetFixedWindowLimiter("ip:" + ip, _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 600,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+        })
+        : PartitionedRateLimiter.Create<HttpContext, string>(_ =>
+            RateLimitPartition.GetNoLimiter("rate-limiting-disabled"));
+});
+
+// Tenant/subject limiter runs after membership resolution and retains separate API/video buckets.
+builder.Services.AddSingleton<PartitionedRateLimiter<HttpContext>>(_ =>
+    PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        if (httpContext.Request.Path.StartsWithSegments("/health"))
+            return RateLimitPartition.GetNoLimiter("health");
+        var issuer = httpContext.User.FindFirst("iss")?.Value;
+        var subject = httpContext.User.FindFirst("sub")?.Value;
+        var tenantId = httpContext.RequestServices.GetService<ITenantContext>()?.TenantId;
+        var remoteAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        // OIDC subject identifiers are scoped to an issuer; never merge two IdPs'
+        // subjects into the same quota bucket.
+        var identityPartition = !string.IsNullOrWhiteSpace(issuer) && !string.IsNullOrWhiteSpace(subject)
+            ? "oidc:" + issuer + ":" + subject
+            : tenantId.HasValue && tenantId.Value != Guid.Empty
+                ? "tenant:" + tenantId.Value.ToString("N")
+                : "ip:" + remoteAddress;
+        var routePartition = httpContext.Request.Path.StartsWithSegments("/api/v1/video") ? "video" : "api";
+        var partition = identityPartition + ":" + routePartition;
+        return RateLimitPartition.GetFixedWindowLimiter(partition, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 300,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    }));
 builder.Services.AddHttpClient<CreatorFlowAiClient>();
+builder.Services.AddAIProviderRegistry(builder.Configuration);
 builder.Services.AddScoped<TenantContext>();
 builder.Services.AddScoped<ITenantContext>(sp => sp.GetRequiredService<TenantContext>());
 builder.Services.AddTransient<TenantContextMiddleware>();
 builder.Services.AddScoped<IAuthorizationHandler, TenantMembershipAuthorizationHandler>();
+builder.Services.AddScoped<IAuthorizationHandler, TenantRoleAuthorizationHandler>();
 
 var oidcAuthority = builder.Configuration["Authentication:Oidc:Authority"];
 var oidcAudience = builder.Configuration["Authentication:Oidc:Audience"];
@@ -47,7 +127,7 @@ builder.Services.AddAuthentication(options =>
 {
     options.Authority = oidcAuthority;
     options.Audience = oidcAudience;
-    options.RequireHttpsMetadata = true;
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
     options.MapInboundClaims = false;
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -67,6 +147,9 @@ builder.Services.AddAuthorization(options =>
         .Build();
     options.DefaultPolicy = tenantPolicy;
     options.FallbackPolicy = tenantPolicy;
+    options.AddPolicy("TenantOwnerOrAdmin", policy => policy
+        .RequireAuthenticatedUser()
+        .AddRequirements(new TenantMembershipRequirement(), new TenantRoleRequirement("Owner", "Admin")));
 });
 
 var connectionString = builder.Configuration.GetConnectionString("CreatorFlow");
@@ -80,13 +163,22 @@ if (!string.IsNullOrWhiteSpace(connectionString))
 
 var app = builder.Build();
 app.UseExceptionHandler();
+app.UseForwardedHeaders();
+app.UseRouting();
+app.UseCors();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseMiddleware<TenantContextMiddleware>();
+app.UseMiddleware<TenantRateLimitMiddleware>();
 app.UseMiddleware<TenantRoleGuardMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" })).AllowAnonymous();
 app.MapVideoRenderEndpoints();
+app.MapAIProviderRegistry();
+app.MapDiscoveryTopicSchedulerEndpoints();
+app.MapDiscoverySearchEndpoints();
+app.MapDiscoveryConnectorSettings();
 
 app.MapGet("/api/v1/content-projects", async (int? skip, int? take, HttpContext context, CancellationToken cancellationToken) =>
 {
@@ -150,6 +242,20 @@ topics.MapPut("/{id:guid}", async (Guid id, UpdateTopicRequest request, CreatorF
     catch (ArgumentException ex) { return Results.ValidationProblem(new Dictionary<string, string[]> { ["topic"] = [ex.Message] }); }
     catch (InvalidOperationException ex) { return Results.Conflict(new { error = ex.Message }); }
 });
+topics.MapPost("/{id:guid}/discovery-plan", async (Guid id, CreateTopicDiscoveryPlanRequest request, CreatorFlowDbContext? db, CreatorFlowAiClient aiClient, HttpContext httpContext, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    var topic = await db.ContentTopics.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id && x.IsActive, ct);
+    if (topic is null) return Results.NotFound();
+    var keywords = topic.Keywords.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Distinct(StringComparer.OrdinalIgnoreCase).Take(30).ToArray();
+    var payload = new AiDiscoveryQueryPlanRequest(topic.Name, keywords, "Vietnam",
+        string.IsNullOrWhiteSpace(request.ProductContext) ? null : request.ProductContext.Trim(),
+        string.IsNullOrWhiteSpace(request.AudienceContext) ? null : request.AudienceContext.Trim(),
+        Math.Clamp(request.MaxQueries ?? 8, 2, 12));
+    return await aiClient.ForwardAsync("/v1/discovery/query-plan", payload, ct, httpContext);
+});
+
 topics.MapPost("/{id:guid}/deactivate", async (Guid id, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
@@ -720,14 +826,23 @@ var styleProfiles = app.MapGroup("/api/v1/style-profiles").RequireAuthorization(
 styleProfiles.MapGet("/{id:guid}/learning-analysis", async (Guid id, string? topic, long? minimumViewsPerVariant, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
-    if (!await db.CreatorStyleProfiles.AnyAsync(x => x.Id == id, ct)) return Results.NotFound();
+    var profile = await db.CreatorStyleProfiles.AsNoTracking().Include(x => x.Evidence)
+        .SingleOrDefaultAsync(x => x.Id == id, ct);
+    if (profile is null) return Results.NotFound();
     var minimumViews = minimumViewsPerVariant ?? 100;
     if (minimumViews < 0 || minimumViews > 1000000000)
         return Results.ValidationProblem(new Dictionary<string, string[]> { ["minimumViewsPerVariant"] = ["Must be between 0 and 1,000,000,000."] });
     if (topic?.Trim().Length > 200)
         return Results.ValidationProblem(new Dictionary<string, string[]> { ["topic"] = ["Topic cannot exceed 200 characters."] });
+
+    // Analysis is profile-scoped: only experiments explicitly linked through this
+    // profile's audited CreatorStyleEvidence may influence its recommendations.
+    var evidenceExperimentIds = profile.Evidence.Select(x => x.StyleExperimentId).Distinct().ToArray();
+    if (evidenceExperimentIds.Length == 0) return Results.Ok(StyleLearningEngine.Analyze([], topic, minimumViews));
+
     var experiments = await db.StyleExperiments.AsNoTracking().Include(x => x.Variants)
-        .Where(x => x.Status == StyleExperimentStatus.Evaluated).ToArrayAsync(ct);
+        .Where(x => evidenceExperimentIds.Contains(x.Id) && x.Status == StyleExperimentStatus.Evaluated)
+        .ToArrayAsync(ct);
     return Results.Ok(StyleLearningEngine.Analyze(experiments, topic, minimumViews));
 });
 styleProfiles.MapGet("/", async (int? skip, int? take, CreatorFlowDbContext? db, CancellationToken ct) =>
@@ -1040,6 +1155,8 @@ public sealed record StyleVariantResponse(Guid Id, string Name, string Hook, str
     long FollowsGained, long ProductClicks, long Orders, decimal? AverageWatchSeconds, decimal? VideoDurationSeconds,
     decimal? EngagementRate, DateTimeOffset? PublishedAt, DateTimeOffset? MeasuredAt);
 public sealed record CreateTopicRequest(string Name, string? Keywords);
+public sealed record CreateTopicDiscoveryPlanRequest(string? ProductContext, string? AudienceContext, int? MaxQueries);
+public sealed record AiDiscoveryQueryPlanRequest(string Topic, string[] Keywords, string TargetMarket, string? ProductContext, string? AudienceContext, int MaxQueries);
 public sealed record UpdateTopicRequest(string Name, string? Keywords);
 public sealed record TopicResponse(Guid Id, string Name, string Keywords, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 public sealed record CreateChannelRequest(string DouyinSecUserId, string DisplayName, string ProfileUrl);

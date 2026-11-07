@@ -50,6 +50,199 @@
     <small class="muted">iPhone: bạn có thể dùng Shortcut “CreatorFlow – Nhận link” để chọn ngay trong bảng Chia sẻ; nếu chưa tạo Shortcut, hãy Sao chép liên kết rồi dán vào ô này. Hướng dẫn: docs/operations/IOS_SHARE_TO_CREATORFLOW.md.</small>
 </section>
 
+<section class="panel topic-management-panel">
+    <div class="panel-heading">
+        <div>
+            <p class="eyebrow">THIẾT LẬP KHÁM PHÁ</p>
+            <h2>Quản lý chủ đề</h2>
+            <p class="muted">Tạo các lĩnh vực bạn muốn theo dõi và nhập từ khóa để AI lập kế hoạch tìm kiếm. Chủ đề được lưu theo workspace của bạn.</p>
+        </div>
+        <span class="status">@topicItems.Count(x => x.IsActive) chủ đề đang dùng</span>
+    </div>
+    <div class="trend-form">
+        <label>Tên chủ đề <span class="required-mark">* Tối đa 120 ký tự</span>
+            <input @bind="topicName" maxlength="120" placeholder="Ví dụ: Đồ gia dụng thông minh" />
+        </label>
+        <label>Từ khóa tìm kiếm <span class="field-hint">Phân tách bằng dấu phẩy hoặc xuống dòng · mỗi từ khóa tối đa 100 ký tự</span>
+            <textarea @bind="topicKeywords" rows="3" placeholder="máy hút bụi mini&#10;máy lau nhà&#10;đồ dùng nhà bếp"></textarea>
+        </label>
+    </div>
+    <div class="form-actions">
+        <button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(topicName))" @onclick="SaveTopicAsync">@(busy ? "Đang lưu…" : editingTopicId.HasValue ? "Lưu thay đổi" : "Thêm chủ đề")</button>
+        @if (editingTopicId.HasValue)
+        {
+            <button class="secondary" disabled="@busy" @onclick="CancelTopicEdit">Hủy chỉnh sửa</button>
+        }
+    </div>
+    @if (topicItems.Count == 0)
+    {
+        <p class="muted">Chưa có chủ đề nào. Hãy tạo chủ đề đầu tiên ở trên để sử dụng chức năng tìm kênh theo chủ đề.</p>
+    }
+    else
+    {
+        <div class="topic-list">
+            @foreach (var item in topicItems)
+            {
+                <article class="trend-item">
+                    <div>
+                        <span class="status">@(item.IsActive ? "Đang sử dụng" : "Đã ngừng")</span>
+                        <h3>@item.Name</h3>
+                        <p class="muted">@(string.IsNullOrWhiteSpace(item.Keywords) ? "Chưa khai báo từ khóa" : item.Keywords.Replace("\n", " · "))</p>
+                    </div>
+                    <div class="form-actions">
+                        @if (item.IsActive)
+                        {
+                            <button class="secondary" disabled="@busy" @onclick="() => EditTopic(item)">Sửa</button>
+                            <button class="secondary" disabled="@busy" @onclick="() => DeactivateTopicAsync(item)">Ngừng sử dụng</button>
+                        }
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</section>
+
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">KHÁM PHÁ CHỦ ĐỘNG</p><h2>Tìm kênh theo chủ đề bạn quan tâm</h2>
+        <p class="muted">Chọn chủ đề đã lưu. CreatorFlow sẽ dùng AI tạo bộ truy vấn tìm kênh/video, gồm từ khóa sản phẩm và ý định mua hàng. Đây là kế hoạch tìm kiếm, chưa phải kết quả kênh đã được thu thập.</p></div></div>
+    <div class="trend-form">
+        <label>Chủ đề<select @bind="selectedTopicId">
+            <option value="">-- Chọn chủ đề --</option>
+            @foreach (var item in topicItems.Where(x => x.IsActive)) { <option value="@item.Id">@item.Name</option> }
+        </select></label>
+        <label>Sản phẩm / ngách muốn bán <span class="field-hint">Không bắt buộc</span><input @bind="discoveryProductContext" maxlength="1000" placeholder="Ví dụ: máy hút bụi mini, đồ gia dụng thông minh" /></label>
+        <label>Khách hàng mục tiêu <span class="field-hint">Không bắt buộc</span><input @bind="discoveryAudienceContext" maxlength="1000" placeholder="Ví dụ: nữ 25–40 tuổi, gia đình trẻ" /></label>
+    </div>
+    <div class="form-actions"><button class="primary" disabled="@(busy || !Api.IsConfigured || string.IsNullOrWhiteSpace(selectedTopicId))" @onclick="DiscoverByTopicAsync">@(busy ? "Đang lập kế hoạch…" : "Tìm kênh theo chủ đề")</button>
+        <span class="muted">Chọn một chủ đề đang sử dụng trong mục Quản lý chủ đề bên dưới. Không tự tạo số liệu bán hàng.</span></div>
+    <div class="panel" style="margin-top:14px">
+        <div class="panel-heading"><div><p class="eyebrow">AI RUNTIME LOG</p><h3>Nhật ký nhà cung cấp AI</h3></div><span class="status">@discoveryLogs.Count lần gọi</span></div>
+        @if (discoveryLogs.Count == 0) { <p class="muted">Chưa có lần tìm kiếm nào trong phiên này. Nhật ký sẽ ghi provider/model thực tế và các lần fallback sau khi bạn nhấn tìm kiếm.</p> }
+        @foreach (var entry in discoveryLogs) { <div style="padding:8px 0;border-bottom:1px solid var(--border,#ddd)"><strong>@entry.Time.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") · @entry.Status</strong><div class="muted">@entry.Detail</div></div> }
+    </div>
+    @if (discoveryPlan is not null)
+    {
+        <div class="discovery-plan">
+            <h3>Bộ truy vấn đề xuất cho: @discoveryPlan.Topic</h3>
+            <p class="muted">Thị trường: Việt Nam · Cần người duyệt: @((discoveryPlan.RequiresHumanReview) ? "Có" : "Không")</p>
+            <strong>Từ khóa tìm kiếm</strong>
+            <ul>@foreach (var query in (discoveryPlan.Queries ?? [])) { <li>@query</li> }</ul>
+            @if (discoveryPlan.RelatedTopics is { Length: > 0 }) { <strong>Chủ đề liên quan</strong><p>@string.Join(" · ", discoveryPlan.RelatedTopics)</p> }
+            @if (discoveryPlan.IntentSignals is { Length: > 0 }) { <strong>Tín hiệu ý định mua hàng</strong><p>@string.Join(" · ", discoveryPlan.IntentSignals)</p> }
+            @if (discoveryPlan.Exclusions is { Length: > 0 }) { <strong>Loại trừ</strong><p>@string.Join(" · ", discoveryPlan.Exclusions)</p> }
+            <p class="muted">Bộ truy vấn AI chỉ là đầu vào. Dùng nút bên dưới để gọi các nguồn tìm kiếm thật; chỉ URL trả về từ connector mới được hiển thị là kết quả.</p>
+        </div>
+        <div class="form-actions">
+            <button class="primary" disabled="@(busy || discoveryPlan.Queries is null || discoveryPlan.Queries.Length == 0)" @onclick="SearchDiscoverySourcesAsync">@(busy ? "Đang tìm nguồn thật…" : "Thu thập kênh và video thực tế")</button>
+        </div>
+    }
+    @if (discoverySearch is not null)
+    {
+        <div class="discovery-plan">
+            <h3>Kết quả connector · @discoverySearch.Channels.Length kênh · @discoverySearch.Videos.Length video</h3>
+            <p class="muted">Thời điểm tìm: @discoverySearch.SearchedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") · @discoverySearch.Status</p>
+            @foreach (var provider in discoverySearch.Providers)
+            {
+                <p class="muted"><strong>@provider.Provider:</strong> @provider.Status · @provider.ResultCount kết quả @(string.IsNullOrWhiteSpace(provider.Error) ? "" : " · " + provider.Error)</p>
+            }
+            @if (discoverySearch.Channels.Length == 0 && discoverySearch.Videos.Length == 0)
+            {
+                <p class="muted">Chưa tìm thấy URL TikTok phù hợp. Kiểm tra cấu hình API key/quyền connector hoặc thử từ khóa cụ thể hơn. Không có dữ liệu giả được hiển thị.</p>
+            }
+            @foreach (var channel in discoverySearch.Channels)
+            {
+                <article class="trend-item">
+                    <div>
+                        <span class="status">Kênh · @channel.Source</span>
+                        <h3>@channel.DisplayName</h3>
+                        <a href="@channel.ProfileUrl" target="_blank" rel="noopener noreferrer">Mở hồ sơ TikTok ↗</a>
+                        <p class="muted">Username: @channel.Username · Có @channel.VideoCount video liên quan trong kết quả</p>
+                        @if (channel.Followers.HasValue) { <p class="muted">Người theo dõi: @channel.Followers.Value.ToString("N0") · Nguồn API</p> }
+                        @if (channel.VideoUrls.Length > 0) { <p>@foreach (var link in channel.VideoUrls) { <a href="@link" target="_blank" rel="noopener noreferrer">Mở video ↗</a><text> </text> }</p> }
+                    </div>
+                </article>
+            }
+            @foreach (var video in discoverySearch.Videos)
+            {
+                <article class="trend-item">
+                    <div>
+                        <span class="status">Video · @video.Source</span>
+                        <h3>@video.Title</h3>
+                        <a href="@video.Url" target="_blank" rel="noopener noreferrer">Mở video TikTok ↗</a>
+                        <p class="muted">@(video.Username is null ? "Không xác định username" : "@" + video.Username) · Nhận từ nguồn: @video.RetrievedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</p>
+                        @if (!string.IsNullOrWhiteSpace(video.Description)) { <p>@video.Description</p> }
+                        @if (video.Views.HasValue || video.Likes.HasValue || video.Comments.HasValue || video.Shares.HasValue)
+                        {
+                            <p class="muted">Chỉ số do API trả về: @((video.Views ?? 0).ToString("N0")) lượt xem · @((video.Likes ?? 0).ToString("N0")) thích · @((video.Comments ?? 0).ToString("N0")) bình luận · @((video.Shares ?? 0).ToString("N0")) chia sẻ</p>
+                        }
+                    </div>
+                </article>
+            }
+            <p class="muted">@discoverySearch.Notice</p>
+        </div>
+    }
+</section>
+
+<section class="panel topic-schedule-panel">
+  <div class="panel-heading"><div><p class="eyebrow">TỰ ĐỘNG THEO DÕI</p><h2>Lịch khám phá chủ đề</h2>
+    <p class="muted">Tạo lịch riêng cho từng chủ đề. Có thể chạy theo chu kỳ, hằng ngày hoặc các ngày cố định trong tuần. Múi giờ mặc định: Việt Nam (UTC+7).</p></div></div>
+  <div class="trend-form">
+    <label>Chủ đề<select @bind="selectedScheduleTopicId" @bind:after="LoadScheduleAsync"><option value="">Chọn chủ đề</option>
+      @foreach (var item in topicItems.Where(x => x.IsActive)) { <option value="@item.Id">@item.Name</option> }
+    </select></label>
+    <label>Kiểu lịch<select @bind="scheduleMode">
+      <option value="Interval">Lặp theo chu kỳ</option><option value="Daily">Hằng ngày</option><option value="Weekly">Theo ngày trong tuần</option>
+    </select></label>
+    @if (scheduleMode == "Interval")
+    {
+      <label>Chu kỳ (phút)<input type="number" min="5" max="1440" @bind="scheduleRefreshMinutes" /></label>
+    }
+    else
+    {
+      <label>Giờ chạy (giờ Việt Nam)<input type="time" value="@scheduleLocalTime" @onchange="OnScheduleTimeChanged" /></label>
+    }
+    <label class="schedule-toggle"><input type="checkbox" @bind="scheduleEnabled" /> Bật tự động theo dõi</label>
+  </div>
+  @if (scheduleMode == "Weekly")
+  {
+    <div class="schedule-options"><strong>Ngày chạy</strong><div class="schedule-checks">
+      @foreach (var day in ScheduleDays)
+      {
+        <label><input type="checkbox" checked="@scheduleDays.Contains(day.Value)" @onchange="e => ToggleScheduleDay(day.Value, e)" /> @day.Label</label>
+      }
+    </div></div>
+  }
+  <div class="schedule-options"><strong>Nền tảng theo dõi</strong><div class="schedule-checks">
+    <label><input type="checkbox" checked="@(schedulePlatforms.Contains("TikTokVietnam"))" @onchange='e => ToggleSchedulePlatform("TikTokVietnam", e)' /> TikTok Việt Nam</label>
+    <label><input type="checkbox" checked="@(schedulePlatforms.Contains("YouTubeShortsVietnam"))" @onchange='e => ToggleSchedulePlatform("YouTubeShortsVietnam", e)' /> YouTube Shorts Việt Nam</label>
+    <label><input type="checkbox" checked="@(schedulePlatforms.Contains("FacebookReelsVietnam"))" @onchange='e => ToggleSchedulePlatform("FacebookReelsVietnam", e)' /> Facebook Reels Việt Nam</label>
+  </div></div>
+  <div class="form-actions">
+    <button class="primary" disabled="@(busy || !Api.IsConfigured || !Guid.TryParse(selectedScheduleTopicId, out _))" @onclick="SaveScheduleAsync">Lưu lịch theo dõi</button>
+    <button class="secondary" disabled="@(busy || !Guid.TryParse(selectedScheduleTopicId, out _))" @onclick="LoadScheduleAsync">Làm mới trạng thái</button>
+  </div>
+  @if (!string.IsNullOrWhiteSpace(scheduleMessage)) { <p class="muted" role="status">@scheduleMessage</p> }
+  @if (scheduleInfo is not null) {
+    <article class="trend-item"><div><span class="status">@(scheduleInfo.IsEnabled ? "Đã bật lịch" : "Đã tắt lịch") · @ScheduleRunStatusLabel(scheduleInfo.LastRunStatus)</span>
+      <p class="muted">Kiểu lịch: @ScheduleModeLabel(scheduleInfo.ScheduleMode) · Giờ Việt Nam: @scheduleInfo.LocalTime</p>
+      @if (scheduleInfo.ScheduleMode == "Weekly") { <p class="muted">Ngày chạy: @string.Join(", ", scheduleInfo.DaysOfWeek.Select(ScheduleDayLabel))</p> }
+      <p class="muted">Nền tảng: @string.Join(", ", JsonPlatformLabels(scheduleInfo.PlatformsJson))</p>
+      <p class="muted">Lần chạy gần nhất: @(scheduleInfo.LastRunAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa có")</p>
+      <p class="muted">Lần chạy tiếp theo: @(scheduleInfo.NextRunAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "Chưa xếp lịch")</p>
+      <p class="muted">Kết quả: @scheduleInfo.CandidateCount ứng viên · @scheduleInfo.ChannelCount kênh</p>
+      @if (!string.IsNullOrWhiteSpace(scheduleInfo.LastErrorCode)) { <p class="muted">Chi tiết: @ScheduleErrorLabel(scheduleInfo.LastErrorCode)</p> }
+    </div></article>
+  }
+  <h3>Lịch sử thực thi</h3>
+  @if (scheduleHistory.Count == 0) { <p class="muted">Chưa có lần chạy nào.</p> }
+  @foreach (var run in scheduleHistory) {
+    <article class="share-item"><div><strong>@ScheduleRunStatusLabel(run.Status)</strong><p class="muted">@run.StartedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") · @run.CandidateCount ứng viên · @run.ChannelCount kênh</p>
+      @if (!string.IsNullOrWhiteSpace(run.ErrorCode)) { <small class="muted">@ScheduleErrorLabel(run.ErrorCode)</small> }
+    </div></article>
+  }
+  <p class="muted">Khi chưa có connector nguồn được phê duyệt, worker ghi trạng thái bỏ qua thay vì tạo dữ liệu xu hướng giả.</p>
+</section>
+
 <section class="panel">
     <div class="panel-heading"><div><p class="eyebrow">GHI NHẬN</p><h2>Ghi nhận xu hướng mới</h2></div></div>
     <div class="trend-form">
@@ -92,11 +285,29 @@
     private string sharedUrl = "";
     private string shareMessage = "";
     private List<SharedLinkItem> shareItems = [];
+    private List<TopicItem> topicItems = [];
+    private string selectedTopicId = "", discoveryProductContext = "", discoveryAudienceContext = "";
+    private string topicName = "", topicKeywords = "";
+    private Guid? editingTopicId;
+    private DiscoveryPlanItem? discoveryPlan;
+    private DiscoverySearchResponse? discoverySearch;
+    private List<DiscoveryLogItem> discoveryLogs = [];
+    private string selectedScheduleTopicId = "";
+    private int scheduleRefreshMinutes = 30;
+    private string scheduleMode = "Interval";
+    private string scheduleLocalTime = "09:00";
+    private string scheduleTimeZoneId = "Asia/Ho_Chi_Minh";
+    private HashSet<string> scheduleDays = new(StringComparer.OrdinalIgnoreCase);
+    private HashSet<string> schedulePlatforms = new(StringComparer.OrdinalIgnoreCase) { "TikTokVietnam" };
+    private bool scheduleEnabled = true;
+    private string scheduleMessage = "";
+    private TopicScheduleItem? scheduleInfo;
+    private List<TopicScheduleRunItem> scheduleHistory = [];
 
     [Parameter, SupplyParameterFromQuery(Name = "sharedUrl")] public string? IncomingSharedUrl { get; set; }
     private string? lastAutoSubmittedLink;
 
-    protected override async Task OnInitializedAsync() { await LoadAsync(); await LoadShareInboxAsync(); }
+    protected override async Task OnInitializedAsync() { await LoadAsync(); await LoadShareInboxAsync(); await LoadTopicsAsync(); }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -121,6 +332,288 @@
         finally { busy = false; }
     }
 
+
+    private async Task LoadTopicsAsync()
+    {
+        if (!Api.IsConfigured) return;
+        try { topicItems = await Api.GetAsync<List<TopicItem>>("/api/v1/topics?take=100") ?? []; if (string.IsNullOrWhiteSpace(selectedScheduleTopicId)) selectedScheduleTopicId = topicItems.FirstOrDefault(x => x.IsActive)?.Id.ToString() ?? ""; if (!string.IsNullOrWhiteSpace(selectedScheduleTopicId)) await LoadScheduleAsync(); }
+        catch (Exception ex) { error = "Không tải được danh sách chủ đề: " + ex.Message; }
+    }
+
+    private void EditTopic(TopicItem item)
+    {
+        editingTopicId = item.Id;
+        topicName = item.Name;
+        topicKeywords = item.Keywords;
+        error = "";
+        successMessage = "";
+    }
+
+    private void CancelTopicEdit()
+    {
+        editingTopicId = null;
+        topicName = topicKeywords = "";
+    }
+
+    private async Task LoadScheduleAsync()
+    {
+        if (!Guid.TryParse(selectedScheduleTopicId, out var topicId) || !Api.IsConfigured) { scheduleInfo = null; scheduleHistory = []; return; }
+        try {
+            scheduleMessage = "";
+            scheduleInfo = await Api.GetAsync<TopicScheduleItem>($"/api/v1/topics/{topicId}/schedule");
+            if (scheduleInfo is not null) { scheduleEnabled = scheduleInfo.IsEnabled; scheduleRefreshMinutes = scheduleInfo.RefreshMinutes; scheduleMode = scheduleInfo.ScheduleMode; scheduleLocalTime = scheduleInfo.LocalTime; scheduleDays = new HashSet<string>(scheduleInfo.DaysOfWeek ?? [], StringComparer.OrdinalIgnoreCase); schedulePlatforms = System.Text.Json.JsonSerializer.Deserialize<HashSet<string>>(scheduleInfo.PlatformsJson) ?? new(StringComparer.OrdinalIgnoreCase); scheduleTimeZoneId = scheduleInfo.TimeZoneId; }
+            scheduleHistory = await Api.GetAsync<List<TopicScheduleRunItem>>($"/api/v1/topics/{topicId}/schedule/history?take=20") ?? [];
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { scheduleInfo = null; scheduleHistory = []; scheduleEnabled = true; scheduleRefreshMinutes = 30; scheduleMode = "Interval"; scheduleLocalTime = "09:00"; scheduleDays = new(StringComparer.OrdinalIgnoreCase); schedulePlatforms = new(StringComparer.OrdinalIgnoreCase) { "TikTokVietnam" }; scheduleMessage = "Chủ đề chưa có lịch. Lưu cấu hình để tạo lịch đầu tiên."; }
+        catch (Exception ex) { scheduleMessage = "Không tải được lịch: " + ex.Message; }
+    }
+
+    private async Task SaveScheduleAsync()
+    {
+        if (!Guid.TryParse(selectedScheduleTopicId, out var topicId)) return;
+        if (scheduleMode == "Interval" && scheduleRefreshMinutes is < 5 or > 1440) { scheduleMessage = "Chu kỳ phải từ 5 đến 1.440 phút."; return; }
+        if (scheduleMode == "Weekly" && scheduleDays.Count == 0) { scheduleMessage = "Hãy chọn ít nhất một ngày trong tuần."; return; }
+        if (schedulePlatforms.Count == 0) { scheduleMessage = "Hãy chọn ít nhất một nền tảng."; return; }
+        try {
+            busy = true; scheduleMessage = "";
+            await Api.PutAsync<object, object>($"/api/v1/topics/{topicId}/schedule", new { isEnabled = scheduleEnabled, refreshMinutes = scheduleRefreshMinutes, platforms = schedulePlatforms.ToArray(), scheduleMode, localTime = scheduleLocalTime, daysOfWeek = scheduleDays.ToArray(), timeZoneId = scheduleTimeZoneId });
+            await LoadScheduleAsync();
+            scheduleMessage = scheduleEnabled ? "Đã lưu lịch. Worker sẽ tự kiểm tra chủ đề đến hạn." : "Đã tắt lịch. Lịch sử cũ vẫn được giữ nguyên.";
+        }
+        catch (Exception ex) { scheduleMessage = "Không lưu được lịch: " + ex.Message; }
+        finally { busy = false; }
+    }
+
+    private static readonly (string Label, string Value)[] ScheduleDays =
+    [
+        ("Thứ 2", "Monday"), ("Thứ 3", "Tuesday"), ("Thứ 4", "Wednesday"),
+        ("Thứ 5", "Thursday"), ("Thứ 6", "Friday"), ("Thứ 7", "Saturday"), ("Chủ nhật", "Sunday")
+    ];
+
+    private void OnScheduleTimeChanged(ChangeEventArgs args)
+    {
+        scheduleLocalTime = args.Value?.ToString() ?? "09:00";
+    }
+
+    private void ToggleScheduleDay(string day, ChangeEventArgs args)
+    {
+        if (args.Value is bool enabled && enabled) scheduleDays.Add(day);
+        else scheduleDays.Remove(day);
+    }
+
+    private void ToggleSchedulePlatform(string platformName, ChangeEventArgs args)
+    {
+        if (args.Value is bool enabled && enabled) schedulePlatforms.Add(platformName);
+        else schedulePlatforms.Remove(platformName);
+    }
+
+    private static string ScheduleModeLabel(string mode) => mode switch
+    {
+        "Daily" => "Hằng ngày", "Weekly" => "Theo ngày trong tuần", _ => "Lặp theo chu kỳ"
+    };
+
+    private static string ScheduleRunStatusLabel(string? status) => status switch
+    {
+        "Queued" => "Đang chờ", "Running" => "Đang chạy", "Completed" => "Hoàn tất",
+        "Partial" => "Hoàn tất một phần", "Failed" => "Thất bại", "Skipped" => "Đã bỏ qua",
+        null or "" => "Chưa chạy", _ => status
+    };
+
+    private static string ScheduleErrorLabel(string? code) => code switch
+    {
+        "NoApprovedSourceConnector" => "Chưa có nguồn dữ liệu được phê duyệt; chưa thu thập xu hướng.",
+        "LeaseExpired" => "Lượt chạy trước hết thời gian giữ chỗ và đã được đánh dấu lỗi.",
+        null or "" => "", _ => code
+    };
+
+    private static string ScheduleDayLabel(string day) => day switch
+    {
+        "Monday" => "Thứ 2", "Tuesday" => "Thứ 3", "Wednesday" => "Thứ 4",
+        "Thursday" => "Thứ 5", "Friday" => "Thứ 6", "Saturday" => "Thứ 7",
+        "Sunday" => "Chủ nhật", _ => day
+    };
+
+    private static string[] JsonPlatformLabels(string json)
+    {
+        try
+        {
+            return (System.Text.Json.JsonSerializer.Deserialize<string[]>(json) ?? [])
+                .Select(x => x switch {
+                    "TikTokVietnam" => "TikTok Việt Nam",
+                    "YouTubeShortsVietnam" => "YouTube Shorts Việt Nam",
+                    "FacebookReelsVietnam" => "Facebook Reels Việt Nam",
+                    _ => x
+                }).ToArray();
+        }
+        catch { return []; }
+    }
+
+    private async Task SaveTopicAsync()
+    {
+        if (string.IsNullOrWhiteSpace(topicName))
+        {
+            error = "Vui lòng nhập tên chủ đề.";
+            return;
+        }
+        if (topicName.Trim().Length > 120)
+        {
+            error = "Tên chủ đề không được vượt quá 120 ký tự.";
+            return;
+        }
+
+        try
+        {
+            busy = true;
+            error = "";
+            successMessage = "";
+            var request = new { name = topicName.Trim(), keywords = topicKeywords };
+            if (editingTopicId.HasValue)
+                await Api.PutNoContentAsync($"/api/v1/topics/{editingTopicId.Value}", request);
+            else
+                await Api.PostAsync<object, TopicItem>("/api/v1/topics", request);
+
+            var wasEditing = editingTopicId.HasValue;
+            CancelTopicEdit();
+            await LoadTopicsAsync();
+            successMessage = wasEditing ? "Đã cập nhật chủ đề." : "Đã tạo chủ đề. Bạn có thể chọn chủ đề này để tìm kênh.";
+        }
+        catch (Exception ex) { error = ToUserMessage(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task DeactivateTopicAsync(TopicItem item)
+    {
+        try
+        {
+            busy = true;
+            error = "";
+            successMessage = "";
+            await Api.PostAsync<object, object>($"/api/v1/topics/{item.Id}/deactivate", new { });
+            if (selectedTopicId == item.Id.ToString()) selectedTopicId = "";
+            if (editingTopicId == item.Id) CancelTopicEdit();
+            await LoadTopicsAsync();
+            successMessage = $"Đã ngừng sử dụng chủ đề \"{item.Name}\". Dữ liệu lịch sử không bị xóa.";
+        }
+        catch (Exception ex) { error = ToUserMessage(ex); }
+        finally { busy = false; }
+    }
+
+    private async Task DiscoverByTopicAsync()
+    {
+        if (!Guid.TryParse(selectedTopicId, out var topicId)) { error = "Vui lòng chọn chủ đề."; return; }
+        try
+        {
+            busy = true; error = ""; successMessage = ""; discoveryPlan = null;
+            var started = DateTimeOffset.UtcNow;
+            var configuredRoute = await GetConfiguredPrimaryProviderAsync();
+            discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG GỌI AI", $"Đã nhận thao tác. {configuredRoute}. Đang gửi yêu cầu đến CreatorFlow AI service."));
+            await InvokeAsync(StateHasChanged);
+            var result = await Api.PostWithMetadataAsync<object, DiscoveryPlanItem>($"/api/v1/topics/{topicId}/discovery-plan",
+                new { productContext = discoveryProductContext, audienceContext = discoveryAudienceContext, maxQueries = 8 });
+            discoveryPlan = result.Data;
+            var detail = ParseProviderTrace(result.ProviderTrace);
+            discoveryLogs[0] = new DiscoveryLogItem(started, result.Error is not null ? "THẤT BẠI" : discoveryPlan is null ? "KHÔNG CÓ KẾT QUẢ" : "THÀNH CÔNG", string.Join(" · ", new[] { detail, result.Error }.Where(x => !string.IsNullOrWhiteSpace(x))));
+            if (result.Error is not null) error = ToUserMessage(new InvalidOperationException(result.Error));
+            else if (discoveryPlan is null) error = "AI chưa trả về kế hoạch tìm kiếm.";
+            else successMessage = "Đã tạo bộ truy vấn khám phá cho chủ đề.";
+        }
+        catch (Exception ex)
+        {
+            error = ToUserMessage(ex);
+            if (discoveryLogs.Count > 0 && discoveryLogs[0].Status == "ĐANG GỌI AI")
+                discoveryLogs[0] = discoveryLogs[0] with { Status = "THẤT BẠI", Detail = error };
+        }
+        finally { busy = false; }
+
+        // AI chỉ lập kế hoạch truy vấn; tự động gọi connector để lấy URL thật,
+        // tránh khiến người dùng hiểu nhầm rằng Ollama tự sinh ra link kênh/video.
+        if (discoveryPlan?.Queries is { Length: > 0 })
+            await SearchDiscoverySourcesAsync();
+    }
+
+    private async Task SearchDiscoverySourcesAsync()
+    {
+        var plan = discoveryPlan;
+        if (plan is null || plan.Queries is not { Length: > 0 }) return;
+        try
+        {
+            busy = true; error = ""; successMessage = ""; discoverySearch = null;
+            var started = DateTimeOffset.UtcNow;
+            discoveryLogs.Insert(0, new DiscoveryLogItem(started, "ĐANG TÌM NGUỒN", "Đang gọi Brave Search và TikTok Research API nếu đã cấu hình."));
+            await InvokeAsync(StateHasChanged);
+            if (!Guid.TryParse(selectedTopicId, out var topicId))
+                throw new InvalidOperationException("Hãy chọn chủ đề theo dõi trước khi tìm kiếm để lưu ứng viên đúng chủ đề.");
+            var search = await Api.PostAsync<object, DiscoverySearchResponse>("/api/v1/discovery/search",
+                new { topic = plan.Topic, queries = plan.Queries, contentTopicId = topicId });
+            if (search is null) throw new InvalidOperationException("Connector không trả về nội dung phản hồi.");
+            discoverySearch = search;
+            var summary = string.Join(" · ", search.Providers.Select(x => $"{x.Provider}: {x.Status} ({x.ResultCount})"));
+            discoveryLogs[0] = new DiscoveryLogItem(started, search.Status == "Completed" ? "HOÀN TẤT TÌM NGUỒN" : "CHƯA CẤU HÌNH NGUỒN", summary);
+            successMessage = search.Channels.Length > 0 || search.Videos.Length > 0
+                ? $"Đã nhận {search.Channels.Length} kênh, {search.Videos.Length} video; lưu mới {search.SavedCandidateCount} ứng viên vào chủ đề. Video trùng được giữ nguyên."
+                : "Connector đã chạy nhưng chưa trả về URL TikTok phù hợp. Kiểm tra trạng thái từng nguồn.";
+        }
+        catch (Exception ex)
+        {
+            error = ToUserMessage(ex);
+            if (discoveryLogs.Count > 0 && discoveryLogs[0].Status == "ĐANG TÌM NGUỒN")
+                discoveryLogs[0] = discoveryLogs[0] with { Status = "THẤT BẠI", Detail = error };
+        }
+        finally { busy = false; }
+    }
+
+    private sealed record DiscoverySearchResponse(string Topic, DateTimeOffset SearchedAt, string Status,
+        DiscoveryChannelResult[] Channels, DiscoverySearchResult[] Videos, DiscoveryProviderState[] Providers, int SavedCandidateCount, string Notice);
+    private sealed record DiscoveryChannelResult(string Username, string DisplayName, string ProfileUrl, int VideoCount,
+        long MaxObservedViews, long? Followers, string[] VideoUrls, string Source, DateTimeOffset RetrievedAt);
+    private sealed record DiscoverySearchResult(string Url, string Title, string? Description, string? Username,
+        long? Views, long? Likes, long? Comments, long? Shares, string Kind, string Source,
+        DateTimeOffset RetrievedAt, DateTimeOffset? PublishedAt);
+    private sealed record DiscoveryProviderState(string Provider, string Status, int ResultCount, string? Error);
+
+    private async Task<string> GetConfiguredPrimaryProviderAsync()
+    {
+        try
+        {
+            var configured = await Api.GetAsync<List<AIProviderSummary>>("/api/v1/ai/providers") ?? [];
+            var active = configured.Where(x => x.IsActive).ToArray();
+            var primary = active.FirstOrDefault(x => string.Equals(x.RoutingRole, "Primary", StringComparison.OrdinalIgnoreCase));
+            if (primary is null)
+                return "Không tìm thấy Primary workspace đang bật; không thể xác nhận tuyến AI workspace";
+            var fallbacks = active.Where(x => string.Equals(x.RoutingRole, "Fallback", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(x => x.FallbackOrder).Select(x => $"{x.DisplayName}/{x.Model}").ToArray();
+            return $"Primary workspace: {primary.DisplayName}/{primary.Model}" +
+                (fallbacks.Length == 0 ? "; không bật fallback, không chuyển sang Gemini/OpenAI" : $"; fallback: {string.Join(", ", fallbacks)}");
+        }
+        catch
+        {
+            return "Không đọc được cấu hình provider workspace; trace sau phản hồi sẽ xác nhận provider thực tế";
+        }
+    }
+
+    private sealed class AIProviderSummary
+    {
+        public string DisplayName { get; set; } = "";
+        public string Model { get; set; } = "";
+        public bool IsActive { get; set; }
+        public string RoutingRole { get; set; } = "";
+        public int? FallbackOrder { get; set; }
+    }
+
+    private static string ParseProviderTrace(string? encoded)
+    {
+        if (string.IsNullOrWhiteSpace(encoded)) return "Không nhận được metadata provider từ AI service; không thể xác nhận model thực tế.";
+        try
+        {
+            var json = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(encoded));
+            var attempts = System.Text.Json.JsonSerializer.Deserialize<List<ProviderAttempt>>(json, new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+            return attempts.Count == 0 ? "AI service không ghi nhận provider attempt." : string.Join(" → ", attempts.Select(x => $"{x.Provider}/{x.Model}: {x.Status}{(string.IsNullOrWhiteSpace(x.Reason) ? "" : " (" + x.Reason + ")")}"));
+        }
+        catch { return "Metadata provider nhận được nhưng không đọc được; kiểm tra log API/AI." ; }
+    }
+
+    private sealed record ProviderAttempt(string Provider, string Model, string Status, string? Reason);
+    private sealed record DiscoveryLogItem(DateTimeOffset Time, string Status, string Detail);
 
     private async Task LoadShareInboxAsync()
     {
@@ -149,6 +642,11 @@
     private static string KindLabel(string value) => value switch { "Video" => "Video", "CreatorChannel" => "Kênh sáng tạo", "Sound" => "Âm thanh", _ => "Khác" };
     private static string PlatformLabel(string value) => value switch { "TikTokVietnam" => "TikTok Việt Nam", "YouTubeShortsVietnam" => "YouTube Shorts Việt Nam", "FacebookReelsVietnam" => "Facebook Reels Việt Nam", "Douyin" => "Douyin", _ => "Khác" };
     private static string ShareStatusLabel(string value) => value switch { "Pending" => "Chờ xem xét", "Reviewed" => "Đã xem xét", "Linked" => "Đã liên kết", "Ignored" => "Đã bỏ qua", _ => "Chưa xác định" };
+
+    private sealed record TopicItem(Guid Id, string Name, string Keywords, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    private sealed record TopicScheduleItem(Guid Id, bool IsEnabled, int RefreshMinutes, string PlatformsJson, DateTimeOffset? NextRunAt, DateTimeOffset? LastRunAt, string? LastRunStatus, string? LastErrorCode, DateTimeOffset? LeaseUntil, int CandidateCount, int ChannelCount, string ScheduleMode, string LocalTime, string[] DaysOfWeek, string TimeZoneId);
+    private sealed record TopicScheduleRunItem(Guid Id, string TriggerKind, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, int CandidateCount, int ChannelCount, string? ErrorCode);
+    private sealed record DiscoveryPlanItem(string Topic, string[] Queries, string[] RelatedTopics, string[] IntentSignals, string[] Exclusions, bool RequiresHumanReview);
 
     private sealed record SharedLinkItem(Guid Id, string Platform, string SharedUrl,
         DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId);
@@ -196,6 +694,10 @@
             return "Ghi nhận này đã tồn tại. Hãy dùng chức năng cập nhật quan sát thay vì tạo mục trùng.";
         if (message.Contains("HTTP 400", StringComparison.OrdinalIgnoreCase))
             return "Dữ liệu chưa hợp lệ. Hãy kiểm tra các trường có dấu * và định dạng đường dẫn HTTPS.";
+        if (message.Contains("Discovery query plan did not match the required contract", StringComparison.OrdinalIgnoreCase))
+            return "AI provider đã trả về cấu trúc bộ truy vấn chưa hợp lệ. CreatorFlow đã chuẩn hóa các định dạng phổ biến; nếu lỗi tiếp diễn, hãy gửi nhật ký provider/model để kiểm tra.";
+        if (message.Contains("HTTP 502", StringComparison.OrdinalIgnoreCase))
+            return "Nhà cung cấp AI không trả về kết quả hợp lệ (HTTP 502). Hãy kiểm tra nhật ký provider/model.";
         return "Không thể hoàn tất yêu cầu. Chi tiết: " + message;
     }
 }

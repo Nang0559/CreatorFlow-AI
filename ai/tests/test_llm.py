@@ -1,66 +1,105 @@
 from __future__ import annotations
-
 import asyncio
-import json
-
 import httpx
 import pytest
+from creatorflow_ai.llm import AIConfigurationError,AIInvalidOutputError,AIProviderError,LLMSettings,OpenAICompatibleLLM,ProviderConfig
 
-from creatorflow_ai.llm import (
-    AIConfigurationError,
-    AIInvalidOutputError,
-    LLMSettings,
-    OpenAICompatibleLLM,
-)
+def test_settings_require_provider_key_and_model(monkeypatch):
+    monkeypatch.delenv("CREATORFLOW_LLM_API_KEY",raising=False); monkeypatch.delenv("CREATORFLOW_LLM_MODEL",raising=False)
+    with pytest.raises(AIConfigurationError): LLMSettings.from_environment()
+
+def test_environment_defaults_to_ollama_without_cloud_fallback(monkeypatch):
+    monkeypatch.delenv("CREATORFLOW_LLM_PRIMARY_PROVIDER",raising=False)
+    monkeypatch.delenv("CREATORFLOW_LLM_FALLBACK_PROVIDERS",raising=False)
+    monkeypatch.setenv("CREATORFLOW_LLM_OLLAMA_MODEL","qwen2.5:3b")
+    monkeypatch.setenv("CREATORFLOW_LLM_GEMINI_API_KEY","cloud-gemini-key")
+    monkeypatch.setenv("CREATORFLOW_LLM_GEMINI_MODEL","gemini-cloud-model")
+    monkeypatch.setenv("CREATORFLOW_LLM_OPENAI_API_KEY","cloud-openai-key")
+    monkeypatch.setenv("CREATORFLOW_LLM_OPENAI_MODEL","gpt-cloud-model")
+    settings=LLMSettings.from_environment()
+    assert settings.provider=="ollama"
+    assert settings.model=="qwen2.5:3b"
+    assert settings.fallbacks==()
 
 
-def test_settings_require_provider_key_and_model(monkeypatch) -> None:
-    monkeypatch.delenv("CREATORFLOW_LLM_API_KEY", raising=False)
-    monkeypatch.delenv("CREATORFLOW_LLM_MODEL", raising=False)
+def test_settings_reject_insecure_remote_provider_url(monkeypatch):
+    monkeypatch.setenv("CREATORFLOW_LLM_API_KEY","secret"); monkeypatch.setenv("CREATORFLOW_LLM_MODEL","model")
+    monkeypatch.setenv("CREATORFLOW_LLM_BASE_URL","http://remote.example/v1")
+    with pytest.raises(AIConfigurationError): LLMSettings.from_environment()
+
+def test_gemini_compatible_endpoint_parses_json():
+    seen={}
+    def handler(r):
+        seen["url"]=str(r.url); seen["auth"]=r.headers.get("Authorization")
+        return httpx.Response(200,json={"choices":[{"message":{"content":'{"summary":"ok"}'}}]})
+    s=LLMSettings("https://generativelanguage.googleapis.com/v1beta/openai","g-key","gemini-3.8-flash",5,512)
+    result=asyncio.run(OpenAICompatibleLLM(s,httpx.MockTransport(handler)).complete_json(system_prompt="JSON",user_payload={}))
+    assert result=={"summary":"ok"} and seen["url"].endswith("/chat/completions") and seen["auth"]=="Bearer g-key"
+
+def test_invalid_json_is_rejected():
+    s=LLMSettings("https://provider.example/v1","secret","model",5,512)
+    llm=OpenAICompatibleLLM(s,httpx.MockTransport(lambda r:httpx.Response(200,json={"choices":[{"message":{"content":"bad"}}]})))
+    with pytest.raises(AIInvalidOutputError): asyncio.run(llm.complete_json(system_prompt="JSON",user_payload={}))
+
+def test_router_falls_back_after_gemini_503():
+    calls={"gemini":0,"openai":0}
+    def gemini(r): calls["gemini"]+=1; return httpx.Response(503)
+    def openai(r):
+        calls["openai"]+=1
+        return httpx.Response(200,json={"choices":[{"message":{"content":'{"provider":"openai"}'}}]})
+    s=LLMSettings("https://g.example/v1","g","gm",2,512,"gemini",
+      (ProviderConfig("openai","https://o.example/v1","o","om"),),0,0)
+    result=asyncio.run(OpenAICompatibleLLM(s,transports={"gemini":httpx.MockTransport(gemini),"openai":httpx.MockTransport(openai)}).complete_json(system_prompt="JSON",user_payload={}))
+    assert result=={"provider":"openai"} and calls=={"gemini":1,"openai":1}
+
+def test_primary_retries_before_fallback():
+    calls={"gemini":0,"openai":0}
+    def gemini(r):
+        calls["gemini"]+=1
+        if calls["gemini"]==1:return httpx.Response(503)
+        return httpx.Response(200,json={"choices":[{"message":{"content":'{"provider":"gemini"}'}}]})
+    def openai(r): calls["openai"]+=1; return httpx.Response(200,json={"choices":[{"message":{"content":'{"provider":"openai"}'}}]})
+    s=LLMSettings("https://g.example/v1","g","gm",2,512,"gemini",
+      (ProviderConfig("openai","https://o.example/v1","o","om"),),1,0)
+    result=asyncio.run(OpenAICompatibleLLM(s,transports={"gemini":httpx.MockTransport(gemini),"openai":httpx.MockTransport(openai)}).complete_json(system_prompt="JSON",user_payload={}))
+    assert result=={"provider":"gemini"} and calls=={"gemini":2,"openai":0}
+
+def test_local_ollama_http_is_allowed_but_remote_http_is_not(monkeypatch):
+    monkeypatch.setenv("CREATORFLOW_LLM_API_KEY","g"); monkeypatch.setenv("CREATORFLOW_LLM_MODEL","m")
+    monkeypatch.setenv("CREATORFLOW_LLM_PRIMARY_PROVIDER","ollama")
+    monkeypatch.setenv("CREATORFLOW_LLM_OLLAMA_MODEL","local-model")
+    monkeypatch.setenv("CREATORFLOW_LLM_OLLAMA_BASE_URL","http://host.docker.internal:11434/v1")
+    assert LLMSettings.from_environment().provider=="ollama"
+
+
+def test_all_provider_failures_report_primary_and_fallback_errors():
+    def gemini(r): return httpx.Response(503)
+    def openai(r): return httpx.Response(429)
+    settings=LLMSettings("https://g.example/v1","g","gm",2,512,"gemini",
+      (ProviderConfig("openai","https://o.example/v1","o","om"),),0,0)
+    llm=OpenAICompatibleLLM(settings,transports={
+      "gemini":httpx.MockTransport(gemini),
+      "openai":httpx.MockTransport(openai)})
+    with pytest.raises(AIProviderError) as caught:
+        asyncio.run(llm.complete_json(system_prompt="JSON",user_payload={}))
+    message=str(caught.value)
+    assert "gemini: AI provider 'gemini' returned HTTP 503." in message
+    assert "openai: AI provider 'openai' returned HTTP 429." in message
+
+
+def test_workspace_route_builds_primary_and_fallback_settings():
+    settings=LLMSettings.from_route({
+      "primary":{"name":"Gemini workspace","base_url":"https://generativelanguage.googleapis.com/v1beta/openai",
+                 "api_key":"secret-primary","model":"gemini-flash","timeout_seconds":90,"max_output_tokens":2048},
+      "fallbacks":[{"name":"OpenAI backup","base_url":"https://api.openai.com/v1",
+                    "api_key":"secret-fallback","model":"gpt-mini"}]})
+    assert settings.provider=="Gemini workspace"
+    assert settings.api_key=="secret-primary"
+    assert settings.timeout_seconds==90 and settings.max_output_tokens==2048
+    assert len(settings.fallbacks)==1 and settings.fallbacks[0].name=="OpenAI backup"
+
+
+def test_workspace_route_rejects_insecure_remote_url():
     with pytest.raises(AIConfigurationError):
-        LLMSettings.from_environment()
-
-
-def test_settings_reject_insecure_remote_provider_url(monkeypatch) -> None:
-    monkeypatch.setenv("CREATORFLOW_LLM_API_KEY", "secret")
-    monkeypatch.setenv("CREATORFLOW_LLM_MODEL", "model-name")
-    monkeypatch.setenv("CREATORFLOW_LLM_BASE_URL", "http://remote.example/v1")
-    with pytest.raises(AIConfigurationError):
-        LLMSettings.from_environment()
-
-
-def test_openai_compatible_adapter_sends_json_mode_and_parses_response() -> None:
-    seen: dict[str, object] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        seen["url"] = str(request.url)
-        seen["authorization"] = request.headers.get("Authorization")
-        seen["body"] = json.loads(request.content)
-        return httpx.Response(200, json={
-            "choices": [{"message": {"content": json.dumps({"summary": "structured output"})}}]
-        })
-
-    settings = LLMSettings("https://provider.example/v1", "server-secret", "test-model", 5, 512)
-    llm = OpenAICompatibleLLM(settings, transport=httpx.MockTransport(handler))
-    result = asyncio.run(llm.complete_json(
-        system_prompt="Return JSON only.",
-        user_payload={"source_text": "reference"},
-    ))
-
-    assert result == {"summary": "structured output"}
-    assert seen["url"] == "https://provider.example/v1/chat/completions"
-    assert seen["authorization"] == "Bearer server-secret"
-    assert seen["body"]["response_format"] == {"type": "json_object"}
-    assert seen["body"]["model"] == "test-model"
-
-
-def test_openai_compatible_adapter_rejects_non_json_content() -> None:
-    def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={
-            "choices": [{"message": {"content": "not-json"}}]
-        })
-
-    settings = LLMSettings("https://provider.example/v1", "server-secret", "test-model", 5, 512)
-    llm = OpenAICompatibleLLM(settings, transport=httpx.MockTransport(handler))
-    with pytest.raises(AIInvalidOutputError):
-        asyncio.run(llm.complete_json(system_prompt="Return JSON.", user_payload={}))
+        LLMSettings.from_route({"primary":{"name":"bad","base_url":"http://provider.example/v1",
+            "api_key":"secret","model":"model"}})

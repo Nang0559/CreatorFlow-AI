@@ -49,7 +49,14 @@ public sealed class TenantContextMiddleware(
                     bootstrapTenant = created;
                 }
                 if (bootstrapTenant is not null)
-                    ((TenantContext)tenantContext).Set(tenantId, TenantRole.Owner.ToString());
+                {
+                    var configuredRole = configuration["Tenant:BootstrapRole"];
+                    var role = Enum.TryParse<TenantRole>(configuredRole, true, out var parsedRole) &&
+                               Enum.IsDefined(parsedRole)
+                        ? parsedRole
+                        : TenantRole.Owner;
+                    ((TenantContext)tenantContext).Set(tenantId, role.ToString());
+                }
             }
 
             await next(context);

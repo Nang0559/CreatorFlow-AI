@@ -34,10 +34,10 @@ The repository contains a foundation, an initial LLM runtime, discovery/ranking 
 
 Known limitations that must remain visible until implemented and tested:
 
-- Discovery ranking is heuristic; query planning is not a live data collector, and feedback aggregation is not yet proven as an activated end-to-end learning loop.
+- Discovery query planning is AI-assisted. On-demand Brave public-web search and approval-gated TikTok Research API connectors return validated source links; results are not yet persisted as candidates or executed by recurring schedules. Ranking remains heuristic and feedback aggregation is not yet proven as an activated end-to-end learning loop.
 - Shared links are stored as user-provided inputs; automatic short-link resolution, permitted source enrichment and ranking-priority integration are not yet proven.
-- Live trend connectors, speech/music analysis, advanced effects, product/cart attribution and official publishing are not complete.
-- The video UI, worker configuration and documentation must be reconciled to the selected FFmpeg-only initial engine; a completed job must be validated as a real playable MP4.
+- Complete live trend ingestion, recurring connector execution, Douyin integration, speech/music analysis, advanced effects, product/cart attribution and official publishing are not complete.
+- The initial renderer is FFmpeg-only; a completed job must still be validated as a real playable MP4 on the target machine.
 - SQL migration execution, tenant-isolation negative tests, target-machine performance and full end-to-end acceptance remain release gates.
 
 See [AI Runtime design](docs/design/AI_RUNTIME.md), [video rendering runbook](docs/operations/VIDEO_RENDERING_AE_FFMPEG.md), [go-live gates](docs/operations/GO_LIVE_READINESS.md), [as-built status](docs/design/AS_BUILT_STATUS.md) and the [functional audit plan](docs/operations/FUNCTIONAL_AUDIT_AND_COMPLETION_PLAN.md).

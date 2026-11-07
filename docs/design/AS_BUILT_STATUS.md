@@ -4,9 +4,11 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 
 ## Implemented in the repository
 
+> Status is for `feature/keycloak-oidc-local` and must be refreshed against the current branch head before release. Historical audit documents are not evidence for this branch.
+
 | Capability | Evidence in repository | Status |
 |---|---|---|
-| SaaS tenant identity and row-isolation foundation | Tenant/Membership/Invitation entities; API JWT validation; Web OIDC Authorization Code + PKCE; issuer+subject membership; one-time Owner bootstrap; invitation acceptance and membership administration; EF tenant filters; migrations 011–013 and composite tenant/unique-key migrations 018–020 | Baseline implemented in code; real provider configuration, email delivery, full role matrix, SQL execution and cross-tenant security tests remain pending |
+| SaaS tenant identity and row-isolation foundation | Tenant/Membership/Invitation entities; API JWT validation; Web OIDC Authorization Code + PKCE; issuer+subject membership; one-time Owner bootstrap; invitation acceptance and membership administration; EF tenant filters; migrations 011–013 and composite tenant/unique-key migrations 018–020 | Baseline implemented in code; real provider configuration, email delivery, resource-specific role checks, SQL execution and exhaustive cross-tenant security tests remain pending |
 | Content project foundation | Domain, API, EF mapping and SQL | Implemented foundation |
 | Topic management | Topic domain/API/UI and SQL | Metadata workflow |
 | Douyin source channel records | Channel domain/API/UI and SQL | Metadata workflow; no live Douyin follow |
@@ -18,11 +20,11 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 | Immutable Style Lab metric history | Migration 008, EF mapping, capture on every measure, history API and domain tests | Implemented foundation for ML datasets; no predictor yet |
 | Creator style profile | Profile API, UI, domain and SQL | Implemented |
 | Winner evidence import | Learn endpoint, evidence snapshot and unique profile/experiment index | Implemented with duplicate protection |
-| Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; not ML |
+| Topic-aware style learning | Deterministic engine, API preview, UI preview and unit tests | Implemented statistical baseline; analysis input is now restricted to experiments explicitly imported as profile evidence; not ML |
 | Video source library and rights confirmation | Tenant-scoped asset upload, SHA-256 provenance, size/format checks, SQL metadata | Implemented foundation; codec/duration validation occurs in render worker |
-| Automated video render | Durable SQL jobs, After Effects JSX project generation, AE image-sequence render, FFmpeg H.264/AAC MP4, preview/download proxy | Implemented pipeline; hardware/visual acceptance on HP Z240 still required |
+| Automated video render | Durable SQL jobs, Windows FFmpeg H.264/AAC MP4 worker, preview/download proxy | FFmpeg-only pilot pipeline; no After Effects JSX/AE render adapter is part of the current branch; hardware/visual acceptance on HP Z240 still required |
 | LLM runtime | Provider adapter, structured contracts, authenticated FastAPI endpoints, tests, .NET proxy, Style Lab generation UI and profile-scoped learning synthesis UI | Implemented first LLM workflow; provider credentials required; synthesis output is a draft and must be submitted to Learning Memory for review |
-| Human review and Learning Memory | Persisted proposal create/list/approve/reject, reviewer from authenticated identity, immutable profile versions | Implemented foundation; production OIDC and profile-scoped analysis remain release gates |
+| Human review and Learning Memory | Persisted proposal create/list/approve/reject, reviewer from authenticated identity, immutable profile versions | Implemented foundation; production OIDC and live end-to-end acceptance remain release gates |
 
 ## Not implemented / do not represent as complete
 - Douyin login, automatic channel follow, feed polling and new-video monitor.
@@ -35,14 +37,15 @@ This is a release-truth checklist. A persisted entity, endpoint or UI control is
 - Product catalog, product matching, cart attachment and order attribution.
 - TikTok OAuth, official publishing, scheduling and post reconciliation.
 - Durable discovery/provider connector jobs, outbox/inbox, retries and connector observability. Video render jobs are durable but do not constitute connector orchestration.
-- Production OIDC provider configuration and contract tests; MFA enforcement is delegated to the provider.
+- Production OIDC provider configuration and API acceptance against a production identity provider remain release gates. The local Keycloak realm export and live signed-token issuance contract run in CI; API JWT validation and issuer+subject membership resolution now have WebApplicationFactory integration tests using a signed test JWT and EF InMemory. These tests do not prove SQL Server provider parity or that the API accepted a token issued by the CI Keycloak container.
 - Invitation and membership administration APIs exist; invitation delivery is manual until SMTP/provider integration.
-- Analyst writes are blocked centrally and Publisher writes are blocked outside future publishing routes; full endpoint-specific role policies remain incomplete.
+- Central mutation authorization now uses a deny-by-default role matrix: Owner/Admin, content-workflow Editor allowlist, read-only Analyst and publishing-only Publisher. Publisher still has no writable route because `/api/v1/publishing` is not implemented; endpoint/resource-specific checks and exhaustive negative tests remain release gates.
+- API applies a cheap pre-authentication IP fixed-window limit (600 requests/minute) before JWT validation and membership database access, then a separate 300 requests/minute authenticated subject/workspace limiter with distinct API/video buckets. Both layers honor `RateLimiting:Enabled`. An explicit CORS origin allowlist is configured. Forwarded client/proto headers are accepted only from explicitly configured KnownProxies; configure that list correctly at deployment. Per-route quotas and production tuning remain open.
 - SQL Server Row-Level Security is not yet configured. Composite same-tenant foreign keys are added for the currently mapped business relationships by migrations 018–019; migration 020 changes channel/video/trend/profile uniqueness to workspace scope. Remaining unmapped Discovery SQL tables still need explicit tenant ownership before those tables can be used by a multi-tenant runtime.
-- SQL Server execution of the current migration manifest through 020 has not been verified on the user's HP Z240 in this review. Migration 012's legacy-workspace backfill assumes all listed existing business rows belong to one workspace; review ownership before applying it.
+- SQL Server execution of the current migration manifest through 029 has not yet been evidenced as successful on the user's HP Z240. The dedicated self-hosted SQL QC workflow exists, but its latest run must complete successfully before claiming SQL acceptance. Migration 012's legacy-workspace backfill assumes all listed existing business rows belong to one workspace; review ownership before applying it.
 - Background workers that access tenant-owned business data must scope each operation by TenantId; the video worker processes durable jobs globally but each job/output is tenant-keyed.
 
-- Profile-scoped deterministic style learning analysis; current deterministic analysis reads the global evaluated experiment pool. LLM synthesis is scoped to imported profile evidence.
+- Profile-scoped deterministic analysis is now filtered by the profile's imported CreatorStyleEvidence. A regression test verifies unrelated evaluated experiments are excluded. LLM synthesis remains scoped to imported profile evidence.
 - Trained ML prediction, durable model registry/retraining and KPI/retention-aware optimization.
 - Prompt registry/version history and production prompt-evaluation datasets. Learning proposals and immutable approved profile versions are implemented through Learning Memory.
 - Production evaluation datasets and end-to-end connector tests.
@@ -71,3 +74,62 @@ Creator-authored Select/Reject/Watch feedback is persisted as append-only histor
 Implemented in code: `Tenant` and `TenantMembership` domain entities; configurable OIDC JWT bearer validation; request tenant selection validated against exact issuer+subject membership; API default authorization requires a resolved active tenant; EF Core applies tenant filters to business entities and stamps/locks TenantId on writes. The local API-key path is restricted to a fixed legacy workspace in Development only. Migration 011 creates identity tables; migration 012 adds TenantId, tenant FK and index to all current business tables and backfills existing single-workspace data to `legacy-workspace`.
 
 Not yet release-complete: production OIDC provider configuration, MFA enforcement, invitation delivery, endpoint-specific role policies, SQL Server execution tests for the current migration manifest, RLS, tenant ownership for unmapped Discovery SQL tables, and cross-tenant negative tests. Migration 012 must not be applied to a database containing multiple customer workspaces until a reviewed row-ownership mapping is prepared.
+
+
+## Discovery connector milestone — migrations 025–029
+
+The current branch `feature/keycloak-oidc-local` includes topic scheduler foundations (025–027) and workspace-scoped connector credentials (028). The Trends UI can request an AI-generated query plan and automatically invoke the authenticated discovery search endpoint. The endpoint supports Brave Search public-web indexing and an optional TikTok Research API adapter that is usable only after the relevant TikTok Research project approval.
+
+Workspace connector keys are stored in `dbo.DiscoveryConnectorConfigurations` per tenant and encrypted using ASP.NET Core Data Protection. Settings endpoints expose credential-presence flags only and enforce Owner/Admin management. Environment variables remain a server-side fallback. Migration 028 is tenant-dependent and is included in the migration runner's tenant migration set.
+
+**Not yet complete:** discovered results are not persisted into the durable discovery candidate model; recurring topic/calendar schedules do not yet run connector searches; no media download, channel follow, TikTok account interaction, rights clearance or publishing is performed by these connectors. Brave results may be incomplete/stale. TikTok Research API access remains approval-gated. End-to-end validation with a real Brave key and, separately, an approved TikTok Research project on the Z240 is still required.
+
+### Release evidence boundary
+
+At commit `e2524f3d570460b9fd9f1462d2cfea046b74efe4`, GitHub CI run `41823809975` completed successfully for .NET build/tests, Python tests and PowerShell script validation. This does not prove SQL Server migration 028 was applied to the HP Z240, credentials were configured, a provider returned live results, or the Z240 runtime passed acceptance. Record those as separate host acceptance evidence.
+
+
+## Render implementation correction (2026-11-04)
+
+The active branch `feature/keycloak-oidc-local` uses an FFmpeg-only local render worker. References in earlier audit snapshots to After Effects JSX generation and image-sequence rendering describe a different historical implementation/branch and must not be used as current release evidence. After Effects remains a possible future adapter only. A successful build does not constitute a Z240 render acceptance test.
+
+
+## Profile-scoped deterministic analysis correction (2026-11-04)
+
+The `GET /api/v1/style-profiles/{id}/learning-analysis` endpoint now loads the selected profile's audited evidence links first and analyzes only evaluated experiments whose IDs occur in that profile's evidence. A profile with no imported evidence returns an empty analysis rather than learning from the tenant-wide experiment pool. The API test suite includes a regression test with an unrelated evaluated experiment.
+
+## SQL CI evidence correction (2026-11-04)
+
+SQL Server QC is a separate self-hosted workflow, not a job inside the GitHub-hosted `.github/workflows/ci.yml`. It is intentionally not triggered by pull requests because it executes repository code on the local SQL host. The QC script applies migrations 001–028 only to a clean database or one whose tenant foundation 011–013 is already complete, then verifies checksums and tenant/composite constraints. It refuses to infer ownership for a populated legacy database. The current run must be observed to completion on the Z240 runner. Pending, queued or cancelled runs are not SQL acceptance evidence.
+
+
+## Local Keycloak reproducibility (2026-11-04)
+
+The development Compose stack imports `docker/keycloak/realm-import/creatorflow-realm.json` on first startup. The checked-in realm contract defines confidential Authorization Code + PKCE S256, local Web redirect URIs, optional `creatorflow-api` scope and access-token audience mapper. `scripts/Test-KeycloakRealmContract.ps1` validates the static import contract in CI and can additionally verify live OIDC discovery with `-CheckLive`. The import intentionally contains no users or client secret. It does not overwrite an already-existing realm in a persisted Keycloak volume. CI now issues a signed token from the actual `creatorflow-web` client, validates issuer/audience/signature, and sends that same token through the API's real JwtBearer handler and issuer+subject membership pipeline. The membership store in this live contract test is EF Core InMemory; first-start import and SQL Server membership parity on the Z240 remain pending.
+
+
+## Reverse-proxy and health rate-limit correction (2026-11-04)
+
+Forwarded headers are processed for one hop only and only from IPs configured in `ForwardedHeaders:KnownProxies`; an empty list trusts no external proxy. `/health` is excluded from the global fixed-window limiter. The default baseline is 300 requests/minute per authenticated subject or fallback remote IP. Route-specific upload/polling quotas and production edge/WAF tuning remain open.
+
+
+## Security and Discovery tenant-scope update (2026-11-04)
+
+- Learning proposal approve/reject actions are Owner/Admin-only; Editor can no longer change active profile guidance through the Style Profiles mutation prefix. Sensitive administrative GET routes (identity, AI provider registry, connector credentials and billing) are also Owner/Admin-only. Integration tests exercise the real API pipeline for Editor denials; the unit role matrix covers the broader route policy.
+- API rate limiting now runs after tenant resolution, partitions by authenticated subject or resolved tenant (falling back to forwarded remote IP), isolates video API traffic from general API traffic, and exempts `/health`. Forwarded headers are trusted only from configured `ForwardedHeaders:KnownProxies` addresses. Route-specific quotas and production edge tuning remain open.
+- Migration 029 adds tenant ownership and trusted tenant FKs to the Discovery 014/015 tables, replaces global unique keys with tenant-scoped keys and converts candidate/source/run/feedback relationships to tenant-composite FKs. `Verify-Database.ps1 -RequireTenantMigrations` now checks the legacy Discovery tenant columns and composite relationship constraints. This is repository implementation only; SQL Server execution and legacy data backfill remain unverified until the Z240 QC workflow succeeds.
+- The profile learning-analysis test now calls the actual HTTP endpoint through `WebApplicationFactory` with an InMemory test provider. It verifies response counts and that an unrelated experiment does not enter the response. This is an API integration test, not SQL Server provider parity; SQL Server behavior still requires QC.
+- `scripts/Initialize-KeycloakLocal.ps1` provisions a local user with a temporary password, retrieves the generated confidential client secret into ignored `.env`, and explains the separate CreatorFlow Owner bootstrap. CI now verifies a token from the actual `creatorflow-web` client through API JwtBearer and tenant membership; the live Z240 environment still needs its own acceptance run.
+
+
+## JWT membership integration coverage update (2026-11-04)
+
+The API integration-test factory now configures the actual ASP.NET Core JwtBearer handler with a deterministic test issuer, HMAC signing key and the production API audience value. Requests carry signed bearer JWTs and pass through the normal authentication, tenant-context, role-guard and authorization middleware. Tests cover: an active issuer+subject membership resolving the selected workspace; the membership's Editor role overriding the API-key bootstrap Owner configuration; a caller selecting a different workspace without membership being denied; and a suspended membership being denied.
+
+**Evidence boundary:** the general endpoint tests use EF Core InMemory for the membership store. A separate live Keycloak CI job now obtains a token from the checked-in `creatorflow-web` client and passes the same token through the real API JwtBearer handler, issuer+subject membership lookup, and a protected API request. This verifies the live identity-provider-to-API authentication path, but not SQL Server query/transaction parity. SQL Server migration 029 and host acceptance remain pending until the Z240 QC workflow completes successfully.
+
+## Custom discovery provider egress boundary and scheduler limits (2026-11-06)
+
+Custom discovery providers are tenant-configured outbound HTTP calls and are treated as untrusted egress. Controls in this branch: HTTPS on port 443 only, no embedded credentials or fragments, early rejection of obviously internal hosts when saving, authoritative DNS resolution and address validation at connection time (loopback, private, link-local, shared, documentation, multicast, 6to4/Teredo/NAT64 ranges refused), no redirects, no proxy, a 2 MB response cap, a 60-second total budget per search for custom providers, and one shared header policy (`ProviderHeaderPolicy`) applied when saving and again before every request. Secrets (API key and additional headers) are encrypted per tenant and never returned.
+
+Known limits: the scheduled worker uses the platform-wide `BraveSearch:ApiKey` configuration and does **not** read the tenant's encrypted connector credentials, so scheduled discovery cost is not attributed to a tenant; it also needs a shared Data Protection key ring before it can decrypt tenant keys. Scheduled runs keep partial results and record `BraveSearchRateLimited` when Brave returns HTTP 429. Custom-provider endpoint tests run on EF InMemory and make no outbound calls; SQL Server behaviour (unique indexes, migration 029) still requires the QC run.

@@ -130,6 +130,24 @@ def test_analyze_rejects_empty_text(monkeypatch) -> None:
     response = client.post("/v1/analyze", headers={"X-CreatorFlow-AI-Key": "test-service-key-0123456789abcdef"}, json={"text": ""})
     assert response.status_code == 422
 
+def test_analyze_reports_missing_provider_after_validating_request(monkeypatch) -> None:
+    monkeypatch.setenv("CREATORFLOW_AI_API_KEY", "test-service-key-0123456789abcdef")
+    for name in (
+        "CREATORFLOW_LLM_API_KEY", "CREATORFLOW_LLM_MODEL", "CREATORFLOW_LLM_BASE_URL",
+        "CREATORFLOW_LLM_GEMINI_API_KEY", "CREATORFLOW_LLM_GEMINI_MODEL",
+        "CREATORFLOW_LLM_OPENAI_API_KEY", "CREATORFLOW_LLM_OPENAI_MODEL",
+        "CREATORFLOW_LLM_OLLAMA_MODEL",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    response = client.post(
+        "/v1/analyze",
+        headers={"X-CreatorFlow-AI-Key": "test-service-key-0123456789abcdef"},
+        json={"text": "Nội dung hợp lệ"},
+    )
+    assert response.status_code == 503
+    assert response.json()["detail"] == "AI provider configuration is invalid or unavailable."
+
 
 def test_discovery_rank_works_without_shared_link_and_priority_is_bounded(monkeypatch) -> None:
     headers = auth(monkeypatch)
@@ -148,6 +166,28 @@ def test_discovery_rank_rejects_out_of_range_features(monkeypatch) -> None:
     headers = auth(monkeypatch)
     response = client.post("/v1/discovery/rank", headers=headers, json={"topicFit": 120})
     assert response.status_code == 422
+
+
+def test_discovery_query_plan_normalizes_provider_variants_and_missing_fields(monkeypatch) -> None:
+    headers = auth(monkeypatch)
+    fake = FakeLLM({
+        "queries": ["máy hút bụi mini", "review máy hút bụi cầm tay"],
+        "purchaseIntents": ["so sánh giá", "đánh giá thực tế"],
+    })
+    app.dependency_overrides[get_llm_client] = lambda: fake
+    try:
+        response = client.post("/v1/discovery/query-plan", headers=headers, json={
+            "topic": "đồ công nghệ", "keywords": ["máy hút bụi mini"],
+            "targetMarket": "Vietnam", "maxQueries": 8,
+        })
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["topic"] == "đồ công nghệ"
+    assert len(payload["queries"]) >= 2
+    assert payload["intentSignals"] == ["so sánh giá", "đánh giá thực tế"]
+    assert payload["requiresHumanReview"] is True
 
 
 def test_discovery_query_plan_is_optional_link_independent_and_bounded(monkeypatch) -> None:

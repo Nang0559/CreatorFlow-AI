@@ -55,7 +55,7 @@ Write-Host 'Không in nội dung .env, API key, mật khẩu hoặc connection s
 
 $gitBranch = (& git branch --show-current 2>$null | Out-String).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Không xác định được Git branch.' }
-if ($gitBranch -ne 'feature/trend-selection-safety-intelligence') {
+if ($gitBranch -ne 'feature/keycloak-oidc-local') {
     throw "Đang ở nhánh '$gitBranch'. Hãy chuyển sang feature/trend-selection-safety-intelligence rồi chạy lại."
 }
 $dirty = (& git status --porcelain 2>$null | Out-String).Trim()

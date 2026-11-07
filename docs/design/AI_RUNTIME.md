@@ -24,16 +24,9 @@ Provider credentials and the internal service key stay server-side. The AI servi
 
 ## 3. Configuration
 
-| Environment variable | Required | Meaning |
-|---|---:|---|
-| `CREATORFLOW_AI_API_KEY` | Yes for /v1 routes | Internal service credential; minimum 32 characters |
-| `CREATORFLOW_LLM_BASE_URL` | No | OpenAI-compatible API base; defaults to OpenAI API |
-| `CREATORFLOW_LLM_API_KEY` | Yes for model calls | Provider secret |
-| `CREATORFLOW_LLM_MODEL` | Yes for model calls | Exact model identifier |
-| `CREATORFLOW_LLM_TIMEOUT_SECONDS` | No | Request timeout; default 60 |
-| `CREATORFLOW_LLM_MAX_OUTPUT_TOKENS` | No | Output budget; default 3000, bounded 256–16000 |
+The Python service keeps its internal service credential separate from external model-provider credentials. The current provider order and per-provider environment variables are documented in [AI provider configuration](AI_PROVIDER_CONFIGURATION.md): Gemini primary, OpenAI fallback, and Ollama optional. Workspace-managed provider credentials are configured through `/settings/ai-providers` and migration 024. Do not copy provider secrets into Web configuration or browser storage.
 
-Only HTTPS provider URLs are accepted, except localhost for development. Missing credentials fail closed; there is no runtime mock fallback.
+`CREATORFLOW_AI_API_KEY` authenticates the internal .NET API-to-AI service calls. Provider credentials are resolved server-side and passed only over that authenticated internal channel. Only HTTPS hosted-provider URLs are accepted, except localhost for development. Missing credentials fail closed; there is no runtime mock fallback.
 
 ## 4. Implemented workflows
 
@@ -62,7 +55,7 @@ Python tests inject a fake LLM adapter only at the test boundary. .NET domain te
 - Trained ML model, feature pipeline, artifact registry, persisted model, retraining, drift detection or champion/challenger rollout.
 - Durable LLM proposal entities, approval/rejection workflow, prompt registry/version persistence and immutable approved profile versions.
 - Comparable-window orchestration and source provenance for external metric sync.
-- Video/audio understanding, STT, TTS, advanced effects/B-roll, music analysis and automatic platform publishing. A separate local After Effects + FFmpeg render worker now creates initial vertical MP4 variants; it is not an AI media-understanding pipeline and still requires HP Z240 acceptance.
+- Video/audio understanding, STT, TTS, advanced effects/B-roll, music analysis and automatic platform publishing. A separate local FFmpeg-only render worker creates initial vertical MP4 variants; After Effects is not required by the current renderer. This is not an AI media-understanding pipeline and still requires HP Z240 acceptance.
 - Production OIDC configuration, complete role-specific authorization and cross-tenant negative-test acceptance; tenant identity/isolation foundations are implemented separately.
 
 ## 8. ML acceptance gates

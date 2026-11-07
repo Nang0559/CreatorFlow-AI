@@ -16,8 +16,8 @@ See [SaaS + Hybrid Architecture](SAAS_HYBRID_ARCHITECTURE.md) for tenancy, provi
 - Infrastructure: SQL Server, private object storage, durable queue and provider adapters.
 - Workers: durable asynchronous orchestration with idempotency and bounded retries.
 - AI services: model capabilities behind provider-neutral interfaces; output is always a draft.
-- Media engine: Windows After Effects project/PNG-sequence rendering plus FFmpeg H.264/AAC MP4 encoding through SQL-backed video jobs; advanced effects, STT/TTS and hardware acceptance remain open.
-- Platform connectors: separate TikTok and Douyin OAuth clients, token stores, scopes, rate limits and audit trails.
+- Media engine: Windows FFmpeg-only H.264/AAC MP4 encoding through SQL-backed video jobs; After Effects is a possible future adapter, not a current requirement. Advanced effects, STT/TTS and hardware acceptance remain open.
+- Platform connectors: server-side Brave public-web search and approval-gated TikTok Research API are available for on-demand discovery. Separate TikTok/Douyin OAuth clients, token stores, scopes, rate limits and audit trails remain future work.
 
 ## Target workflow
 
@@ -41,4 +41,4 @@ Public cloud edge (WAF/TLS) fronts stateless Web/API. SQL Server, queue and obje
 
 ## Current implementation boundary
 
-The current branch has .NET API/Blazor, SQL Server migrations, a Python FastAPI LLM adapter, tenant identity/isolation foundations, a user-shared-link inbox and a local Windows AE+FFmpeg render worker. It does not yet implement production OIDC configuration, full RLS/negative-test coverage, cloud object storage, live TikTok/Douyin trend providers, the complete Discovery feedback-learning loop, speech/music analysis, product/cart attribution or publishing. Video rendering is a local pilot pipeline, not a production media platform. The Style Learning API has known profile-scoping limitations described in [as-built status](design/AS_BUILT_STATUS.md). Do not infer implementation from this target architecture.
+The current branch has .NET API/Blazor, SQL Server migrations, a Python FastAPI LLM adapter, tenant identity/isolation foundations, a user-shared-link inbox, workspace-managed AI and discovery credentials, an on-demand Brave/TikTok Research discovery adapter, and a local Windows FFmpeg-only render worker. It does not yet implement complete production OIDC/security acceptance, full RLS/negative-test coverage, cloud object storage, persistent discovery-result ingestion, recurring connector execution, the complete Discovery feedback-learning loop, speech/music analysis, product/cart attribution or publishing. TikTok Research API remains approval-gated and Brave results are limited to indexed public pages. Video rendering is a local pilot pipeline, not a production media platform. The Style Learning API has known profile-scoping limitations described in [as-built status](design/AS_BUILT_STATUS.md). Do not infer implementation from this target architecture.

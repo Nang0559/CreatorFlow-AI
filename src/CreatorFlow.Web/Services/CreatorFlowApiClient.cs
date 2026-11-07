@@ -6,9 +6,14 @@ namespace CreatorFlow.Web.Services;
 public sealed class CreatorFlowApiClient(
     HttpClient http,
     IHttpContextAccessor httpContextAccessor,
-    IServiceProvider scopedServices)
+    IServiceProvider scopedServices,
+    IConfiguration configuration,
+    IWebHostEnvironment environment)
 {
     public bool IsConfigured => http.BaseAddress is not null;
+    public bool CanBootstrapOwner => environment.IsDevelopment() &&
+        configuration.GetValue<bool>("Authentication:OwnerBootstrapEnabled") &&
+        !string.IsNullOrWhiteSpace(configuration["Authentication:OwnerBootstrapToken"]);
 
     public async Task<T?> GetAsync<T>(string path, CancellationToken ct = default)
     {
@@ -72,6 +77,31 @@ public sealed class CreatorFlowApiClient(
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
     }
 
+    public async Task<(TResponse? Data, string? ProviderTrace, string? Error)> PostWithMetadataAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = JsonContent.Create(body) };
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, ct);
+        response.Headers.TryGetValues("X-CreatorFlow-LLM-Trace", out var values);
+        var trace = values?.FirstOrDefault();
+        var content = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            return (default, trace, $"API trả về HTTP {(int)response.StatusCode}: {(content.Length <= 1000 ? content : content[..1000])}");
+        var data = string.IsNullOrWhiteSpace(content) ? default : System.Text.Json.JsonSerializer.Deserialize<TResponse>(content, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+        return (data, trace, null);
+    }
+
+    public async Task<TResponse?> PutAsync<TRequest, TResponse>(string path, TRequest body, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        using var request = new HttpRequestMessage(HttpMethod.Put, path) { Content = JsonContent.Create(body) };
+        await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, ct);
+        await EnsureSuccessAsync(response, ct);
+        return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: ct);
+    }
+
     public async Task PostNoContentAsync<TRequest>(string path, TRequest body, CancellationToken ct = default)
     {
         EnsureConfigured();
@@ -95,6 +125,25 @@ public sealed class CreatorFlowApiClient(
         EnsureConfigured();
         using var request = new HttpRequestMessage(HttpMethod.Put, path) { Content = JsonContent.Create(body) };
         await AddIdentityHeadersAsync(request);
+        using var response = await http.SendAsync(request, ct);
+        await EnsureSuccessAsync(response, ct);
+    }
+
+    public async Task BootstrapOwnerAsync(string name, string slug, CancellationToken ct = default)
+    {
+        EnsureConfigured();
+        if (!CanBootstrapOwner)
+            throw new InvalidOperationException("Owner bootstrap UI chỉ được bật trong Development khi Authentication:OwnerBootstrapEnabled=true và secret đã cấu hình.");
+        var bootstrapSecret = configuration["Authentication:OwnerBootstrapToken"];
+        if (string.IsNullOrWhiteSpace(bootstrapSecret))
+            throw new InvalidOperationException("Web chưa được cấu hình Authentication:OwnerBootstrapToken. Hãy cấu hình secret ở môi trường Web rồi khởi động lại container.");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/identity/owner/bootstrap")
+        {
+            Content = JsonContent.Create(new { name, slug })
+        };
+        await AddIdentityHeadersAsync(request);
+        request.Headers.TryAddWithoutValidation("X-CreatorFlow-Owner-Bootstrap", bootstrapSecret);
         using var response = await http.SendAsync(request, ct);
         await EnsureSuccessAsync(response, ct);
     }

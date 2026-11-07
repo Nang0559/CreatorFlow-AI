@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import os
 import secrets
+import base64
+import json
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from creatorflow_ai.contracts import (
@@ -37,16 +40,49 @@ def require_service_key(x_creatorflow_ai_key: str | None = Header(default=None))
         raise HTTPException(status_code=401, detail="Invalid CreatorFlow AI service credential.")
 
 
-def get_llm_client() -> OpenAICompatibleLLM:
+class _UnavailableLLMClient:
+    """Defer provider configuration failures until after FastAPI validates the request body."""
+
+    def __init__(self, error: AIConfigurationError):
+        self._error = error
+
+    async def complete_json(self, *, system_prompt: str, user_payload: dict[str, Any]) -> dict[str, Any]:
+        raise self._error
+
+
+def get_llm_client(x_creatorflow_llm_route: str | None = Header(default=None)) -> OpenAICompatibleLLM:
     try:
-        return OpenAICompatibleLLM(LLMSettings.from_environment())
-    except AIConfigurationError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        if x_creatorflow_llm_route:
+            if len(x_creatorflow_llm_route) > 24000:
+                raise AIConfigurationError("Workspace AI provider route exceeds the allowed size.")
+            decoded = base64.b64decode(x_creatorflow_llm_route, validate=True)
+            route = json.loads(decoded.decode("utf-8"))
+            if not isinstance(route, dict):
+                raise AIConfigurationError("Workspace AI provider route is invalid.")
+            settings = LLMSettings.from_route(route)
+        else:
+            settings = LLMSettings.from_environment()
+        return OpenAICompatibleLLM(settings)
+    except (AIConfigurationError, ValueError, UnicodeDecodeError, json.JSONDecodeError):
+        # FastAPI resolves dependencies before invoking the endpoint. Returning a deferred
+        # failure lets Pydantic report malformed requests as 422 even when AI is offline.
+        return _UnavailableLLMClient(
+            AIConfigurationError("AI provider configuration is invalid or unavailable.")
+        )  # type: ignore[return-value]
+
+
+def encode_provider_trace(client: Any) -> str:
+    trace = getattr(client, "last_trace", [])
+    if not isinstance(trace, list):
+        trace = []
+    return base64.b64encode(json.dumps(trace, ensure_ascii=False).encode("utf-8")).decode("ascii")
 
 
 async def invoke_llm(client: OpenAICompatibleLLM, system_prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
     try:
         return await client.complete_json(system_prompt=system_prompt, user_payload=payload)
+    except AIConfigurationError as exc:
+        raise HTTPException(status_code=503, detail="AI provider configuration is invalid or unavailable.") from exc
     except AIInvalidOutputError as exc:
         raise HTTPException(status_code=502, detail="LLM provider returned invalid structured output.") from exc
     except AIProviderError as exc:
@@ -92,14 +128,81 @@ async def discovery_query_plan(
         "priority context, never a prerequisite. Return JSON with topic, queries, related_topics, intent_signals, exclusions. "
         "Queries must target observable content and creator profiles; do not invent trend metrics or claim results exist."
     )
-    raw = await invoke_llm(client, system_prompt, request.model_dump())
     try:
-        result = DiscoveryQueryPlanResponse.model_validate({**raw, "requires_human_review": True})
-        if len(result.queries) > request.max_queries:
-            raise ValueError("The model returned more queries than requested.")
-    except (ValidationError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail="Discovery query plan did not match the required contract.") from exc
-    return result
+        raw = await invoke_llm(client, system_prompt, request.model_dump())
+    except HTTPException as exc:
+        trace = encode_provider_trace(client)
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers={"X-CreatorFlow-LLM-Trace": trace})
+    trace = encode_provider_trace(client)
+    try:
+        if not isinstance(raw, dict):
+            raise ValueError("The model response must be a JSON object.")
+
+        # Providers sometimes vary between snake_case/camelCase or return a single
+        # newline-delimited query. Normalize those harmless shape differences before
+        # enforcing the public response contract.
+        def pick(*names: str, default: Any = None) -> Any:
+            for name in names:
+                if name in raw and raw[name] is not None:
+                    return raw[name]
+            return default
+
+        def string_list(value: Any) -> list[str]:
+            if isinstance(value, str):
+                values = value.splitlines()
+            elif isinstance(value, list):
+                values = value
+            else:
+                values = []
+            result: list[str] = []
+            seen: set[str] = set()
+            for item in values:
+                if not isinstance(item, str):
+                    continue
+                cleaned = item.strip().lstrip("-•*0123456789. ").strip().strip('"').strip("'")
+                key = cleaned.casefold()
+                if cleaned and key not in seen:
+                    seen.add(key)
+                    result.append(cleaned[:300])
+            return result
+
+        queries = string_list(pick("queries", "search_queries", "searchQueries", "query_suggestions", "querySuggestions"))
+        # Keep the plan useful when a model omits or duplicates query variants.
+        # These are transparent topic-derived search phrases, never claimed results.
+        seed_terms = [request.topic, *request.keywords]
+        if request.product_context:
+            seed_terms.append(request.product_context)
+        for term in seed_terms:
+            term = term.strip()
+            if not term:
+                continue
+            for suffix in ("review trải nghiệm", "giá và đánh giá"):
+                candidate = f"{term} {suffix}"
+                if candidate.casefold() not in {q.casefold() for q in queries}:
+                    queries.append(candidate)
+                if len(queries) >= request.max_queries:
+                    break
+            if len(queries) >= request.max_queries:
+                break
+        response_topic = pick("topic", "subject", default=request.topic)
+        if not isinstance(response_topic, str) or not response_topic.strip():
+            response_topic = request.topic
+        normalized = {
+            "topic": response_topic,
+            "queries": queries[:request.max_queries],
+            "related_topics": string_list(pick("related_topics", "relatedTopics")),
+            "intent_signals": string_list(pick("intent_signals", "intentSignals", "purchase_intents", "purchaseIntents")),
+            "exclusions": string_list(pick("exclusions", "exclude_terms", "excludeTerms")),
+            "requires_human_review": True,
+        }
+        result = DiscoveryQueryPlanResponse.model_validate(normalized)
+    except (ValidationError, ValueError, TypeError):
+        return JSONResponse(
+            status_code=502,
+            content={"detail": "Discovery query plan did not match the required contract."},
+            headers={"X-CreatorFlow-LLM-Trace": trace},
+        )
+    return JSONResponse(status_code=200, content=result.model_dump(by_alias=True), headers={"X-CreatorFlow-LLM-Trace": trace})
 
 
 @app.post("/v1/analyze", response_model=AnalyzeResponse, dependencies=[Depends(require_service_key)])

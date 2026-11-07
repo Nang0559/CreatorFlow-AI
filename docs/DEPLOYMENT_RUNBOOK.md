@@ -56,6 +56,8 @@ Use separate secret sets per environment. The current repository's bootstrap set
 
 .NET API (current keys; verify exact configuration binding in the deployed build):
 - `ConnectionStrings__CreatorFlow`
+- `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`, ... (optional explicit browser-origin allowlist; unset means no cross-origin browser origin is trusted).
+- API global rate limiting is enabled by default at 300 requests/minute per authenticated subject, or a fallback tenant/IP partition for local API-key/anonymous traffic. Tune at the edge and per expensive route before public SaaS; do not disable it as a workaround.
 - `Authentication__ApiKey` (bootstrap only; do not use as the public SaaS user identity)
 - `CREATORFLOW_AI_BASE_URL`
 - `CREATORFLOW_AI_API_KEY`
@@ -65,17 +67,19 @@ Blazor Web:
 - `CreatorFlowApi__ApiKey` (server-side only; never sent to browser JavaScript)
 
 Python AI:
-- `CREATORFLOW_AI_API_KEY`
-- `CREATORFLOW_LLM_API_KEY`
-- `CREATORFLOW_LLM_MODEL`
-- Provider base URL as supported by the current adapter.
+- `CREATORFLOW_AI_API_KEY` (shared service-to-service secret; must match the value configured for the API's AI client and the AI container).
+- `CREATORFLOW_LLM_PRIMARY_PROVIDER`, `CREATORFLOW_LLM_FALLBACK_PROVIDERS`.
+- `CREATORFLOW_LLM_GEMINI_API_KEY`, `CREATORFLOW_LLM_OPENAI_API_KEY`, and/or local Ollama endpoint/model according to the selected providers.
 
-Future provider configuration must be distinct:
-- `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, registered redirect URI and approved scopes.
-- `DOUYIN_CLIENT_KEY`, `DOUYIN_CLIENT_SECRET`, registered redirect URI and approved scopes.
-- KMS key references for encrypted user tokens, not plaintext token environment variables.
+Current local-pilot discovery connectors (API runs as a Windows process):
+- `BraveSearch__ApiKey` for Brave Search Web API; alternatively configure it in the workspace Settings UI after migration 028.
+- `TikTokResearch__ClientKey` and `TikTokResearch__ClientSecret` only for a TikTok Research API project that has actually been approved and is eligible for the applicant. Do not assume ordinary TikTok developer access grants Research API.
 
-Do not create these variables and assume connectors work: the TikTok/Douyin adapters and OAuth routes must first be implemented and tested. Store platform user tokens per tenant connection in encrypted persistence backed by KMS.
+The current local `.env.example` also includes `Authentication__ApiKey` and `CreatorFlowApi__ApiKey`; these are the API/Web bootstrap shared secret pair and must have the same value. The Keycloak client secret, Keycloak admin password and one-time owner bootstrap token are separate credentials and are not provider API keys.
+
+The current workspace AI provider registry (migration 024) and discovery connector settings (migration 028) allow Owner/Admin to manage provider keys in the authenticated Settings UI. Workspace secrets are encrypted server-side and never returned to the browser. The internal service credentials, Keycloak bootstrap secrets and database connection string remain deployment configuration, not workspace connector fields.
+
+TikTok/Douyin user OAuth connections, publishing scopes and a commercial-grade global TikTok/Douyin trend feed are not delivered by these API keys. Do not create arbitrary `TIKTOK_CLIENT_KEY` or `DOUYIN_CLIENT_KEY` variables and assume connectors work; the corresponding OAuth adapters/routes must first be implemented and tested. Store future platform user tokens per tenant connection in encrypted persistence backed by a production KMS.
 
 ## 6. Database release procedure
 
@@ -98,7 +102,7 @@ Migration 010 still requires SQL Server execution tests against an empty databas
 4. Apply database migrations and verify schema.
 5. Deploy API and Web containers/artifacts; verify health and readiness endpoints.
 6. Deploy private AI service; verify service-to-service authentication and provider health.
-7. For local pilot only, start the SQL-backed AE+FFmpeg render worker using `docs/operations/VIDEO_RENDERING_AE_FFMPEG.md`. Deploy cloud discovery/provider workers only after durable outbox/queue, idempotency and dead-letter controls exist.
+7. For local pilot only, start the SQL-backed FFmpeg-only render worker using `docs/operations/VIDEO_RENDERING_AE_FFMPEG.md`. Deploy cloud discovery/provider workers only after durable outbox/queue, idempotency and dead-letter controls exist.
 8. Enable tenant identity and authorization before onboarding external customers.
 9. Register TikTok and Douyin applications separately; complete platform reviews and request only required scopes.
 10. Connect one authorized test account per provider in staging; test token refresh/revocation and provider error handling.
@@ -130,3 +134,11 @@ Never put OAuth tokens, API keys, full signed URLs, private media or sensitive p
 ## 10. Operational acceptance
 
 A deployment is accepted only when health checks, schema verification, auth/tenant isolation, storage access, backup/restore, monitoring, and rollback are evidenced. A green build alone is not a production deployment sign-off.
+
+### Reverse proxy
+
+Set `ForwardedHeaders__KnownProxies__0` and additional indexed entries to the exact private IP addresses of trusted reverse proxies. The API processes one forwarded hop only. Leave the list empty when no trusted proxy is deployed. Ensure the proxy strips client-supplied forwarded headers and writes its own values. `/health` bypasses the global API rate limiter; other API routes share the 300/minute per-subject/IP baseline pending route-specific production tuning.
+
+### Discovery tenant ownership
+
+Migration 029 backfills existing Discovery 014/015 rows to the explicit `legacy-workspace` tenant, adds tenant foreign keys, replaces global natural-key uniqueness with tenant-scoped indexes, and enforces tenant-composite relationships between Discovery records. Apply it only after reviewing the legacy ownership assumption. Do not expose Discovery 014/015 tables to multi-tenant runtime until migration 029 and `Verify-Database.ps1 -RequireTenantMigrations` pass on the target database.

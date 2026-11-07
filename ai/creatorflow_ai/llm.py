@@ -1,98 +1,173 @@
-"""Provider-neutral runtime for OpenAI-compatible chat-completions APIs.
-
-The runtime intentionally has no local/mock fallback: missing credentials or a
-model configuration is an explicit service-unavailable condition.
-"""
+"""OpenAI-compatible runtime: local Ollama by default; cloud providers only when explicitly configured."""
 from __future__ import annotations
-
-import json
-import os
-from dataclasses import dataclass
+import asyncio, json, os
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
-
 import httpx
 
+_RETRYABLE={408,409,425,429,500,502,503,504}
 
-class AIConfigurationError(RuntimeError):
-    pass
-
-
+class AIConfigurationError(RuntimeError): pass
+class AIInvalidOutputError(RuntimeError): pass
 class AIProviderError(RuntimeError):
-    pass
+    def __init__(self,message:str,*,provider:str="unknown",retryable:bool=False):
+        super().__init__(message); self.provider=provider; self.retryable=retryable
 
-
-class AIInvalidOutputError(RuntimeError):
-    pass
-
+@dataclass(frozen=True)
+class ProviderConfig:
+    name:str
+    base_url:str
+    api_key:str
+    model:str
 
 @dataclass(frozen=True)
 class LLMSettings:
-    base_url: str
-    api_key: str
-    model: str
-    timeout_seconds: float = 60.0
-    max_output_tokens: int = 3000
+    base_url:str
+    api_key:str
+    model:str
+    timeout_seconds:float=60.0
+    max_output_tokens:int=3000
+    provider:str="gemini"
+    fallbacks:tuple[ProviderConfig,...]=field(default_factory=tuple)
+    retries_per_provider:int=1
+    retry_backoff_seconds:float=1.0
 
     @classmethod
-    def from_environment(cls) -> "LLMSettings":
-        api_key = os.getenv("CREATORFLOW_LLM_API_KEY", "").strip()
-        model = os.getenv("CREATORFLOW_LLM_MODEL", "").strip()
-        if not api_key or not model:
-            raise AIConfigurationError(
-                "CREATORFLOW_LLM_API_KEY and CREATORFLOW_LLM_MODEL must be configured."
-            )
-        base_url = os.getenv("CREATORFLOW_LLM_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
-        parsed_url = urlparse(base_url)
-        is_local_http = parsed_url.scheme == "http" and parsed_url.hostname in {"localhost", "127.0.0.1", "::1"}
-        if parsed_url.scheme != "https" and not is_local_http:
-            raise AIConfigurationError("CREATORFLOW_LLM_BASE_URL must use HTTPS (HTTP is allowed only for localhost).")
-        if not parsed_url.hostname or parsed_url.username or parsed_url.password or parsed_url.query or parsed_url.fragment:
-            raise AIConfigurationError("CREATORFLOW_LLM_BASE_URL is not a valid provider base URL.")
+    def from_route(cls, route:dict[str,Any])->"LLMSettings":
         try:
-            timeout = float(os.getenv("CREATORFLOW_LLM_TIMEOUT_SECONDS", "60"))
-            max_tokens = int(os.getenv("CREATORFLOW_LLM_MAX_OUTPUT_TOKENS", "3000"))
-        except ValueError as exc:
-            raise AIConfigurationError("LLM timeout and output token settings must be numeric.") from exc
-        if timeout <= 0 or max_tokens < 256 or max_tokens > 16000:
-            raise AIConfigurationError("LLM timeout must be positive and output tokens must be between 256 and 16000.")
-        return cls(base_url, api_key, model, timeout, max_tokens)
+            primary=route["primary"]
+            name=str(primary["name"]).strip()
+            base=str(primary["base_url"]).strip().rstrip("/")
+            key=str(primary["api_key"]).strip()
+            model=str(primary["model"]).strip()
+            timeout=float(primary.get("timeout_seconds",120))
+            tokens=int(primary.get("max_output_tokens",3000))
+            if not name or not key or not model or timeout<5 or timeout>300 or not 256<=tokens<=16000:
+                raise ValueError("Invalid primary provider settings.")
+            def validate(url:str)->None:
+                p=urlparse(url)
+                if p.scheme!="https" and not (p.scheme=="http" and p.hostname in {"localhost","127.0.0.1","::1","host.docker.internal"}):
+                    raise ValueError("Provider URL must use HTTPS except local endpoints.")
+                if not p.hostname or p.username or p.password or p.query or p.fragment:
+                    raise ValueError("Provider URL is invalid.")
+            validate(base)
+            fallbacks=[]
+            for item in route.get("fallbacks",[]):
+                fb_name=str(item["name"]).strip()
+                fb_base=str(item["base_url"]).strip().rstrip("/")
+                fb_key=str(item["api_key"]).strip()
+                fb_model=str(item["model"]).strip()
+                if fb_name and fb_key and fb_model:
+                    validate(fb_base)
+                    fallbacks.append(ProviderConfig(fb_name,fb_base,fb_key,fb_model))
+            return cls(base,key,model,timeout,tokens,name,tuple(fallbacks),1,1.0)
+        except (KeyError,TypeError,ValueError) as exc:
+            raise AIConfigurationError("Workspace AI provider route is invalid.") from exc
 
+    @classmethod
+    def from_environment(cls)->"LLMSettings":
+        try:
+            timeout=float(os.getenv("CREATORFLOW_LLM_TIMEOUT_SECONDS","60"))
+            tokens=int(os.getenv("CREATORFLOW_LLM_MAX_OUTPUT_TOKENS","3000"))
+            retries=int(os.getenv("CREATORFLOW_LLM_RETRIES_PER_PROVIDER","1"))
+            backoff=float(os.getenv("CREATORFLOW_LLM_RETRY_BACKOFF_SECONDS","1"))
+        except ValueError as exc: raise AIConfigurationError("LLM timeout, token and retry settings must be numeric.") from exc
+        if timeout<=0 or not 256<=tokens<=16000 or not 0<=retries<=3 or not 0<=backoff<=10:
+            raise AIConfigurationError("Invalid LLM limits: timeout > 0, tokens 256..16000, retries 0..3, backoff 0..10.")
+        legacy_key=os.getenv("CREATORFLOW_LLM_API_KEY","").strip()
+        legacy_model=os.getenv("CREATORFLOW_LLM_MODEL","").strip()
+        legacy_url=os.getenv("CREATORFLOW_LLM_BASE_URL","").strip()
+        configs={
+          "gemini":(os.getenv("CREATORFLOW_LLM_GEMINI_BASE_URL","").strip() or legacy_url or "https://generativelanguage.googleapis.com/v1beta/openai",
+                    os.getenv("CREATORFLOW_LLM_GEMINI_API_KEY","").strip() or legacy_key,
+                    os.getenv("CREATORFLOW_LLM_GEMINI_MODEL","").strip() or legacy_model or "gemini-3.8-flash"),
+          "openai":(os.getenv("CREATORFLOW_LLM_OPENAI_BASE_URL","").strip() or "https://api.openai.com/v1",
+                    os.getenv("CREATORFLOW_LLM_OPENAI_API_KEY","").strip(),
+                    os.getenv("CREATORFLOW_LLM_OPENAI_MODEL","").strip() or "gpt-4.1-mini"),
+          "ollama":(os.getenv("CREATORFLOW_LLM_OLLAMA_BASE_URL","").strip() or "http://host.docker.internal:11434/v1",
+                    os.getenv("CREATORFLOW_LLM_OLLAMA_API_KEY","").strip() or "ollama",
+                    os.getenv("CREATORFLOW_LLM_OLLAMA_MODEL","").strip())}
+        primary=os.getenv("CREATORFLOW_LLM_PRIMARY_PROVIDER","ollama").strip().lower()
+        if primary not in configs: raise AIConfigurationError("Primary provider must be gemini, openai or ollama.")
+        names=[v.strip().lower() for v in os.getenv("CREATORFLOW_LLM_FALLBACK_PROVIDERS","").split(",") if v.strip()]
+        if any(v not in configs for v in names): raise AIConfigurationError("Fallback list contains an unsupported provider.")
+        def validate(name,base):
+            p=urlparse(base); local={"localhost","127.0.0.1","::1"}
+            if name=="ollama": local.add("host.docker.internal")
+            if p.scheme!="https" and not (p.scheme=="http" and p.hostname in local):
+                raise AIConfigurationError("Provider URLs must use HTTPS; HTTP is allowed only for local Ollama.")
+            if not p.hostname or p.username or p.password or p.query or p.fragment:
+                raise AIConfigurationError("Provider base URL is invalid.")
+        base,key,model=configs[primary]
+        if not key or not model: raise AIConfigurationError(f"Primary provider '{primary}' requires an API key and model.")
+        validate(primary,base)
+        fallbacks=[]
+        for name in names:
+            if name==primary: continue
+            b,k,m=configs[name]
+            if not k or not m: continue
+            validate(name,b); fallbacks.append(ProviderConfig(name,b.rstrip("/"),k,m))
+        return cls(base.rstrip("/"),key,model,timeout,tokens,primary,tuple(fallbacks),retries,backoff)
 
 class OpenAICompatibleLLM:
-    def __init__(self, settings: LLMSettings, transport: httpx.AsyncBaseTransport | None = None):
-        self._settings = settings
-        self._transport = transport
+    def __init__(self,settings:LLMSettings,transport:httpx.AsyncBaseTransport|None=None,
+                 transports:dict[str,httpx.AsyncBaseTransport]|None=None):
+        self._settings=settings; self._transport=transport; self._transports=transports or {}; self.last_trace:list[dict[str,str]]=[]
 
-    async def complete_json(self, *, system_prompt: str, user_payload: dict[str, Any]) -> dict[str, Any]:
-        body = {
-            "model": self._settings.model,
-            "temperature": 0.4,
-            "max_tokens": self._settings.max_output_tokens,
-            "response_format": {"type": "json_object"},
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
-            ],
-        }
+    async def _complete_one(self,name,base,key,model,transport,system_prompt,user_payload):
+        body={"model":model,"temperature":0.4,"max_tokens":self._settings.max_output_tokens,
+              "response_format":{"type":"json_object"},
+              "messages":[{"role":"system","content":system_prompt},
+                          {"role":"user","content":json.dumps(user_payload,ensure_ascii=False)}]}
         try:
-            async with httpx.AsyncClient(timeout=self._settings.timeout_seconds, transport=self._transport) as client:
-                response = await client.post(
-                    f"{self._settings.base_url}/chat/completions",
-                    headers={"Authorization": f"Bearer {self._settings.api_key}", "Content-Type": "application/json"},
-                    json=body,
-                )
+            timeout=httpx.Timeout(self._settings.timeout_seconds,connect=min(20,self._settings.timeout_seconds))
+            async with httpx.AsyncClient(timeout=timeout,transport=transport) as client:
+                response=await client.post(base.rstrip("/")+"/chat/completions",
+                    headers={"Authorization":f"Bearer {key}","Content-Type":"application/json"},json=body)
                 response.raise_for_status()
-                payload = response.json()
-                content = payload["choices"][0]["message"]["content"]
+                content=response.json()["choices"][0]["message"]["content"]
+                try: result=json.loads(content)
+                except json.JSONDecodeError as exc: raise AIInvalidOutputError("Model response is not valid JSON.") from exc
+                if not isinstance(result,dict): raise AIInvalidOutputError("Model response must be a JSON object.")
+                return result
+        except AIInvalidOutputError: raise
+        except httpx.HTTPStatusError as exc:
+            status=exc.response.status_code
+            raise AIProviderError(f"AI provider '{name}' returned HTTP {status}.",provider=name,retryable=status in _RETRYABLE) from exc
+        except (httpx.TimeoutException,httpx.NetworkError) as exc:
+            raise AIProviderError(f"AI provider '{name}' timed out or is unreachable.",provider=name,retryable=True) from exc
+        except (httpx.HTTPError,KeyError,IndexError,TypeError,ValueError) as exc:
+            raise AIProviderError(f"AI provider '{name}' failed or returned an invalid response.",provider=name) from exc
+
+    async def complete_json(self,*,system_prompt:str,user_payload:dict[str,Any])->dict[str,Any]:
+        routes=[(self._settings.provider,self._settings.base_url,self._settings.api_key,self._settings.model,
+                 self._transport or self._transports.get(self._settings.provider))]
+        routes += [(p.name,p.base_url,p.api_key,p.model,self._transports.get(p.name)) for p in self._settings.fallbacks]
+        failures:list[str]=[]
+        trace:list[dict[str,str]]=[]
+        last_error:Exception|None=None
+        for name,base,key,model,transport in routes:
+            provider_error:Exception|None=None
+            for attempt in range(self._settings.retries_per_provider+1):
                 try:
-                    parsed = json.loads(content)
-                except json.JSONDecodeError as exc:
-                    raise AIInvalidOutputError("The model response is not valid JSON.") from exc
-                if not isinstance(parsed, dict):
-                    raise AIInvalidOutputError("The model response must be a JSON object.")
-                return parsed
-        except AIInvalidOutputError:
-            raise
-        except (httpx.HTTPError, KeyError, IndexError, TypeError, ValueError, json.JSONDecodeError) as exc:
-            raise AIProviderError("The configured LLM provider failed or returned an invalid response.") from exc
+                    result=await self._complete_one(name,base,key,model,transport,system_prompt,user_payload)
+                    trace.append({"provider":name,"model":model,"status":"success"})
+                    self.last_trace=trace
+                    return result
+                except AIInvalidOutputError as exc:
+                    last_error=exc; provider_error=exc; trace.append({"provider":name,"model":model,"status":"invalid_output"}); break
+                except AIProviderError as exc:
+                    last_error=exc; provider_error=exc; trace.append({"provider":name,"model":model,"status":"failed","reason":str(exc)[:240]})
+                    if not exc.retryable or attempt>=self._settings.retries_per_provider: break
+                    await asyncio.sleep(min(self._settings.retry_backoff_seconds*(2**attempt),8))
+            if provider_error is not None:
+                failures.append(f"{name}: {provider_error}")
+        self.last_trace=trace
+        if last_error is None: raise AIConfigurationError("No AI provider is configured.")
+        if len(failures)==1:
+            raise last_error
+        # Preserve every provider's safe status summary; otherwise the final fallback
+        # error hides the primary provider failure and makes diagnosis misleading.
+        raise AIProviderError("All configured AI providers failed: "+"; ".join(failures),
+                              provider="multiple",retryable=False) from last_error

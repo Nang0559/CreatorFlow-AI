@@ -1,4 +1,6 @@
-# Repository audit — 2026-11-02
+# Historical repository audit — 2026-11-02
+
+> **Historical snapshot only.** This audit was performed on `feature/trend-selection-safety-intelligence` and must not be treated as the current status of `feature/keycloak-oidc-local`. Its After Effects render description, commit `c0ebd3b`, 96-test count and CI evidence are branch/commit-specific. Re-run all checks on the active branch before using any figures for release approval. The active branch's current renderer is FFmpeg-only; After Effects is a future adapter.
 
 **Branch:** `feature/trend-selection-safety-intelligence`  
 **Verdict:** Not Go-live ready. The current code supports a local pilot after the remaining build, SQL and HP Z240 acceptance checks pass. Do not treat a successful Web health check as product acceptance.
