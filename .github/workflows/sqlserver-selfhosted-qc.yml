@@ -43,7 +43,7 @@ jobs:
       # SQL login failures are reported here; the fail-closed database guard
       # below remains authoritative and is not bypassed.
       - name: Diagnose runner Windows and SQL identity
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         continue-on-error: true
         run: |
           $ErrorActionPreference = 'Stop'
@@ -67,5 +67,5 @@ jobs:
           }
 
       - name: Preflight, database guard, SQL smoke and tests
-        shell: powershell
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: ./tools/sql-qc/Invoke-SqlServerQc.ps1
