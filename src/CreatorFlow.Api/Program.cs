@@ -389,7 +389,7 @@ shareInbox.MapPost("/", async (CreateSharedLinkRequest request, CreatorFlowDbCon
             .SingleOrDefaultAsync(x => x.UrlHash == SharedLinkInboxItem.Create(request.SharedUrl, DateTimeOffset.UtcNow).UrlHash, ct);
         if (existing is not null)
             return Results.Ok(new SharedLinkInboxResponse(existing.Id, existing.Platform, existing.SharedUrl,
-                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId));
+                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId, existing.ResolverStatus, existing.ResolverError, existing.ResolvedAssetId, existing.ResolvedTitle));
         throw;
     }
 });
