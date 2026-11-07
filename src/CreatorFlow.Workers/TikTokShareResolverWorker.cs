@@ -42,6 +42,13 @@ internal sealed class TikTokShareResolverWorker(
         await using var c = new SqlConnection(connectionString); await c.OpenAsync(ct);
         await using var cmd = c.CreateCommand();
         cmd.CommandText = """
+          UPDATE dbo.SharedLinkInboxItems
+             SET ResolverStatus=CASE WHEN ResolverAttemptCount>=2 THEN N'Failed' ELSE N'Pending' END,
+                 ResolverError=CASE WHEN ResolverAttemptCount>=2 THEN N'Worker lease expired after the final attempt.' ELSE ResolverError END,
+                 ResolverUpdatedAt=SYSUTCDATETIME()
+           WHERE ResolverStatus=N'Resolving'
+             AND ResolverUpdatedAt < DATEADD(minute,-10,SYSUTCDATETIME());
+
           ;WITH q AS (
             SELECT TOP(1) * FROM dbo.SharedLinkInboxItems WITH(UPDLOCK,READPAST,ROWLOCK)
             WHERE Platform=N'TikTok' AND ResolverStatus=N'Pending' AND ResolverAttemptCount<2
@@ -57,6 +64,8 @@ internal sealed class TikTokShareResolverWorker(
     private async Task ResolveAsync(ShareItem item,CancellationToken ct)
     {
         string? temp=null;
+        string? finalPath=null;
+        var assetPersisted=false;
         try
         {
             var pageUri=await GetPublicPageAsync(new Uri(item.Url),ct);
@@ -68,7 +77,7 @@ internal sealed class TikTokShareResolverWorker(
             var tenantRoot=Path.Combine(root,"sources",item.TenantId.ToString("N"));
             Directory.CreateDirectory(tenantRoot);
             var assetId=Guid.NewGuid(); var fileName=assetId.ToString("N")+".mp4";
-            var finalPath=Path.Combine(tenantRoot,fileName); temp=finalPath+".part";
+            finalPath=Path.Combine(tenantRoot,fileName); temp=finalPath+".part";
             using var response=await SendSafeAsync(mediaUri,HttpCompletionOption.ResponseHeadersRead,ct);
             response.EnsureSuccessStatusCode();
             if(response.Content.Headers.ContentLength is > MaxBytes) throw new InvalidOperationException("Video vượt quá giới hạn 500 MB.");
@@ -83,15 +92,20 @@ internal sealed class TikTokShareResolverWorker(
             string hash; await using(var hashStream=File.OpenRead(temp)){hash=Convert.ToHexString(await SHA256.HashDataAsync(hashStream,ct));}
             File.Move(temp,finalPath,true); temp=null;
             await SaveAssetAndJobsAsync(item,assetId,title,finalPath,fileName,new FileInfo(finalPath).Length,hash,ct);
-            await SetStateAsync(item.Id,"NeedsReview",null,assetId,title,ct);
+            assetPersisted=true;
+            await SetStateAsync(item.TenantId,item.Id,"NeedsReview",null,assetId,title,ct);
             logger.LogInformation("Resolved public TikTok share {ShareId} into asset {AssetId}; jobs await rights review.",item.Id,assetId);
         }
         catch(Exception ex)
         {
             logger.LogWarning(ex,"Could not resolve public TikTok share {ShareId}",item.Id);
-            await SetStateAsync(item.Id,"Failed",ex.Message,null,null,ct);
+            await SetStateAsync(item.TenantId,item.Id,"Failed",ex.Message,null,null,ct);
         }
-        finally { if(temp is not null && File.Exists(temp)) try{File.Delete(temp);}catch{} }
+        finally
+        {
+            if(temp is not null && File.Exists(temp)) try{File.Delete(temp);}catch{}
+            if(!assetPersisted && finalPath is not null && File.Exists(finalPath)) try{File.Delete(finalPath);}catch{}
+        }
     }
 
     private async Task<Uri> GetPublicPageAsync(Uri uri,CancellationToken ct)
@@ -161,11 +175,11 @@ internal sealed class TikTokShareResolverWorker(
         await tx.CommitAsync(ct);
     }
 
-    private async Task SetStateAsync(Guid id,string status,string? error,Guid? asset,string? title,CancellationToken ct)
+    private async Task SetStateAsync(Guid tenantId,Guid id,string status,string? error,Guid? asset,string? title,CancellationToken ct)
     {
         await using var c=new SqlConnection(connectionString);await c.OpenAsync(ct);await using var cmd=c.CreateCommand();
-        cmd.CommandText="UPDATE dbo.SharedLinkInboxItems SET ResolverStatus=@status,ResolverError=@error,ResolvedAssetId=COALESCE(@asset,ResolvedAssetId),ResolvedTitle=COALESCE(@title,ResolvedTitle),ResolverUpdatedAt=SYSUTCDATETIME() WHERE Id=@id";
-        Add(cmd,"@status",status);Add(cmd,"@error",error is null?DBNull.Value:error.Length>950?error[..950]:error);Add(cmd,"@asset",asset is null?DBNull.Value:asset.Value);Add(cmd,"@title",title is null?DBNull.Value:title);Add(cmd,"@id",id);await cmd.ExecuteNonQueryAsync(ct);
+        cmd.CommandText="UPDATE dbo.SharedLinkInboxItems SET ResolverStatus=@status,ResolverError=@error,ResolvedAssetId=COALESCE(@asset,ResolvedAssetId),ResolvedTitle=COALESCE(@title,ResolvedTitle),ResolverUpdatedAt=SYSUTCDATETIME() WHERE Id=@id AND TenantId=@tenant";
+        Add(cmd,"@status",status);Add(cmd,"@error",error is null?DBNull.Value:error.Length>950?error[..950]:error);Add(cmd,"@asset",asset is null?DBNull.Value:asset.Value);Add(cmd,"@title",title is null?DBNull.Value:title);Add(cmd,"@id",id);Add(cmd,"@tenant",tenantId);await cmd.ExecuteNonQueryAsync(ct);
     }
     private static void Add(SqlCommand c,string name,object value){c.Parameters.AddWithValue(name,value);}
     private sealed record ShareItem(Guid Id,Guid TenantId,string Url);
