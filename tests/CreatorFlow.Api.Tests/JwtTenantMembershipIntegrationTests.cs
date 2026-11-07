@@ -131,6 +131,29 @@ public sealed class JwtTenantMembershipIntegrationTests
     }
 
     [Fact]
+    public async Task Editor_cannot_confirm_shared_video_rights()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        await factory.SeedAsync((db, _) =>
+        {
+            db.TenantMemberships.Add(TenantMembership.Create(
+                CreatorFlowApiFactory.LegacyTenantId,
+                CreatorFlowApiFactory.TestJwtIssuer,
+                Subject,
+                TenantRole.Editor,
+                DateTimeOffset.UtcNow));
+            return Task.CompletedTask;
+        });
+
+        using var client = CreateAuthenticatedClient(factory, Subject);
+        using var body = new StringContent("{}", System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PostAsync(
+            $"/api/v1/share-inbox/{Guid.NewGuid()}/confirm-rights", body);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Jwt_membership_scopes_topic_list_to_selected_workspace()
     {
         using var factory = new CreatorFlowApiFactory();
