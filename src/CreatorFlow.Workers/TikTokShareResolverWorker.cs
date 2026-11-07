@@ -1,5 +1,6 @@
 using System.Net;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Data.SqlClient;
 
@@ -126,10 +127,23 @@ internal sealed class TikTokShareResolverWorker(
 
     private async Task<string> GetTextAsync(Uri uri,CancellationToken ct)
     {
-        using var response=await SendSafeAsync(uri,HttpCompletionOption.ResponseContentRead,ct);
+        const int maxPageBytes=5_000_000;
+        using var response=await SendSafeAsync(uri,HttpCompletionOption.ResponseHeadersRead,ct);
         response.EnsureSuccessStatusCode();
-        if(response.Content.Headers.ContentLength is > 5_000_000) throw new InvalidOperationException("Trang nguồn vượt giới hạn đọc 5 MB.");
-        return await response.Content.ReadAsStringAsync(ct);
+        if(response.Content.Headers.ContentLength is > maxPageBytes) throw new InvalidOperationException("Trang nguồn vượt giới hạn đọc 5 MB.");
+        var contentType=response.Content.Headers.ContentType?.MediaType;
+        if(contentType is not null && contentType is not ("text/html" or "application/xhtml+xml" or "text/plain"))
+            throw new InvalidOperationException("Nguồn TikTok không trả về trang HTML công khai.");
+        await using var input=await response.Content.ReadAsStreamAsync(ct);
+        using var buffer=new MemoryStream();
+        var chunk=new byte[81920];long total=0;int read;
+        while((read=await input.ReadAsync(chunk,ct))>0)
+        {
+            total+=read;
+            if(total>maxPageBytes) throw new InvalidOperationException("Trang nguồn vượt giới hạn đọc 5 MB.");
+            await buffer.WriteAsync(chunk.AsMemory(0,read),ct);
+        }
+        return Encoding.UTF8.GetString(buffer.ToArray());
     }
 
     private async Task<HttpResponseMessage> SendSafeAsync(Uri uri,HttpCompletionOption option,CancellationToken ct)
@@ -142,7 +156,10 @@ internal sealed class TikTokShareResolverWorker(
     }
 
     private static bool AllowedPageHost(Uri u) => u.Scheme=="https" && (HostIs(u.Host,"tiktok.com")||HostIs(u.Host,"tiktokv.com"));
-    private static bool AllowedMediaHost(Uri u) => u.Scheme=="https" && (HostIs(u.Host,"tiktokcdn.com")||HostIs(u.Host,"tiktokv.com")||HostIs(u.Host,"byteoversea.com"));
+    private static bool AllowedMediaHost(Uri u) => u.Scheme=="https" &&
+        (HostIs(u.Host,"tiktokcdn.com")||HostIs(u.Host,"tiktokcdn-us.com")||
+         HostIs(u.Host,"tiktokcdn-eu.com")||HostIs(u.Host,"tiktokv.com")||
+         HostIs(u.Host,"byteoversea.com")||HostIs(u.Host,"ibytedtos.com")||HostIs(u.Host,"muscdn.com"));
     private static bool HostIs(string host,string suffix) => host.Equals(suffix,StringComparison.OrdinalIgnoreCase)||host.EndsWith("."+suffix,StringComparison.OrdinalIgnoreCase);
     private static string? ExtractMeta(string html,string key)
     {
