@@ -102,7 +102,8 @@ SELECT
           AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'RightsConfirmedAt') IS NOT NULL
          THEN 1 ELSE 0 END AS ResolverColumnsPresent,
     CASE WHEN EXISTS (SELECT 1 FROM sys.foreign_keys
-        WHERE name=N'FK_SharedLinkInbox_ResolvedAsset' AND is_disabled=0 AND is_not_trusted=0)
+        WHERE name=N'FK_SharedLinkInbox_Tenant_ResolvedAsset' AND is_disabled=0 AND is_not_trusted=0
+          AND (SELECT COUNT(*) FROM sys.foreign_key_columns fkc WHERE fkc.constraint_object_id=object_id(N'dbo.FK_SharedLinkInbox_Tenant_ResolvedAsset'))=2)
          THEN 1 ELSE 0 END AS ResolvedAssetForeignKeyTrusted,
     CASE WHEN EXISTS (SELECT 1 FROM sys.check_constraints
         WHERE name=N'CK_SharedLinkInbox_ResolverStatus' AND is_disabled=0 AND is_not_trusted=0)
