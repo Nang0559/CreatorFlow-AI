@@ -101,9 +101,27 @@ SELECT
           AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'ResolverUpdatedAt') IS NOT NULL
           AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'RightsConfirmedAt') IS NOT NULL
          THEN 1 ELSE 0 END AS ResolverColumnsPresent,
-    CASE WHEN EXISTS (SELECT 1 FROM sys.foreign_keys
-        WHERE name=N'FK_SharedLinkInbox_Tenant_ResolvedAsset' AND is_disabled=0 AND is_not_trusted=0
-          AND (SELECT COUNT(*) FROM sys.foreign_key_columns fkc WHERE fkc.constraint_object_id=object_id(N'dbo.FK_SharedLinkInbox_Tenant_ResolvedAsset'))=2)
+    CASE WHEN EXISTS
+    (
+        SELECT 1 FROM sys.foreign_keys fk
+        WHERE fk.name=N'FK_SharedLinkInbox_Tenant_ResolvedAsset'
+          AND fk.is_disabled=0 AND fk.is_not_trusted=0
+          AND (SELECT COUNT(*) FROM sys.foreign_key_columns fkc WHERE fkc.constraint_object_id=fk.object_id)=2
+          AND EXISTS
+          (
+              SELECT 1 FROM sys.foreign_key_columns fkc
+              INNER JOIN sys.columns child ON child.object_id=fkc.parent_object_id AND child.column_id=fkc.parent_column_id
+              INNER JOIN sys.columns parent ON parent.object_id=fkc.referenced_object_id AND parent.column_id=fkc.referenced_column_id
+              WHERE fkc.constraint_object_id=fk.object_id AND child.name=N'TenantId' AND parent.name=N'TenantId'
+          )
+          AND EXISTS
+          (
+              SELECT 1 FROM sys.foreign_key_columns fkc
+              INNER JOIN sys.columns child ON child.object_id=fkc.parent_object_id AND child.column_id=fkc.parent_column_id
+              INNER JOIN sys.columns parent ON parent.object_id=fkc.referenced_object_id AND parent.column_id=fkc.referenced_column_id
+              WHERE fkc.constraint_object_id=fk.object_id AND child.name=N'ResolvedAssetId' AND parent.name=N'Id'
+          )
+    )
          THEN 1 ELSE 0 END AS ResolvedAssetForeignKeyTrusted,
     CASE WHEN EXISTS (SELECT 1 FROM sys.check_constraints
         WHERE name=N'CK_SharedLinkInbox_ResolverStatus' AND is_disabled=0 AND is_not_trusted=0)
