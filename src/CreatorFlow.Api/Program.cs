@@ -409,9 +409,9 @@ shareInbox.MapPost("/{id:guid}/confirm-rights", async (Guid id, CreatorFlowDbCon
     if (assetValue is null || assetValue is DBNull) return Results.Conflict(new { error="Video chưa được phân giải hoặc đã xử lý." });
     var assetId=(Guid)assetValue;
     await using var update=connection.CreateCommand(); update.Transaction=tx;
-    update.CommandText="UPDATE dbo.VideoRenderJobs SET Status=N'Queued' WHERE TenantId=@tenant AND AssetId=@asset AND Status=N'AwaitingRightsReview'; SELECT @@ROWCOUNT;";
+    update.CommandText="UPDATE dbo.VideoRenderJobs SET Status=N'Queued' WHERE TenantId=@tenant AND SharedLinkInboxItemId=@share AND Status=N'AwaitingRightsReview'; SELECT @@ROWCOUNT;";
     var p3=update.CreateParameter();p3.ParameterName="@tenant";p3.Value=tenant.TenantId.Value;update.Parameters.Add(p3);
-    var p4=update.CreateParameter();p4.ParameterName="@asset";p4.Value=assetId;update.Parameters.Add(p4);
+    var p4=update.CreateParameter();p4.ParameterName="@share";p4.Value=id;update.Parameters.Add(p4);
     var count=Convert.ToInt32(await update.ExecuteScalarAsync(ct));
     if(count!=3) return Results.Conflict(new { error="Không tìm thấy đủ ba render jobs đang chờ xác nhận.", updated=count });
     await using var mark=connection.CreateCommand();mark.Transaction=tx;
