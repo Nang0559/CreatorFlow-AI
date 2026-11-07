@@ -18,6 +18,9 @@ BEGIN
         RightsConfirmedAt datetimeoffset(7) NULL;
 END;
 
+IF COL_LENGTH(N'dbo.VideoRenderJobs',N'SharedLinkInboxItemId') IS NULL
+    ALTER TABLE dbo.VideoRenderJobs ADD SharedLinkInboxItemId uniqueidentifier NULL;
+
 -- Use dynamic SQL for objects that reference columns added above. SQL Server compiles
 -- static DDL against the pre-ALTER table shape when all statements share one batch.
 IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name=N'FK_SharedLinkInbox_Tenant_ResolvedAsset')
@@ -28,6 +31,16 @@ IF NOT EXISTS (SELECT 1 FROM sys.check_constraints WHERE name=N'CK_SharedLinkInb
 
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.SharedLinkInboxItems') AND name=N'IX_SharedLinkInbox_ResolverQueue')
     EXEC sys.sp_executesql N'CREATE INDEX IX_SharedLinkInbox_ResolverQueue ON dbo.SharedLinkInboxItems(ResolverStatus,SharedAt) INCLUDE(TenantId,Platform,ResolverAttemptCount);';
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.SharedLinkInboxItems') AND name=N'UX_SharedLinkInboxItems_Tenant_Id')
+    EXEC sys.sp_executesql N'CREATE UNIQUE INDEX UX_SharedLinkInboxItems_Tenant_Id ON dbo.SharedLinkInboxItems(TenantId,Id);';
+
+IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name=N'FK_VideoRenderJobs_Tenant_ShareInbox')
+    EXEC sys.sp_executesql N'ALTER TABLE dbo.VideoRenderJobs WITH CHECK ADD CONSTRAINT FK_VideoRenderJobs_Tenant_ShareInbox FOREIGN KEY(TenantId,SharedLinkInboxItemId) REFERENCES dbo.SharedLinkInboxItems(TenantId,Id) ON DELETE NO ACTION;';
+
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id=OBJECT_ID(N'dbo.VideoRenderJobs') AND name=N'IX_VideoRenderJobs_ShareInbox')
+    EXEC sys.sp_executesql N'CREATE INDEX IX_VideoRenderJobs_ShareInbox ON dbo.VideoRenderJobs(TenantId,SharedLinkInboxItemId,Status);';
+
 
 IF EXISTS
 (
