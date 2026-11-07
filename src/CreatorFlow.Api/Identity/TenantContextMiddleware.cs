@@ -73,18 +73,43 @@ public sealed class TenantContextMiddleware(
         var subject = context.User.FindFirst("sub")?.Value;
         var selectedTenant = context.Request.Headers[TenantHeader].ToString();
 
-        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject) ||
-            !Guid.TryParse(selectedTenant, out var tenantIdFromHeader) || tenantIdFromHeader == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(subject))
         {
             await next(context);
             return;
         }
 
-        var membership = await db.TenantMemberships.AsNoTracking().SingleOrDefaultAsync(x =>
-            x.TenantId == tenantIdFromHeader &&
+        var memberships = db.TenantMemberships.AsNoTracking().Where(x =>
             x.IdentityIssuer == issuer &&
             x.SubjectId == subject &&
-            x.Status == TenantMembershipStatus.Active, context.RequestAborted);
+            x.Status == TenantMembershipStatus.Active);
+
+        TenantMembership? membership;
+        if (string.IsNullOrWhiteSpace(selectedTenant))
+        {
+            // A single active workspace is unambiguous and can be selected automatically.
+            // Multiple memberships still require an explicit workspace choice from the UI.
+            var available = await memberships.OrderBy(x => x.TenantId).Take(2)
+                .ToArrayAsync(context.RequestAborted);
+            if (available.Length != 1)
+            {
+                await next(context);
+                return;
+            }
+            membership = available[0];
+        }
+        else
+        {
+            // An explicitly supplied but malformed/unknown tenant must never fall back
+            // to another workspace.
+            if (!Guid.TryParse(selectedTenant, out var tenantIdFromHeader) || tenantIdFromHeader == Guid.Empty)
+            {
+                await next(context);
+                return;
+            }
+            membership = await memberships.SingleOrDefaultAsync(
+                x => x.TenantId == tenantIdFromHeader, context.RequestAborted);
+        }
 
         if (membership is null)
         {
