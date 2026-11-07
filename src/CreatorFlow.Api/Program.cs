@@ -420,7 +420,7 @@ shareInbox.MapPost("/{id:guid}/confirm-rights", async (Guid id, CreatorFlowDbCon
     var p6=mark.CreateParameter();p6.ParameterName="@tenant";p6.Value=tenant.TenantId.Value;mark.Parameters.Add(p6);
     await mark.ExecuteNonQueryAsync(ct); await tx.CommitAsync(ct);
     return Results.Ok(new { assetId, renderJobsQueued=count, status="Queued" });
-});
+}).RequireAuthorization("TenantOwnerOrAdmin");
 shareInbox.MapPost("/{id:guid}/review", async (Guid id, ReviewSharedLinkRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
