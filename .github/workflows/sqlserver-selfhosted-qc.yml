@@ -39,16 +39,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 9.0.x
-
       # Diagnostic only: this runs under the actual Windows service identity.
       # SQL login failures are reported here; the fail-closed database guard
       # below remains authoritative and is not bypassed.
       - name: Diagnose runner Windows and SQL identity
-        shell: pwsh
+        shell: powershell
         continue-on-error: true
         run: |
           $ErrorActionPreference = 'Stop'
@@ -72,5 +67,5 @@ jobs:
           }
 
       - name: Preflight, database guard, SQL smoke and tests
-        shell: pwsh
+        shell: powershell
         run: ./tools/sql-qc/Invoke-SqlServerQc.ps1
