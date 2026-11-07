@@ -141,7 +141,7 @@ internal sealed class TikTokShareResolverWorker(
 
     private async Task SaveAssetAndJobsAsync(ShareItem item,Guid assetId,string title,string path,string name,long size,string hash,CancellationToken ct)
     {
-        await using var c=new SqlConnection(connectionString);await c.OpenAsync(ct);await using var tx=await c.BeginTransactionAsync(ct);
+        await using var c=new SqlConnection(connectionString);await c.OpenAsync(ct);await using SqlTransaction tx=(SqlTransaction)await c.BeginTransactionAsync(ct);
         await using(var asset=c.CreateCommand())
         {
             asset.Transaction=tx;asset.CommandText="INSERT dbo.VideoAssets(Id,TenantId,OriginalFileName,StoredFileName,StoragePath,ContentType,FileSizeBytes,Sha256,RightsNote,CreatedAt) VALUES(@id,@tenant,@name,@stored,@path,N'video/mp4',@size,@hash,N'Nguồn TikTok công khai; quyền tái sử dụng CHƯA được xác minh.',SYSUTCDATETIME())";
