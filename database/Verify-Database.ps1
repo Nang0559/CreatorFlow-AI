@@ -13,7 +13,7 @@ if (@('.', '(local)', 'localhost', $env:COMPUTERNAME) -notcontains $hostName) { 
 Import-Module SqlServer -ErrorAction Stop
 
 $prefixes = @('001_', '002_', '003_', '004_', '005_', '006_', '007_', '008_', '009_', '010_', '014_', '015_')
-if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_', '021_', '022_', '023_', '024_', '025_', '026_', '027_', '028_', '029_') }
+if ($RequireTenantMigrations) { $prefixes += @('011_', '012_', '013_', '016_', '017_', '018_', '019_', '020_', '021_', '022_', '023_', '024_', '025_', '026_', '027_', '028_', '029_', '030_', '031_') }
 $schemaPath = Join-Path $PSScriptRoot 'schema'
 $files = @(Get-ChildItem -LiteralPath $schemaPath -File -Filter '*.sql' | Where-Object {
     $name = $_.Name
@@ -90,6 +90,34 @@ WHERE COL_LENGTH(N'dbo.' + t.TableName, N'TenantId') IS NULL
          AND i.name=N'IX_' + t.TableName + N'_TenantId');
 "@)
     if ($tenantCheck.Count -gt 0) { throw "Tenant isolation is incomplete (TenantId/FK/index missing or FK untrusted): $(($tenantCheck | ForEach-Object { $_.TableName }) -join ', ')" }
+
+    $resolverCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
+SELECT
+    CASE WHEN COL_LENGTH(N'dbo.SharedLinkInboxItems',N'ResolverStatus') IS NOT NULL
+          AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'ResolverError') IS NOT NULL
+          AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'ResolvedAssetId') IS NOT NULL
+          AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'ResolvedTitle') IS NOT NULL
+          AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'ResolverAttemptCount') IS NOT NULL
+          AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'ResolverUpdatedAt') IS NOT NULL
+          AND COL_LENGTH(N'dbo.SharedLinkInboxItems',N'RightsConfirmedAt') IS NOT NULL
+         THEN 1 ELSE 0 END AS ResolverColumnsPresent,
+    CASE WHEN EXISTS (SELECT 1 FROM sys.foreign_keys
+        WHERE name=N'FK_SharedLinkInbox_ResolvedAsset' AND is_disabled=0 AND is_not_trusted=0)
+         THEN 1 ELSE 0 END AS ResolvedAssetForeignKeyTrusted,
+    CASE WHEN EXISTS (SELECT 1 FROM sys.check_constraints
+        WHERE name=N'CK_SharedLinkInbox_ResolverStatus' AND is_disabled=0 AND is_not_trusted=0)
+         THEN 1 ELSE 0 END AS ResolverStatusConstraintTrusted,
+    CASE WHEN EXISTS (SELECT 1 FROM sys.check_constraints
+        WHERE name=N'CK_VideoRenderJobs_Status' AND is_disabled=0 AND is_not_trusted=0
+          AND definition LIKE N'%AwaitingRightsReview%')
+         THEN 1 ELSE 0 END AS RightsReviewJobStatusAllowed;
+"@)
+    if ($resolverCheck.Count -ne 1 -or $resolverCheck[0].ResolverColumnsPresent -ne 1 -or
+        $resolverCheck[0].ResolvedAssetForeignKeyTrusted -ne 1 -or
+        $resolverCheck[0].ResolverStatusConstraintTrusted -ne 1 -or
+        $resolverCheck[0].RightsReviewJobStatusAllowed -ne 1) {
+        throw 'Public TikTok resolver migration 031 is missing or its rights-gating constraints are not trusted.'
+    }
     $integrityCheck = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop -Query @"
 DECLARE @ExpectedForeignKeys TABLE
 (
