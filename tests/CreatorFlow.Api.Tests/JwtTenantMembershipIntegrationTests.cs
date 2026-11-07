@@ -36,6 +36,28 @@ public sealed class JwtTenantMembershipIntegrationTests
     }
 
     [Fact]
+    public async Task Single_active_workspace_is_selected_when_tenant_header_is_missing()
+    {
+        using var factory = new CreatorFlowApiFactory();
+        await factory.SeedAsync((db, _) =>
+        {
+            db.TenantMemberships.Add(TenantMembership.Create(
+                CreatorFlowApiFactory.LegacyTenantId,
+                CreatorFlowApiFactory.TestJwtIssuer,
+                Subject,
+                TenantRole.Editor,
+                DateTimeOffset.UtcNow));
+            return Task.CompletedTask;
+        });
+
+        using var client = CreateAuthenticatedClient(factory, Subject);
+        client.DefaultRequestHeaders.Remove(TenantContextHeader);
+        var response = await client.GetAsync("/api/v1/topics/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Jwt_membership_role_not_bootstrap_configuration_controls_authorization()
     {
         // The factory's API-key bootstrap role defaults to Owner. This request uses JWT,
