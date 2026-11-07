@@ -60,6 +60,14 @@ jobs:
               -Query "SELECT SUSER_SNAME() AS SqlLogin, ORIGINAL_LOGIN() AS OriginalLogin, IS_SRVROLEMEMBER(N'sysadmin') AS IsSysadmin;" `
               -ErrorAction Stop
             $identity | Format-List
+
+  $databasePermissions = Invoke-Sqlcmd `
+    -ServerInstance $env:CREATORFLOW_QC_SQL_INSTANCE `
+    -Database $env:CREATORFLOW_QC_DATABASE `
+    -TrustServerCertificate `
+    -Query "SELECT USER_NAME() AS DatabaseUser, IS_MEMBER(N'db_owner') AS IsDbOwner, IS_MEMBER(N'db_ddladmin') AS IsDbDdlAdmin, IS_MEMBER(N'db_datareader') AS IsDbDataReader, IS_MEMBER(N'db_datawriter') AS IsDbDataWriter, HAS_PERMS_BY_NAME(N'dbo',N'SCHEMA',N'ALTER') AS CanAlterDboSchema;" `
+    -ErrorAction Stop
+  $databasePermissions | Format-List
           }
           catch {
             Write-Warning ("Runner SQL identity probe failed: " + $_.Exception.Message)
