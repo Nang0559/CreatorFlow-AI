@@ -3,6 +3,10 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
+public class Program
+{
+public static async Task Main(string[] args)
+{
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls(builder.Configuration["ASPNETCORE_URLS"] ?? "http://127.0.0.1:8095");
 builder.Services.AddProblemDetails();
@@ -13,7 +17,8 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok", service = "CreatorFl
 app.MapGet("/api/resolve", ResolveAsync);
 app.MapGet("/download", DownloadAsync);
 
-app.Run();
+await app.RunAsync();
+}
 
 static readonly HttpClient PageClient = new(new HttpClientHandler { AllowAutoRedirect = false })
 {
@@ -146,7 +151,7 @@ static async Task<IResult> DownloadAsync(HttpContext context, string? mediaUrl, 
             }
             await context.Response.Body.WriteAsync(buffer.AsMemory(0, read), ct);
         }
-        return Results.Empty;
+        return Results.StatusCode(StatusCodes.Status200OK);
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
     catch
@@ -220,3 +225,5 @@ $("resolve").addEventListener("click",async()=>{
 });
 </script></main></body></html>
 """;
+
+}
