@@ -71,27 +71,18 @@ internal sealed class TikTokShareResolverWorker(
         {
             var pageUri=await GetPublicPageAsync(new Uri(item.Url),ct);
             var html=await GetTextAsync(pageUri,ct);
-            var media=ExtractMeta(html,"og:video:secure_url") ?? ExtractMeta(html,"og:video") ?? ExtractMeta(html,"twitter:player:stream");
-            if (!Uri.TryCreate(WebUtility.HtmlDecode(media),UriKind.Absolute,out var mediaUri) || !AllowedMediaHost(mediaUri))
-                throw new InvalidOperationException("Trang công khai không cung cấp URL media trực tiếp có host được cho phép.");
             var title=ExtractMeta(html,"og:title") ?? "Video TikTok được chia sẻ";
             var tenantRoot=Path.Combine(root,"sources",item.TenantId.ToString("N"));
             Directory.CreateDirectory(tenantRoot);
             var assetId=Guid.NewGuid(); var fileName=assetId.ToString("N")+".mp4";
-            finalPath=Path.Combine(tenantRoot,fileName); temp=finalPath+".part";
-            using var response=await SendSafeAsync(mediaUri,HttpCompletionOption.ResponseHeadersRead,ct);
-            response.EnsureSuccessStatusCode();
-            if(response.Content.Headers.ContentLength is > MaxBytes) throw new InvalidOperationException("Video vượt quá giới hạn 500 MB.");
-            await using(var input=await response.Content.ReadAsStreamAsync(ct))
-            await using(var output=new FileStream(temp,FileMode.CreateNew,FileAccess.Write,FileShare.None,81920,FileOptions.Asynchronous))
-            {
-                var buffer=new byte[81920]; long total=0; int read;
-                while((read=await input.ReadAsync(buffer,ct))>0){ total+=read;if(total>MaxBytes)throw new InvalidOperationException("Video vượt quá giới hạn 500 MB.");await output.WriteAsync(buffer.AsMemory(0,read),ct);}
-            }
-            var header=new byte[12];
-            await using(var f=File.OpenRead(temp)){if(await f.ReadAsync(header,ct)<12 || System.Text.Encoding.ASCII.GetString(header,4,4)!="ftyp")throw new InvalidOperationException("Nguồn trả về không phải tệp MP4 hợp lệ.");}
-            string hash; await using(var hashStream=File.OpenRead(temp)){hash=Convert.ToHexString(await SHA256.HashDataAsync(hashStream,ct));}
-            File.Move(temp,finalPath,true); temp=null;
+            finalPath=Path.Combine(tenantRoot,fileName);
+            temp=finalPath+".work";
+            Directory.CreateDirectory(temp);
+            var downloaded=await TikTokYtDlpDownloader.DownloadAsync(pageUri.ToString(),title,temp,config,ct);
+            title=downloaded.Title;
+            File.Move(downloaded.FilePath,finalPath,true);
+            Directory.Delete(temp,recursive:true); temp=null;
+            string hash; await using(var hashStream=File.OpenRead(finalPath)){hash=Convert.ToHexString(await SHA256.HashDataAsync(hashStream,ct));}
             var saved=await SaveAssetAndJobsAsync(item,assetId,title,finalPath,fileName,new FileInfo(finalPath).Length,hash,ct);
             assetId=saved.AssetId;
             assetPersisted=true;
@@ -109,7 +100,7 @@ internal sealed class TikTokShareResolverWorker(
         }
         finally
         {
-            if(temp is not null && File.Exists(temp)) try{File.Delete(temp);}catch{}
+            if(temp is not null && Directory.Exists(temp)) try{Directory.Delete(temp,recursive:true);}catch{}
             if(!assetPersisted && finalPath is not null && File.Exists(finalPath)) try{File.Delete(finalPath);}catch{}
         }
     }
