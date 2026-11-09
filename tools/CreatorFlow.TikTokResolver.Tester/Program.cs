@@ -30,7 +30,9 @@ public class Program
             status = "ok",
             service = "CreatorFlow.TikTokResolver.Tester",
             ytDlpConfigured = FindYtDlp() is not null,
-            ytDlpLauncher = FindYtDlp() is null ? "not-found" : Path.GetFileName(FindYtDlp())
+            ytDlpLauncher = FindYtDlp() is null ? "not-found" : Path.GetFileName(FindYtDlp()),
+            ffmpegConfigured = FindFfmpeg() is not null,
+            ffmpegPath = FindFfmpeg()
         }));
         app.MapGet("/api/resolve", ResolveAsync);
         app.MapGet("/download", DownloadAsync);
@@ -160,22 +162,45 @@ public class Program
             try
             {
                 var output = Path.Combine(tempDir, "video.%(ext)s");
-                var result = await RunYtDlpAsync(executable, new[]
+                var ffmpeg = FindFfmpeg();
+                var downloadArguments = new List<string>
                 {
                     "--no-warnings", "--no-progress", "--no-playlist", "--no-cookies", "--no-cache-dir",
                     "--socket-timeout", "20", "--retries", "1", "--extractor-retries", "1",
-                    "--max-filesize", "500M", "--format", "best[ext=mp4]/best",
-                    "--merge-output-format", "mp4", "--output", output, page!.ToString()
-                }, DownloadTimeout, ct);
+                    "--max-filesize", "500M",
+                    // Prefer an actual video stream plus audio; the previous best[ext=mp4]/best
+                    // selector could choose an audio-only MPEG response from TikTok.
+                    "--format", "bv*+ba/b",
+                    "--merge-output-format", "mp4",
+                    "--output", output
+                };
+                if (ffmpeg is not null)
+                {
+                    downloadArguments.Add("--ffmpeg-location");
+                    downloadArguments.Add(Path.GetDirectoryName(ffmpeg)!);
+                    downloadArguments.Add("--remux-video");
+                    downloadArguments.Add("mp4");
+                }
+                downloadArguments.Add(page!.ToString());
+                var result = await RunYtDlpAsync(executable, downloadArguments, DownloadTimeout, ct);
                 if (result.ExitCode != 0)
                     return Results.Problem("yt-dlp không tải được video công khai: " + Clip(result.StdErr, 700), statusCode: 502);
 
-                var file = Directory.GetFiles(tempDir).FirstOrDefault(f => new FileInfo(f).Length > 0);
-                if (file is null) return Results.Problem("yt-dlp không tạo được tệp video.", statusCode: 502);
+                var file = Directory.GetFiles(tempDir, "*.mp4", SearchOption.TopDirectoryOnly)
+                    .FirstOrDefault(f => new FileInfo(f).Length > 0);
+                if (file is null)
+                {
+                    var produced = Directory.GetFiles(tempDir).Select(Path.GetFileName).ToArray();
+                    var ffmpegHint = ffmpeg is null
+                        ? " Chưa tìm thấy FFmpeg; hãy cài FFmpeg hoặc đặt CREATORFLOW_FFMPEG_PATH."
+                        : "";
+                    return Results.Problem("yt-dlp không tạo được MP4 đã ghép/remux. Tệp đầu ra: " +
+                        string.Join(", ", produced) + "." + ffmpegHint, statusCode: 502);
+                }
                 var info = new FileInfo(file);
                 if (info.Length > MaxMediaBytes) return Results.BadRequest(new { error = "Video vượt giới hạn 500 MB." });
                 if (!await HasMp4SignatureAsync(file, ct))
-                    return Results.BadRequest(new { error = "Tệp tải về không có chữ ký MP4 hợp lệ; không cung cấp tệp giả dạng MP4." });
+                    return Results.BadRequest(new { error = "FFmpeg/yt-dlp tạo ra tệp không có chữ ký MP4 hợp lệ; từ chối trả tệp." });
 
                 context.Response.ContentType = "video/mp4";
                 context.Response.Headers.ContentDisposition = "attachment; filename=\"creatorflow-tiktok-video.mp4\"";
@@ -304,6 +329,31 @@ public class Program
             try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
             throw;
         }
+    }
+
+    private static string? FindFfmpeg()
+    {
+        var configured = Environment.GetEnvironmentVariable("CREATORFLOW_FFMPEG_PATH");
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            if (File.Exists(configured)) return configured;
+            var configuredExe = Path.Combine(configured, OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg");
+            if (File.Exists(configuredExe)) return configuredExe;
+        }
+
+        var executableName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
+        foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            var candidate = Path.Combine(directory.Trim().Trim('"'), executableName);
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            foreach (var candidate in new[] { @"C:\Tools\ffmpeg\bin\ffmpeg.exe", @"C:\ffmpeg\bin\ffmpeg.exe" })
+                if (File.Exists(candidate)) return candidate;
+        }
+        return null;
     }
 
     private static string? FindYtDlp()
