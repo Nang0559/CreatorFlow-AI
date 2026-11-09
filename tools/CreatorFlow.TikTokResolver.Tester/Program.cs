@@ -163,23 +163,47 @@ public class Program
             {
                 var output = Path.Combine(tempDir, "video.%(ext)s");
                 var ffmpeg = FindFfmpeg();
+                var infoResult = await RunYtDlpAsync(executable, new[]
+                {
+                    "--dump-single-json", "--no-warnings", "--no-playlist", "--no-download",
+                    "--no-cookies", "--no-cache-dir", "--socket-timeout", "20",
+                    "--retries", "1", "--extractor-retries", "1", page!.ToString()
+                }, ResolveTimeout, ct);
+                if (infoResult.ExitCode != 0)
+                    return Results.Problem("Không đọc được danh sách định dạng từ yt-dlp: " + Clip(infoResult.StdErr, 900), statusCode: 502);
+
+                using var infoDocument = JsonDocument.Parse(infoResult.StdOut);
+                var infoRoot = infoDocument.RootElement;
+                if (YtDlpFormatPlanner.IsImagePlaylist(infoRoot))
+                    return Results.UnprocessableEntity(new { error = "Đây là bài đăng ảnh/slideshow, không có luồng video MP4 để tải." });
+
+                var formats = YtDlpFormatPlanner.ParseFormats(infoRoot);
+                var plan = YtDlpFormatPlanner.Plan(formats, ffmpeg is not null);
+                if (!plan.Success)
+                {
+                    var status = plan.ErrorCode == YtDlpFormatPlanner.FfmpegRequired ? 503 : 422;
+                    return Results.Problem(plan.Error ?? "Không tìm thấy luồng video phù hợp.", statusCode: status,
+                        extensions: new Dictionary<string, object?> { ["errorCode"] = plan.ErrorCode, ["formats"] = plan.Formats });
+                }
+                if (plan.NeedsFfmpeg && ffmpeg is null)
+                    return Results.Problem("Định dạng video này cần FFmpeg để ghép hoặc chuyển container MP4.", statusCode: 503);
+
                 var downloadArguments = new List<string>
                 {
                     "--no-warnings", "--no-progress", "--no-playlist", "--no-cookies", "--no-cache-dir",
                     "--socket-timeout", "20", "--retries", "1", "--extractor-retries", "1",
-                    "--max-filesize", "500M",
-                    // Prefer an actual video stream plus audio; the previous best[ext=mp4]/best
-                    // selector could choose an audio-only MPEG response from TikTok.
-                    "--format", "bv*+ba/b",
-                    "--merge-output-format", "mp4",
-                    "--output", output
+                    "--max-filesize", "500M", "--format", plan.FormatSelector!,
+                    "--merge-output-format", "mp4", "--output", output
                 };
                 if (ffmpeg is not null)
                 {
                     downloadArguments.Add("--ffmpeg-location");
                     downloadArguments.Add(Path.GetDirectoryName(ffmpeg)!);
-                    downloadArguments.Add("--remux-video");
-                    downloadArguments.Add("mp4");
+                    if (plan.NeedsFfmpeg)
+                    {
+                        downloadArguments.Add("--remux-video");
+                        downloadArguments.Add("mp4");
+                    }
                 }
                 downloadArguments.Add(page!.ToString());
                 var result = await RunYtDlpAsync(executable, downloadArguments, DownloadTimeout, ct);
@@ -201,6 +225,17 @@ public class Program
                 if (info.Length > MaxMediaBytes) return Results.BadRequest(new { error = "Video vượt giới hạn 500 MB." });
                 if (!await HasMp4SignatureAsync(file, ct))
                     return Results.BadRequest(new { error = "FFmpeg/yt-dlp tạo ra tệp không có chữ ký MP4 hợp lệ; từ chối trả tệp." });
+                var ffprobe = FindFfprobe(ffmpeg);
+                if (ffprobe is not null)
+                {
+                    var probe = await RunFfprobeAsync(ffprobe, file, ct);
+                    if (!probe.Success)
+                        return Results.BadRequest(new { error = "Tệp MP4 không có video stream hợp lệ; từ chối trả tệp.", ffprobe = Clip(probe.Error, 700) });
+                }
+                else
+                {
+                    return Results.Problem("Không tìm thấy ffprobe.exe để xác minh video stream. Hãy cài bộ FFmpeg đầy đủ (gồm ffprobe) hoặc đặt CREATORFLOW_FFMPEG_PATH.", statusCode: 503);
+                }
 
                 context.Response.ContentType = "video/mp4";
                 context.Response.Headers.ContentDisposition = "attachment; filename=\"creatorflow-tiktok-video.mp4\"";
@@ -269,22 +304,24 @@ public class Program
             {
                 "--dump-single-json", "--no-warnings", "--no-playlist", "--no-download",
                 "--no-cookies", "--no-cache-dir", "--socket-timeout", "15",
-                "--retries", "1", "--extractor-retries", "1",
-                "--format", "best[ext=mp4]/best", page.ToString()
+                "--retries", "1", "--extractor-retries", "1", page.ToString()
             }, ResolveTimeout, ct);
             if (result.ExitCode != 0)
                 return (false, null, null, null, null, Clip(result.StdErr, 900));
             using var doc = JsonDocument.Parse(result.StdOut);
             var root = doc.RootElement;
-            var media = ReadString(root, "url");
-            if (!IsAllowedMediaUrl(media))
-            {
-                if (root.TryGetProperty("requested_formats", out var requested) && requested.ValueKind == JsonValueKind.Array)
-                    media = requested.EnumerateArray().Select(x => ReadString(x, "url")).FirstOrDefault(IsAllowedMediaUrl);
-            }
+            if (YtDlpFormatPlanner.IsImagePlaylist(root))
+                return (false, null, ReadString(root, "title"), ReadString(root, "description"), ReadString(root, "thumbnail"),
+                    "Bài đăng TikTok dạng ảnh/slideshow, không có luồng video.");
+            var formats = YtDlpFormatPlanner.ParseFormats(root);
+            var plan = YtDlpFormatPlanner.Plan(formats, FindFfmpeg() is not null);
+            if (!plan.Success)
+                return (false, null, ReadString(root, "title"), ReadString(root, "description"), ReadString(root, "thumbnail"),
+                    plan.Error ?? "Không tìm thấy luồng video.");
+            var media = plan.PreviewUrl;
             if (!IsAllowedMediaUrl(media))
                 return (false, null, ReadString(root, "title"), ReadString(root, "description"), ReadString(root, "thumbnail"),
-                    "Extractor không trả URL media thuộc CDN allowlist.");
+                    "Đã xác định được format " + plan.ChosenFormatId + " nhưng không có URL preview trực tiếp an toàn; hãy dùng nút tải qua yt-dlp.");
             return (true, media, ReadString(root, "title"), ReadString(root, "description"), ReadString(root, "thumbnail"), null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -354,6 +391,46 @@ public class Program
                 if (File.Exists(candidate)) return candidate;
         }
         return null;
+    }
+
+    private static string? FindFfprobe(string? ffmpeg)
+    {
+        if (string.IsNullOrWhiteSpace(ffmpeg)) return null;
+        var directory = Path.GetDirectoryName(ffmpeg);
+        if (string.IsNullOrWhiteSpace(directory)) return null;
+        var candidate = Path.Combine(directory, OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");
+        return File.Exists(candidate) ? candidate : null;
+    }
+
+    private static async Task<(bool Success, string? Error)> RunFfprobeAsync(string executable, string file, CancellationToken ct)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = executable, UseShellExecute = false, RedirectStandardOutput = true,
+            RedirectStandardError = true, CreateNoWindow = true
+        };
+        foreach (var arg in new[] { "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_type",
+                     "-of", "default=noprint_wrappers=1:nokey=1", file })
+            start.ArgumentList.Add(arg);
+        using var process = new Process { StartInfo = start };
+        if (!process.Start()) return (false, "Không khởi chạy được ffprobe.");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+            var output = await stdout;
+            var error = await stderr;
+            return (process.ExitCode == 0 && output.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Any(x => x.Equals("video", StringComparison.OrdinalIgnoreCase)), error);
+        }
+        catch
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            throw;
+        }
     }
 
     private static string? FindYtDlp()
