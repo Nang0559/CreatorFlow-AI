@@ -69,6 +69,16 @@ builder.Services.AddRateLimiter(options =>
         })
         : PartitionedRateLimiter.Create<HttpContext, string>(_ =>
             RateLimitPartition.GetNoLimiter("rate-limiting-disabled"));
+    options.AddPolicy("public-tiktok-resolver", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            "public-tiktok:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
 });
 
 // Tenant/subject limiter runs after membership resolution and retains separate API/video buckets.
@@ -763,18 +773,7 @@ This is an editable handoff/starter package, not a finished MP4 and not a CapCut
         "comp.openInViewer();",
         "var folder = Folder.selectDialog('Choose where to save your CreatorFlow After Effects starter');",
         "if (folder) app.project.save(File(folder.fsName + '/CreatorFlow_AE_Starter.aep'));",
-        "app.endUndoGroup();"
-    options.AddPolicy("public-tiktok-resolver", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            "public-tiktok:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 20,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                AutoReplenishment = true
-            }));
-    });
+        "app.endUndoGroup();"    });
 
     using var memory = new MemoryStream();
     using (var archive = new ZipArchive(memory, ZipArchiveMode.Create, true))
