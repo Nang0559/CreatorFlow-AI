@@ -10,11 +10,12 @@ public class Program
     private const long MaxMediaBytes = 500L * 1024 * 1024;
     private static readonly TimeSpan ResolveTimeout = TimeSpan.FromSeconds(45);
     private static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(5);
-    private static readonly HttpClient PageClient = new(new HttpClientHandler { AllowAutoRedirect = false })
+    private static readonly CookieContainer Cookies = new();
+    private static readonly HttpClient PageClient = new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = true, CookieContainer = Cookies })
     {
         Timeout = TimeSpan.FromSeconds(25)
     };
-    private static readonly HttpClient MediaClient = new(new HttpClientHandler { AllowAutoRedirect = false })
+    private static readonly HttpClient MediaClient = new(new HttpClientHandler { AllowAutoRedirect = false, UseCookies = true, CookieContainer = Cookies })
     {
         Timeout = TimeSpan.FromMinutes(3)
     };
@@ -94,6 +95,7 @@ public class Program
                         diagnostics["htmlBytes"] = Encoding.UTF8.GetByteCount(html);
                         diagnostics["hasUniversalData"] = html.Contains("__UNIVERSAL_DATA_FOR_REHYDRATION__", StringComparison.Ordinal);
                         diagnostics["hasSigiState"] = html.Contains("SIGI_STATE", StringComparison.Ordinal);
+                        diagnostics["embeddedStructure"] = DescribeEmbedded(html);
                         var embedded = ExtractEmbeddedVideoData(html);
                         title = embedded.Title ?? ExtractMeta(html, "og:title");
                         description = embedded.Description ?? ExtractMeta(html, "og:description");
@@ -570,6 +572,8 @@ public class Program
                                 name.Equals("originCover", StringComparison.OrdinalIgnoreCase) || name.Equals("dynamicCover", StringComparison.OrdinalIgnoreCase))) cover = value;
                         }
                     }
+                    if (media is null && property.Value.ValueKind == JsonValueKind.Object && IsAddrName(name) &&
+                        FirstAllowedUrl(property.Value) is { } listed) media = listed;
                     if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array) Visit(property.Value, depth + 1);
                 }
             else if (element.ValueKind == JsonValueKind.Array)
@@ -577,6 +581,69 @@ public class Program
         }
         Visit(root, 0);
         return (media, title, description, cover);
+    }
+
+    private static bool IsAddrName(string name) => name.Equals("playAddr", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("downloadAddr", StringComparison.OrdinalIgnoreCase);
+
+    private static string? FirstAllowedUrl(JsonElement addr)
+    {
+        foreach (var key in new[] { "UrlList", "urlList" })
+            if (addr.TryGetProperty(key, out var list) && list.ValueKind == JsonValueKind.Array)
+                foreach (var item in list.EnumerateArray())
+                    if (item.ValueKind == JsonValueKind.String && item.GetString() is { Length: > 0 } value && IsAllowedMediaUrl(value))
+                        return value;
+        return null;
+    }
+
+    private static Dictionary<string, object?> DescribeEmbedded(string html)
+    {
+        var info = new Dictionary<string, object?>();
+        var match = Regex.Match(html, @"<script\b(?=[^>]*\bid\s*=\s*['""]__UNIVERSAL_DATA_FOR_REHYDRATION__['""])[^>]*>(.*?)</script>",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        if (!match.Success) { info["scriptFound"] = false; return info; }
+        try
+        {
+            using var document = JsonDocument.Parse(match.Groups[1].Value);
+            if (!document.RootElement.TryGetProperty("__DEFAULT_SCOPE__", out var scope) || scope.ValueKind != JsonValueKind.Object)
+            { info["defaultScope"] = false; return info; }
+            info["scopeKeys"] = scope.EnumerateObject().Select(x => x.Name).Take(20).ToArray();
+            if (!scope.TryGetProperty("webapp.video-detail", out var detail) || detail.ValueKind != JsonValueKind.Object)
+            { info["videoDetail"] = false; return info; }
+            info["videoDetailKeys"] = detail.EnumerateObject().Select(x => x.Name).ToArray();
+            if (detail.TryGetProperty("statusCode", out var code)) info["statusCode"] = code.ToString();
+            if (detail.TryGetProperty("statusMsg", out var msg)) info["statusMsg"] = Clip(msg.ToString(), 200);
+            if (!detail.TryGetProperty("itemInfo", out var itemInfo) || itemInfo.ValueKind != JsonValueKind.Object ||
+                !itemInfo.TryGetProperty("itemStruct", out var item) || item.ValueKind != JsonValueKind.Object)
+            { info["itemStruct"] = false; return info; }
+            info["itemKeys"] = item.EnumerateObject().Select(x => x.Name).ToArray();
+            info["hasImagePost"] = item.TryGetProperty("imagePost", out var imagePost);
+            if (imagePost.ValueKind == JsonValueKind.Object && imagePost.TryGetProperty("images", out var images) && images.ValueKind == JsonValueKind.Array)
+                info["imageCount"] = images.GetArrayLength();
+            if (item.TryGetProperty("video", out var video) && video.ValueKind == JsonValueKind.Object)
+            {
+                info["videoKeys"] = video.EnumerateObject().Select(x => x.Name).ToArray();
+                foreach (var key in new[] { "playAddr", "downloadAddr" })
+                    if (video.TryGetProperty(key, out var addr))
+                        info[key + "Length"] = addr.ValueKind == JsonValueKind.String ? addr.GetString()?.Length ?? 0 : addr.ValueKind.ToString();
+                if (video.TryGetProperty("duration", out var duration)) info["duration"] = duration.ToString();
+                if (video.TryGetProperty("bitrateInfo", out var bitrate) && bitrate.ValueKind == JsonValueKind.Array)
+                {
+                    info["bitrateInfoCount"] = bitrate.GetArrayLength();
+                    var hosts = new List<string>();
+                    foreach (var entry in bitrate.EnumerateArray())
+                        if (entry.ValueKind == JsonValueKind.Object && entry.TryGetProperty("PlayAddr", out var playAddr) &&
+                            playAddr.ValueKind == JsonValueKind.Object && playAddr.TryGetProperty("UrlList", out var urls) &&
+                            urls.ValueKind == JsonValueKind.Array)
+                            foreach (var url in urls.EnumerateArray())
+                                if (url.ValueKind == JsonValueKind.String && Uri.TryCreate(url.GetString(), UriKind.Absolute, out var u))
+                                    hosts.Add(u.Host);
+                    info["bitrateUrlHosts"] = hosts.Distinct().Take(10).ToArray();
+                }
+            }
+        }
+        catch (JsonException ex) { info["jsonError"] = Clip(ex.Message, 200); }
+        return info;
     }
 
     private static string? ExtractMeta(string html, string key)
