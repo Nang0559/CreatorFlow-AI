@@ -423,7 +423,7 @@ public class Program
             await process.WaitForExitAsync(timeout.Token);
             var output = await stdout;
             var error = await stderr;
-            return (process.ExitCode == 0 && output.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries)
+            return (process.ExitCode == 0 && output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
                 .Any(x => x.Equals("video", StringComparison.OrdinalIgnoreCase)), error);
         }
         catch
