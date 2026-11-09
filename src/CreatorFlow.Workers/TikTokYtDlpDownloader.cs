@@ -94,6 +94,7 @@ internal static class TikTokYtDlpDownloader
             "--max-filesize", "500M", "--format", selector, "--merge-output-format", "mp4",
             "--output", outputTemplate]);
         if (ffmpeg is not null) { downloadArgs.Add("--ffmpeg-location"); downloadArgs.Add(Path.GetDirectoryName(ffmpeg)!); }
+        if (needsFfmpeg) { downloadArgs.Add("--remux-video"); downloadArgs.Add("mp4"); }
         downloadArgs.Add(pageUrl);
 
         var downloaded = await RunAsync(yt, downloadArgs, TimeSpan.FromMinutes(5), ct);
