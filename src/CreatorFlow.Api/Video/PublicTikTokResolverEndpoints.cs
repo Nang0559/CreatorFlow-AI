@@ -90,16 +90,12 @@ public static class PublicTikTokResolverEndpoints
 
     private static string? ExtractMeta(string html, string key)
     {
-        var escaped = Regex.Escape(key);
-        var patterns = new[]
+        foreach (Match tag in Regex.Matches(html, @"<meta\\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline))
         {
-            $"<meta\\\\b(?=[^>]*(?:property|name)=['\\\"]{escaped}['\\\"])[^>]*content=['\\\"]([^'\\\"]+)['\\\"][^>]*>",
-            $"<meta\\\\b(?=[^>]*content=['\\\"]([^'\\\"]+)['\\\"])[^>]*(?:property|name)=['\\\"]{escaped}['\\\"][^>]*>"
-        };
-        foreach (var pattern in patterns)
-        {
-            var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-            if (match.Success) return match.Groups[1].Value;
+            var name = Regex.Match(tag.Value, @"(?:property|name)\\s*=\\s*['""]([^'""]+)['""]", RegexOptions.IgnoreCase);
+            if (!name.Success || !name.Groups[1].Value.Equals(key, StringComparison.OrdinalIgnoreCase)) continue;
+            var content = Regex.Match(tag.Value, @"content\\s*=\\s*['""]([^'""]+)['""]", RegexOptions.IgnoreCase);
+            if (content.Success) return content.Groups[1].Value;
         }
         return null;
     }
