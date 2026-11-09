@@ -764,6 +764,16 @@ This is an editable handoff/starter package, not a finished MP4 and not a CapCut
         "var folder = Folder.selectDialog('Choose where to save your CreatorFlow After Effects starter');",
         "if (folder) app.project.save(File(folder.fsName + '/CreatorFlow_AE_Starter.aep'));",
         "app.endUndoGroup();"
+    options.AddPolicy("public-tiktok-resolver", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            "public-tiktok:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
     });
 
     using var memory = new MemoryStream();
@@ -1219,13 +1229,3 @@ public sealed record CreateTrendCandidateOutcomeObservationRequest(string Outcom
 public sealed record TrendCandidateOutcomeObservationResponse(Guid Id, Guid FeedbackId, string OutcomeKind,
     string? OutcomeValue, string MetricsSnapshotJson, string Source, DateTimeOffset ObservedAt);
 public sealed record TrendSelectionFeedbackResponse(Guid Id, Guid DouyinVideoCandidateId, string Decision, string ReasonCode, string? ReasonNote, string CandidateSnapshotJson, string FeatureSnapshotJson, DateTimeOffset ReviewedAt);
-    options.AddPolicy("public-tiktok-resolver", context =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            "public-tiktok:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
-            _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 20,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                AutoReplenishment = true
-            }));
