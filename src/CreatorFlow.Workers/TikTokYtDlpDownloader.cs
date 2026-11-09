@@ -83,7 +83,7 @@ internal static class TikTokYtDlpDownloader
             needsFfmpeg = true;
         }
 
-        var ffmpeg = FindTool(config["VideoRendering:FfmpegPath"], "ffmpeg.exe", "ffmpeg");
+        var ffmpeg = FindTool(config["VideoRendering:FFmpegExe"], "ffmpeg.exe", "ffmpeg");
         if (needsFfmpeg && ffmpeg is null)
             throw new InvalidOperationException("Định dạng TikTok cần FFmpeg để ghép/remux. Cấu hình VideoRendering:FfmpegPath.");
         var outputTemplate = Path.Combine(workDirectory, "source.%(ext)s");
@@ -112,7 +112,7 @@ internal static class TikTokYtDlpDownloader
             if (await stream.ReadAsync(header, ct) < 12 || System.Text.Encoding.ASCII.GetString(header, 4, 4) != "ftyp")
                 throw new InvalidOperationException("Tệp tải về không có chữ ký MP4 hợp lệ.");
 
-        var ffprobe = FindTool(config["VideoRendering:FfprobePath"], "ffprobe.exe", "ffprobe");
+        var ffprobe = FindTool(config["VideoRendering:FFprobeExe"], "ffprobe.exe", "ffprobe");
         if (ffprobe is null && ffmpeg is not null)
         {
             var sibling = Path.Combine(Path.GetDirectoryName(ffmpeg)!, OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe");
