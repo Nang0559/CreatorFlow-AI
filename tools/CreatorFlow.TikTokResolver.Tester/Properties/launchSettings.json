@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "CreatorFlow.TikTokResolver.Tester": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:59425;http://localhost:59426"
+    }
+  }
+}

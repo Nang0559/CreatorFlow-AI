@@ -25,15 +25,32 @@ public class Program
         builder.WebHost.UseUrls(builder.Configuration["ASPNETCORE_URLS"] ?? "http://127.0.0.1:8095");
         var app = builder.Build();
         app.MapGet("/", () => Results.Content(Page, "text/html; charset=utf-8"));
-        app.MapGet("/health", () => Results.Ok(new
+        app.MapGet("/health", async (CancellationToken ct) =>
         {
-            status = "ok",
-            service = "CreatorFlow.TikTokResolver.Tester",
-            ytDlpConfigured = FindYtDlp() is not null,
-            ytDlpLauncher = FindYtDlp() is null ? "not-found" : Path.GetFileName(FindYtDlp()),
-            ffmpegConfigured = FindFfmpeg() is not null,
-            ffmpegPath = FindFfmpeg()
-        }));
+            var ytDlp = FindYtDlp();
+            var ffmpeg = FindFfmpeg();
+            string? ytDlpVersion = null;
+            if (ytDlp is not null)
+            {
+                try
+                {
+                    var versionResult = await RunYtDlpAsync(ytDlp, new[] { "--version" }, TimeSpan.FromSeconds(10), ct);
+                    if (versionResult.ExitCode == 0) ytDlpVersion = versionResult.StdOut.Trim();
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException) { }
+            }
+            return Results.Ok(new
+            {
+                status = "ok",
+                service = "CreatorFlow.TikTokResolver.Tester",
+                ytDlpConfigured = ytDlp is not null,
+                ytDlpLauncher = ytDlp is null ? "not-found" : Path.GetFileName(ytDlp),
+                ytDlpVersion,
+                ytDlpUpdateHint = "py -m pip install --upgrade yt-dlp (TikTok đổi thường xuyên; bản cũ là nguyên nhân lỗi phổ biến nhất)",
+                ffmpegConfigured = ffmpeg is not null,
+                ffmpegPath = ffmpeg
+            });
+        });
         app.MapGet("/api/resolve", ResolveAsync);
         app.MapGet("/download", DownloadAsync);
         await app.RunAsync();
@@ -635,7 +652,7 @@ button:disabled{opacity:.5}.muted{color:#cbd5e1}.error{color:#fca5a5}.ok{color:#
 <p class="muted">Bộ thử nghiệm độc lập: metadata công khai + yt-dlp extractor. Không đăng nhập, giải CAPTCHA, vượt DRM hoặc cơ chế kiểm soát truy cập.</p>
 <section class="panel"><label for="url">Dán link TikTok</label><input id="url" value="https://vt.tiktok.com/ZSpDTFGSf/" placeholder="https://www.tiktok.com/...">
 <button id="resolve">Phân giải video</button><p id="status" class="muted">Sẵn sàng kiểm tra.</p></section>
-<section id="result" class="panel" hidden><h2 id="title"></h2><img id="thumb" hidden alt="Thumbnail"><p id="desc" class="muted"></p><a id="download" class="download" hidden>Tải MP4 về máy tính</a><details open><summary>Thông tin kỹ thuật / chẩn đoán</summary><pre id="debug"></pre></details></section>
+<section id="result" class="panel" hidden><h2 id="title"></h2><img id="thumb" hidden alt="Thumbnail"><p id="desc" class="muted"></p><a id="download" class="download" hidden>Tải MP4 về máy tính</a> <a id="direct" class="download" hidden>Tải trực tiếp từ CDN (dự phòng)</a><details open><summary>Thông tin kỹ thuật / chẩn đoán</summary><pre id="debug"></pre></details></section>
 <script>
 const $=id=>document.getElementById(id);
 $("resolve").addEventListener("click",async()=>{
@@ -643,10 +660,11 @@ $("resolve").addEventListener("click",async()=>{
  try{
   const r=await fetch("/api/resolve?url="+encodeURIComponent(url));const d=await r.json();
   $("debug").textContent=JSON.stringify(d,null,2);$("result").hidden=false;
-  if(!r.ok||!d.success){$("title").textContent="Chưa phân giải được video";$("desc").textContent="Xem phần chẩn đoán bên dưới để biết tầng nào thất bại.";$("thumb").hidden=true;$("download").hidden=true;$("status").textContent=d.error||d.detail||"Không phân giải được video.";$("status").className="error";return;}
+  if(!r.ok||!d.success){$("title").textContent="Chưa phân giải được video";$("desc").textContent="Xem phần chẩn đoán bên dưới để biết tầng nào thất bại.";$("thumb").hidden=true;$("download").hidden=true;$("direct").hidden=true;$("status").textContent=d.error||d.detail||"Không phân giải được video.";$("status").className="error";return;}
   $("title").textContent=d.title||"TikTok video";$("desc").textContent=d.description||"";
   if(d.thumbnailUrl){$("thumb").src=d.thumbnailUrl;$("thumb").hidden=false}else $("thumb").hidden=true;
   $("download").href=d.downloadUrl;$("download").hidden=false;
+  if(d.directDownloadUrl){$("direct").href=d.directDownloadUrl;$("direct").hidden=false}else $("direct").hidden=true;
   $("status").textContent="Đã tìm thấy media URL. Nút tải sẽ dùng yt-dlp để tải và kiểm tra MP4."; $("status").className="ok";
  }catch(e){$("result").hidden=false;$("title").textContent="Lỗi kết nối";$("debug").textContent=String(e);$("status").textContent=e.message;$("status").className="error"}
  finally{$("resolve").disabled=false}
