@@ -61,27 +61,37 @@ static async Task<IResult> ResolveAsync(string? url, CancellationToken ct)
         }
 
         var html = Encoding.UTF8.GetString(memory.ToArray());
-        var media = ExtractMeta(html, "og:video:secure_url")
+        var embedded = ExtractEmbeddedVideoData(html);
+        var media = embedded.MediaUrl
+                    ?? ExtractMeta(html, "og:video:secure_url")
                     ?? ExtractMeta(html, "og:video")
                     ?? ExtractMeta(html, "twitter:player:stream");
         if (!Uri.TryCreate(WebUtility.HtmlDecode(media), UriKind.Absolute, out var mediaUri) || !AllowedMediaHost(mediaUri))
             return Results.UnprocessableEntity(new
             {
                 success = false,
-                error = "Không tìm thấy URL MP4 công khai trong metadata. Hãy thử video công khai khác. Không vượt đăng nhập, CAPTCHA hoặc cơ chế bảo vệ."
+                error = "TikTok không cung cấp URL MP4 trong metadata hoặc JSON công khai của trang này. Có thể trang trả challenge, dữ liệu rút gọn hoặc video không cho phép truy cập trực tiếp. Không vượt đăng nhập, CAPTCHA hoặc cơ chế bảo vệ.",
+                diagnostics = new {
+                    pageBytes = memory.Length,
+                    hasUniversalData = html.Contains("__UNIVERSAL_DATA_FOR_REHYDRATION__", StringComparison.Ordinal),
+                    hasSigiState = html.Contains("SIGI_STATE", StringComparison.Ordinal),
+                    hasOgVideo = ExtractMeta(html, "og:video") is not null,
+                    embeddedDataFound = embedded.Found
+                }
             });
 
         return Results.Ok(new
         {
             success = true,
             resolvedPage = page.ToString(),
-            title = ExtractMeta(html, "og:title") ?? "TikTok public video",
-            description = ExtractMeta(html, "og:description") ?? "",
-            thumbnailUrl = SafeThumbnail(ExtractMeta(html, "og:image")),
+            title = embedded.Title ?? ExtractMeta(html, "og:title") ?? "TikTok public video",
+            description = embedded.Description ?? ExtractMeta(html, "og:description") ?? "",
+            thumbnailUrl = SafeThumbnail(embedded.CoverUrl ?? ExtractMeta(html, "og:image")),
             mediaUrl = mediaUri.ToString(),
             downloadUrl = "/download?mediaUrl=" + Uri.EscapeDataString(mediaUri.ToString()),
             contentType = "video/mp4",
-            note = "Đây là URL media được metadata công khai cung cấp; khả năng tải còn phụ thuộc CDN và thời hạn URL."
+            extractionMethod = embedded.MediaUrl is not null ? embedded.Method : "OpenGraph metadata",
+            note = "Media URL được trích xuất từ dữ liệu công khai của trang; CDN có thể yêu cầu header hoặc từ chối truy cập trực tiếp."
         });
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
@@ -158,6 +168,70 @@ static async Task<IResult> DownloadAsync(HttpContext context, string? mediaUrl, 
     {
         return Results.Problem("Không thể tải media từ CDN công khai.", statusCode: 502);
     }
+}
+
+static (string? MediaUrl, string? Title, string? Description, string? CoverUrl, bool Found, string? Method) ExtractEmbeddedVideoData(string html)
+{
+    foreach (var id in new[] { "__UNIVERSAL_DATA_FOR_REHYDRATION__", "SIGI_STATE", "sigi-persisted-data" })
+    {
+        var pattern = @"<script\\b(?=[^>]*\\bid\\s*=\\s*['""]" + Regex.Escape(id) + @"['""])[^>]*>(.*?)</script>";
+        foreach (Match match in Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(match.Groups[1].Value);
+                var result = FindVideoFields(document.RootElement);
+                if (result.MediaUrl is not null || result.Title is not null || result.Description is not null)
+                    return (result.MediaUrl, result.Title, result.Description, result.CoverUrl, true, id);
+            }
+            catch (JsonException) { }
+        }
+    }
+    return (null, null, null, null, false, null);
+}
+
+static (string? MediaUrl, string? Title, string? Description, string? CoverUrl) FindVideoFields(JsonElement root)
+{
+    string? media = null, title = null, description = null, cover = null;
+    void Visit(JsonElement element, int depth)
+    {
+        if (depth > 40) return;
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in element.EnumerateObject())
+            {
+                var name = property.Name;
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    var value = property.Value.GetString();
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        if (media is null && (name.Equals("playAddr", StringComparison.OrdinalIgnoreCase) ||
+                            name.Equals("downloadAddr", StringComparison.OrdinalIgnoreCase) ||
+                            name.Equals("play_url", StringComparison.OrdinalIgnoreCase)))
+                            media = value.Replace(@"\\u002F", "/").Replace(@"\\/", "/");
+                        else if (title is null && (name.Equals("desc", StringComparison.OrdinalIgnoreCase) ||
+                            name.Equals("title", StringComparison.OrdinalIgnoreCase)) && value.Length < 1000)
+                            title = value;
+                        else if (description is null && name.Equals("description", StringComparison.OrdinalIgnoreCase) && value.Length < 3000)
+                            description = value;
+                        else if (cover is null && (name.Equals("cover", StringComparison.OrdinalIgnoreCase) ||
+                            name.Equals("originCover", StringComparison.OrdinalIgnoreCase) ||
+                            name.Equals("dynamicCover", StringComparison.OrdinalIgnoreCase)))
+                            cover = value;
+                    }
+                }
+                if (property.Value.ValueKind is JsonValueKind.Object or JsonValueKind.Array)
+                    Visit(property.Value, depth + 1);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in element.EnumerateArray()) Visit(child, depth + 1);
+        }
+    }
+    Visit(root, 0);
+    return (media, title, description, cover);
 }
 
 static string? ExtractMeta(string html, string key)
