@@ -43,7 +43,22 @@ if (-not $ffprobeConfiguredExists -and -not [string]::IsNullOrWhiteSpace($env:Vi
     }
 }
 
-$required = @('VideoRendering__StorageRoot','VideoRendering__FFmpegExe','VideoRendering__FFprobeExe')
+# Locate yt-dlp or a Python launcher with the yt-dlp module for public TikTok media resolution.
+$ytDlpConfigured = $env:VideoRendering__YtDlpPath
+if ([string]::IsNullOrWhiteSpace($ytDlpConfigured) -or -not (Test-Path -LiteralPath $ytDlpConfigured -PathType Leaf)) {
+    $ytDlpCommand = Get-Command yt-dlp.exe -ErrorAction SilentlyContinue
+    if ($ytDlpCommand) {
+        $env:VideoRendering__YtDlpPath = $ytDlpCommand.Source
+    } else {
+        $pythonLauncher = Get-Command py.exe -ErrorAction SilentlyContinue
+        if (-not $pythonLauncher) { $pythonLauncher = Get-Command python.exe -ErrorAction SilentlyContinue }
+        if ($pythonLauncher) {
+            $probe = & $pythonLauncher.Source -m yt_dlp --version 2>$null
+            if ($LASTEXITCODE -eq 0 -and $probe) { $env:VideoRendering__YtDlpPath = $pythonLauncher.Source }
+        }
+    }
+}
+$required = @('VideoRendering__StorageRoot','VideoRendering__FFmpegExe','VideoRendering__FFprobeExe','VideoRendering__YtDlpPath')
 foreach ($name in $required) {
     $value = [Environment]::GetEnvironmentVariable($name,'Process')
     if ([string]::IsNullOrWhiteSpace($value)) { throw "Thiếu cấu hình trong .env: $name" }
