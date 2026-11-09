@@ -1,31 +1,54 @@
-# Receive a Douyin/TikTok share on iPhone
+# CreatorFlow – Tải video TikTok và lưu vào Ảnh (iPhone)
 
-## Why a Shortcut is used
-An iOS web app cannot register itself as a native receiving destination in the iOS share sheet through the Web Share Target API. Apple's Shortcuts app can receive a URL from the share sheet and open CreatorFlow with that URL. This keeps CreatorFlow as a web app and does not require a Douyin login on the HP.
+## Hai cách sử dụng
 
-## One-time setup
-1. First run the HP setup with `-EnableLanAccess` on a trusted Private Wi-Fi network.
-2. Note the `Phone URL` printed by the setup script, for example `http://192.168.1.20:8080`. The HP and iPhone must remain on the same trusted Wi-Fi. If the router changes the HP's IP, update the shortcut or reserve the IP in the router.
-3. On iPhone, open **Shortcuts** and create a new shortcut named **CreatorFlow – Nhận link**.
-4. Open shortcut Details and enable **Show in Share Sheet**. Set accepted input to **URLs** (or URLs and Text if Douyin sends a text block containing the URL).
-5. Add these actions in order:
-   - **Get URLs from Shortcut Input**.
-   - **Get Item from List** → First Item (if the previous action returns more than one URL).
-   - **URL Encode** the selected URL.
-   - **Text**: `http://192.168.1.20:8080/trends?sharedUrl=` followed by the encoded URL variable. Replace the example IP with the HP's current Phone URL host.
-   - **Open URLs** using that Text result.
-6. Save the shortcut.
+1. **Tải trực tiếp vào Photos bằng Shortcut:** khuyến nghị. Người dùng chọn Chia sẻ → CreatorFlow – Lưu vào Ảnh. Shortcut tự gọi resolver, tải MP4 và chạy Save to Photo Album. Không cần mở Safari.
+2. **Trang tải trên web:** mở `https://CreatorFlow.fcc-vn.com.vn/public-media/tiktok?url=<URL_ENCODED_TIKTOK_URL>` để xem tiêu đề, thumbnail và bấm tải thủ công.
 
-## Daily use
-1. In Douyin, open the channel or video and tap Share.
-2. Choose **CreatorFlow – Nhận link** in the iOS share sheet.
-3. CreatorFlow opens on the HP's local Web UI and automatically saves the shared link into Share Inbox.
-4. The link is a priority signal only. It does not log into Douyin, follow/unfollow, like, comment, download or publish.
+Web BFF: `GET /public-media/tiktok/resolve?url=<encoded TikTok URL>`. API nội bộ: `GET /api/v1/public-media/tiktok/resolve`. JSON thành công có trường `availableFormats[0].mediaUrl`. Không công khai API 7001, AI 8001 hoặc SQL 1433.
 
-If the shortcut is unavailable for a particular Douyin share action, use Copy Link, return to CreatorFlow → Xu hướng Việt Nam, paste into the Share Inbox field and tap **Nhận link chia sẻ**.
+## Tạo Shortcut một lần trên iPhone
 
-## Security and network limits
-- This local shortcut works only while the iPhone can reach the HP on the same trusted LAN.
-- The setup exposes only Web TCP 8080 to LocalSubnet on a Windows Private network. It does not publish SQL 1433, API 7001 or AI 8001.
-- Do not enable this on a Public or untrusted Wi-Fi network.
-- The link is validated by allowed HTTPS source domains and stored as user-provided metadata. The server does not fetch the supplied URL.
+Mở **Phím tắt (Shortcuts)** → dấu **+**, đặt tên **CreatorFlow – Lưu vào Ảnh**.
+
+Trong phần chi tiết Shortcut, bật **Hiển thị trong Bảng chia sẻ (Show in Share Sheet)** và chỉ nhận loại **URLs**.
+
+Thêm các action theo đúng thứ tự sau:
+
+1. **Get URLs from Shortcut Input** – lấy URL video được chia sẻ.
+2. **Get Item from List** – chọn **First Item**.
+3. **URL Encode** – mã hóa URL TikTok.
+4. **URL** – nhập địa chỉ `https://CreatorFlow.fcc-vn.com.vn/public-media/tiktok/resolve?url=` rồi nối kết quả URL Encode vào cuối. Nếu action URL có phần Query, có thể thêm key `url` với giá trị URL TikTok thay vì tự nối chuỗi.
+5. **Get Contents of URL** – URL ở bước 4, Method **GET**. Đây là phản hồi JSON của CreatorFlow.
+6. **Get Dictionary Value** – lấy key `availableFormats` từ kết quả JSON.
+7. **Get Item from List** – chọn **First Item**.
+8. **Get Dictionary Value** – lấy key `mediaUrl`.
+9. **URL** – chuyển giá trị `mediaUrl` thành URL.
+10. **Get Contents of URL** – tải nội dung URL media. Method **GET**. Đầu ra phải là nội dung tệp video, không phải văn bản.
+11. **Save to Photo Album** – lưu đầu ra video ở bước 10 vào album **Recents** (hoặc album người dùng chọn nếu iOS cung cấp lựa chọn).
+12. **Show Notification** – thông báo `CreatorFlow: Đã lưu video vào Ảnh` sau khi action Save to Photo Album chạy thành công.
+
+Nếu muốn kiểm tra lỗi trước khi tải, chèn **Get Dictionary Value** với key `success` và action **If**: chỉ chạy bước 6–12 khi success là true; nhánh Otherwise hiển thị `Không tìm thấy video MP4 công khai.`. Với phản hồi lỗi HTTP, Shortcut có thể dừng ngay tại Get Contents of URL; đó là hành vi đúng, không nên lưu dữ liệu lỗi như video.
+
+## Sử dụng
+
+1. Mở video TikTok công khai trong ứng dụng TikTok.
+2. Chọn **Chia sẻ** → **CreatorFlow – Lưu vào Ảnh**.
+3. Chờ Shortcut tải xong. Mở **Ảnh (Photos) → Gần đây (Recents)** để kiểm tra video.
+4. Nếu Shortcut không xuất hiện, mở chi tiết Shortcut và xác nhận Show in Share Sheet + Accepted Types = URLs.
+
+## Giới hạn quan trọng
+
+- iOS có thể yêu cầu cấp quyền cho Shortcut thêm ảnh/video vào Photos ở lần đầu.
+- Shortcut chỉ tải khi CreatorFlow trả về URL media MP4 công khai hợp lệ. Nếu TikTok không cung cấp media URL, trả lỗi, URL CDN hết hạn hoặc CDN từ chối request, Shortcut sẽ thất bại và không có video để lưu.
+- Bản resolver hiện chỉ xác nhận một định dạng MP4 nguồn. Không gắn nhãn HD, SD hoặc không watermark nếu không có dữ liệu chứng minh.
+- Một số CDN có thể yêu cầu header hoặc cookie mà Shortcut không có. Không vượt đăng nhập, CAPTCHA, DRM hay cơ chế kiểm soát truy cập.
+- Nên thử với một video công khai do chính người dùng đăng hoặc có quyền tải và sử dụng.
+- Shortcut này chưa gửi tệp về Share Inbox và chưa tạo render jobs. Đó là giai đoạn tiếp theo sau khi xác nhận tải/lưu Photos hoạt động.
+
+## Kiểm thử đạt
+
+- Chia sẻ video TikTok → Shortcut được gọi với URL đúng.
+- Resolver trả JSON thành công, có `availableFormats[0].mediaUrl`.
+- Get Contents of URL tải được dữ liệu MP4 có dung lượng hợp lý.
+- Save to Photo Album hoàn tất; video xuất hiện trong Photos và phát được.

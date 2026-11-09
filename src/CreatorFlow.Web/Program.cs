@@ -13,6 +13,12 @@ builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
 builder.Services.AddTransient<CreatorFlow.Web.Services.OidcAccessTokenHandler>();
 builder.Services.AddHttpClient("OidcBackchannel");
+builder.Services.AddHttpClient("PublicTikTokResolver", client =>
+{
+    var baseUrl = builder.Configuration["CreatorFlowApi:BaseUrl"];
+    if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri)) client.BaseAddress = uri;
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 builder.Services.AddHttpClient<CreatorFlow.Web.Services.CreatorFlowApiClient>(client =>
 {
     var baseUrl = builder.Configuration["CreatorFlowApi:BaseUrl"];
@@ -167,6 +173,19 @@ if (oidcEnabled)
         .AllowAnonymous();
 }
 app.UseAntiforgery();
+
+// Anonymous, narrowly-scoped BFF route used by the iOS Share Sheet shortcut.
+// The API endpoint only resolves public TikTok page metadata; it does not expose API/SQL ports.
+app.MapGet("/public-media/tiktok/resolve", async (string? url, IHttpClientFactory clients, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(url))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["url"] = ["Vui lòng cung cấp liên kết TikTok."] });
+    var client = clients.CreateClient("PublicTikTokResolver");
+    var target = "/api/v1/public-media/tiktok/resolve?url=" + Uri.EscapeDataString(url);
+    using var response = await client.GetAsync(target, ct);
+    var body = await response.Content.ReadAsStringAsync(ct);
+    return Results.Content(body, response.Content.Headers.ContentType?.ToString() ?? "application/json", statusCode: (int)response.StatusCode);
+}).AllowAnonymous();
 
 app.MapGet("/media/video/{id:guid}", async (Guid id, HttpContext context, CreatorFlow.Web.Services.CreatorFlowApiClient api) =>
 {

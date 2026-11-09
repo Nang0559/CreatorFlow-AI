@@ -1,17 +1,7 @@
 name: SQL Server self-hosted QC
 
 on:
-  push:
-    branches: [main, "feature/**"]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - "database/**"
-      - "tools/sql-qc/**"
-      - ".github/workflows/sqlserver-selfhosted-qc.yml"
-      - "CreatorFlow.sln"
-      - "*.props"
-      - "*.targets"
+  # Explicit operator action only: this workflow applies database migrations.
   workflow_dispatch:
 
 permissions:
@@ -39,16 +29,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 9.0.x
-
       # Diagnostic only: this runs under the actual Windows service identity.
       # SQL login failures are reported here; the fail-closed database guard
       # below remains authoritative and is not bypassed.
       - name: Diagnose runner Windows and SQL identity
-        shell: pwsh
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         continue-on-error: true
         run: |
           $ErrorActionPreference = 'Stop'
@@ -65,6 +50,13 @@ jobs:
               -Query "SELECT SUSER_SNAME() AS SqlLogin, ORIGINAL_LOGIN() AS OriginalLogin, IS_SRVROLEMEMBER(N'sysadmin') AS IsSysadmin;" `
               -ErrorAction Stop
             $identity | Format-List
+            $databasePermissions = Invoke-Sqlcmd `
+              -ServerInstance $env:CREATORFLOW_QC_SQL_INSTANCE `
+              -Database $env:CREATORFLOW_QC_DATABASE `
+              -TrustServerCertificate `
+              -Query "SELECT USER_NAME() AS DatabaseUser, IS_MEMBER(N'db_owner') AS IsDbOwner, IS_MEMBER(N'db_ddladmin') AS IsDbDdlAdmin, IS_MEMBER(N'db_datareader') AS IsDbDataReader, IS_MEMBER(N'db_datawriter') AS IsDbDataWriter, HAS_PERMS_BY_NAME(N'dbo',N'SCHEMA',N'ALTER') AS CanAlterDboSchema;" `
+              -ErrorAction Stop
+            $databasePermissions | Format-List
           }
           catch {
             Write-Warning ("Runner SQL identity probe failed: " + $_.Exception.Message)
@@ -72,5 +64,5 @@ jobs:
           }
 
       - name: Preflight, database guard, SQL smoke and tests
-        shell: pwsh
+        shell: powershell -NoProfile -ExecutionPolicy Bypass -Command ". '{0}'"
         run: ./tools/sql-qc/Invoke-SqlServerQc.ps1

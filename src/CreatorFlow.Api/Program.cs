@@ -69,6 +69,16 @@ builder.Services.AddRateLimiter(options =>
         })
         : PartitionedRateLimiter.Create<HttpContext, string>(_ =>
             RateLimitPartition.GetNoLimiter("rate-limiting-disabled"));
+    options.AddPolicy("public-tiktok-resolver", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            "public-tiktok:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
 });
 
 // Tenant/subject limiter runs after membership resolution and retains separate API/video buckets.
@@ -174,6 +184,7 @@ app.UseMiddleware<TenantRoleGuardMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" })).AllowAnonymous();
+app.MapPublicTikTokResolver();
 app.MapVideoRenderEndpoints();
 app.MapAIProviderRegistry();
 app.MapDiscoveryTopicSchedulerEndpoints();
@@ -359,7 +370,7 @@ shareInbox.MapGet("/", async (string? status, int? take, CreatorFlowDbContext? d
     }
     var items = await query.OrderByDescending(x => x.SharedAt).Take(size)
         .Select(x => new SharedLinkInboxResponse(x.Id, x.Platform, x.SharedUrl, x.SharedAt,
-            x.Status.ToString(), x.ReviewNote, x.LinkedChannelId)).ToArrayAsync(ct);
+            x.Status.ToString(), x.ReviewNote, x.LinkedChannelId, x.ResolverStatus, x.ResolverError, x.ResolvedAssetId, x.ResolvedTitle)).ToArrayAsync(ct);
     return Results.Ok(items);
 });
 shareInbox.MapPost("/", async (CreateSharedLinkRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
@@ -371,12 +382,12 @@ shareInbox.MapPost("/", async (CreateSharedLinkRequest request, CreatorFlowDbCon
         var existing = await db.SharedLinkInboxItems.AsNoTracking().SingleOrDefaultAsync(x => x.UrlHash == item.UrlHash, ct);
         if (existing is not null)
             return Results.Ok(new SharedLinkInboxResponse(existing.Id, existing.Platform, existing.SharedUrl,
-                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId));
+                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId, existing.ResolverStatus, existing.ResolverError, existing.ResolvedAssetId, existing.ResolvedTitle));
         db.SharedLinkInboxItems.Add(item);
         await db.SaveChangesAsync(ct);
         return Results.Created($"/api/v1/share-inbox/{item.Id}",
             new SharedLinkInboxResponse(item.Id, item.Platform, item.SharedUrl, item.SharedAt,
-                item.Status.ToString(), item.ReviewNote, item.LinkedChannelId));
+                item.Status.ToString(), item.ReviewNote, item.LinkedChannelId, item.ResolverStatus, item.ResolverError, item.ResolvedAssetId, item.ResolvedTitle));
     }
     catch (ArgumentException ex)
     {
@@ -389,10 +400,39 @@ shareInbox.MapPost("/", async (CreateSharedLinkRequest request, CreatorFlowDbCon
             .SingleOrDefaultAsync(x => x.UrlHash == SharedLinkInboxItem.Create(request.SharedUrl, DateTimeOffset.UtcNow).UrlHash, ct);
         if (existing is not null)
             return Results.Ok(new SharedLinkInboxResponse(existing.Id, existing.Platform, existing.SharedUrl,
-                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId));
+                existing.SharedAt, existing.Status.ToString(), existing.ReviewNote, existing.LinkedChannelId, existing.ResolverStatus, existing.ResolverError, existing.ResolvedAssetId, existing.ResolvedTitle));
         throw;
     }
 });
+shareInbox.MapPost("/{id:guid}/confirm-rights", async (Guid id, CreatorFlowDbContext? db, ITenantContext tenant, CancellationToken ct) =>
+{
+    if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
+    if (!tenant.TenantId.HasValue) return Results.Forbid();
+    var connection = db.Database.GetDbConnection();
+    if (connection.State != System.Data.ConnectionState.Open) await connection.OpenAsync(ct);
+    await using var tx = await connection.BeginTransactionAsync(ct);
+    await using var check = connection.CreateCommand();
+    check.Transaction = tx;
+    check.CommandText = "SELECT ResolvedAssetId FROM dbo.SharedLinkInboxItems WHERE Id=@id AND TenantId=@tenant AND ResolverStatus=N'NeedsReview'";
+    var p1=check.CreateParameter(); p1.ParameterName="@id"; p1.Value=id; check.Parameters.Add(p1);
+    var p2=check.CreateParameter(); p2.ParameterName="@tenant"; p2.Value=tenant.TenantId.Value; check.Parameters.Add(p2);
+    var assetValue=await check.ExecuteScalarAsync(ct);
+    if (assetValue is null || assetValue is DBNull) return Results.Conflict(new { error="Video chưa được phân giải hoặc đã xử lý." });
+    var assetId=(Guid)assetValue;
+    await using var update=connection.CreateCommand(); update.Transaction=tx;
+    update.CommandText="UPDATE dbo.VideoRenderJobs SET Status=N'Queued' WHERE TenantId=@tenant AND SharedLinkInboxItemId=@share AND AssetId=@asset AND Status=N'AwaitingRightsReview'; SELECT @@ROWCOUNT;";
+    var p3=update.CreateParameter();p3.ParameterName="@tenant";p3.Value=tenant.TenantId.Value;update.Parameters.Add(p3);
+    var p4=update.CreateParameter();p4.ParameterName="@share";p4.Value=id;update.Parameters.Add(p4);
+    var p5=update.CreateParameter();p5.ParameterName="@asset";p5.Value=assetId;update.Parameters.Add(p5);
+    var count=Convert.ToInt32(await update.ExecuteScalarAsync(ct));
+    if(count!=3) return Results.Conflict(new { error="Không tìm thấy đủ ba render jobs đang chờ xác nhận.", updated=count });
+    await using var mark=connection.CreateCommand();mark.Transaction=tx;
+    mark.CommandText="UPDATE dbo.SharedLinkInboxItems SET ResolverStatus=N'RightsConfirmed', RightsConfirmedAt=SYSUTCDATETIME() WHERE Id=@id AND TenantId=@tenant";
+    var p6=mark.CreateParameter();p6.ParameterName="@id";p6.Value=id;mark.Parameters.Add(p6);
+    var p7=mark.CreateParameter();p7.ParameterName="@tenant";p7.Value=tenant.TenantId.Value;mark.Parameters.Add(p7);
+    await mark.ExecuteNonQueryAsync(ct); await tx.CommitAsync(ct);
+    return Results.Ok(new { assetId, renderJobsQueued=count, status="Queued" });
+}).RequireAuthorization("TenantOwnerOrAdmin");
 shareInbox.MapPost("/{id:guid}/review", async (Guid id, ReviewSharedLinkRequest request, CreatorFlowDbContext? db, CancellationToken ct) =>
 {
     if (db is null) return (IResult)Results.Problem("SQL Server is not configured.", statusCode: 503);
@@ -733,8 +773,7 @@ This is an editable handoff/starter package, not a finished MP4 and not a CapCut
         "comp.openInViewer();",
         "var folder = Folder.selectDialog('Choose where to save your CreatorFlow After Effects starter');",
         "if (folder) app.project.save(File(folder.fsName + '/CreatorFlow_AE_Starter.aep'));",
-        "app.endUndoGroup();"
-    });
+        "app.endUndoGroup();"    });
 
     using var memory = new MemoryStream();
     using (var archive = new ZipArchive(memory, ZipArchiveMode.Create, true))
@@ -1167,7 +1206,8 @@ public sealed record VideoCandidateResponse(Guid Id, string DouyinVideoId, Guid?
 public sealed record CreateSharedLinkRequest(string SharedUrl);
 public sealed record ReviewSharedLinkRequest(string? Note);
 public sealed record SharedLinkInboxResponse(Guid Id, string Platform, string SharedUrl,
-    DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId);
+    DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId,
+    string ResolverStatus, string? ResolverError, Guid? ResolvedAssetId, string? ResolvedTitle);
 
 public partial class Program;
 

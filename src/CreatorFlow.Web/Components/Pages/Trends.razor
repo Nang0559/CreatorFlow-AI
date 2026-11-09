@@ -40,11 +40,22 @@
     @foreach (var shared in shareItems)
     {
         <article class="share-item">
-            <div><span class="status">@PlatformLabel(shared.Platform) · @ShareStatusLabel(shared.Status)</span>
+            <div><span class="status">@PlatformLabel(shared.Platform) · @ShareStatusLabel(shared.Status) · @ResolverStatusLabel(shared.ResolverStatus)</span>
+                @if (!string.IsNullOrWhiteSpace(shared.ResolverError)) { <p class="muted">@shared.ResolverError</p> }
                 <p class="share-url">@shared.SharedUrl</p>
                 <small class="muted">@shared.SharedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</small>
             </div>
-            <a href="@shared.SharedUrl" target="_blank" rel="noopener noreferrer">Mở liên kết ↗</a>
+            <div class="form-actions">
+                <a href="@shared.SharedUrl" target="_blank" rel="noopener noreferrer">Mở liên kết ↗</a>
+                @if (shared.ResolverStatus == "NeedsReview")
+                {
+                    <button class="primary" disabled="@busy" @onclick="() => ConfirmSharedRightsAsync(shared.Id)">Xác nhận quyền và tạo 3 video</button>
+                }
+                else if (shared.ResolverStatus == "Failed")
+                {
+                    <span class="muted">Không thể tải tự động từ trang công khai này. Hãy thử video khác hoặc tải tệp bạn có quyền sử dụng.</span>
+                }
+            </div>
         </article>
     }
     <small class="muted">iPhone: bạn có thể dùng Shortcut “CreatorFlow – Nhận link” để chọn ngay trong bảng Chia sẻ; nếu chưa tạo Shortcut, hãy Sao chép liên kết rồi dán vào ô này. Hướng dẫn: docs/operations/IOS_SHARE_TO_CREATORFLOW.md.</small>
@@ -639,8 +650,24 @@
         finally { busy = false; }
     }
 
+    private async Task ConfirmSharedRightsAsync(Guid id)
+    {
+        try
+        {
+            busy = true; shareMessage = "";
+            var result = await Api.PostAsync<object, RightsConfirmationResponse>($"/api/v1/share-inbox/{id}/confirm-rights", new { });
+            shareMessage = result is null ? "Không nhận được xác nhận từ API." : $"Đã xác nhận quyền sử dụng. {result.RenderJobsQueued} render jobs đã được đưa vào hàng đợi.";
+            await LoadShareInboxAsync();
+        }
+        catch (Exception ex) { shareMessage = "Chưa thể xác nhận: " + ex.Message; }
+        finally { busy = false; }
+    }
+
+    private sealed record RightsConfirmationResponse(Guid AssetId, int RenderJobsQueued, string Status);
+
     private static string KindLabel(string value) => value switch { "Video" => "Video", "CreatorChannel" => "Kênh sáng tạo", "Sound" => "Âm thanh", _ => "Khác" };
     private static string PlatformLabel(string value) => value switch { "TikTokVietnam" => "TikTok Việt Nam", "YouTubeShortsVietnam" => "YouTube Shorts Việt Nam", "FacebookReelsVietnam" => "Facebook Reels Việt Nam", "Douyin" => "Douyin", _ => "Khác" };
+    private static string ResolverStatusLabel(string value) => value switch { "Pending" => "Đang chờ phân giải", "Resolving" => "Đang xử lý", "NeedsReview" => "Chờ xác nhận quyền", "RightsConfirmed" => "Đã xác nhận quyền", "Failed" => "Không lấy được media", _ => value };
     private static string ShareStatusLabel(string value) => value switch { "Pending" => "Chờ xem xét", "Reviewed" => "Đã xem xét", "Linked" => "Đã liên kết", "Ignored" => "Đã bỏ qua", _ => "Chưa xác định" };
 
     private sealed record TopicItem(Guid Id, string Name, string Keywords, bool IsActive, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
@@ -649,7 +676,8 @@
     private sealed record DiscoveryPlanItem(string Topic, string[] Queries, string[] RelatedTopics, string[] IntentSignals, string[] Exclusions, bool RequiresHumanReview);
 
     private sealed record SharedLinkItem(Guid Id, string Platform, string SharedUrl,
-        DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId);
+        DateTimeOffset SharedAt, string Status, string? ReviewNote, Guid? LinkedChannelId,
+        string ResolverStatus, string? ResolverError, Guid? ResolvedAssetId, string? ResolvedTitle);
 
     private async Task CreateAsync()
     {

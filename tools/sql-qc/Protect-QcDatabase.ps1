@@ -31,4 +31,20 @@ if ($r.IsReadOnly -ne 0) { throw 'QC database is READ_ONLY.' }
 if ($r.EnvironmentTag -cne 'QC') { throw 'Missing CreatorFlowEnvironment=QC tag.' }
 if ($r.RepositoryTag -cne 'CreatorFlow-AI') { throw 'Missing CreatorFlowRepository=CreatorFlow-AI tag.' }
 if ($r.IsSysAdmin -ne 0) { throw 'Runner SQL principal is sysadmin; refusing execution.' }
+$permissions = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database $Database -Query @"
+SELECT
+    USER_NAME() AS DatabaseUser,
+    IS_MEMBER(N'db_owner') AS IsDbOwner,
+    IS_MEMBER(N'db_ddladmin') AS IsDbDdlAdmin,
+    IS_MEMBER(N'db_datareader') AS IsDbDataReader,
+    IS_MEMBER(N'db_datawriter') AS IsDbDataWriter,
+    HAS_PERMS_BY_NAME(N'dbo',N'SCHEMA',N'ALTER') AS CanAlterDboSchema;
+"@ -TrustServerCertificate:$TrustServerCertificate -ErrorAction Stop)
+if ($permissions.Count -ne 1) { throw 'Could not determine SQL QC database permissions.' }
+$hasDdl = ($permissions[0].IsDbOwner -eq 1) -or ($permissions[0].IsDbDdlAdmin -eq 1)
+$hasDataAccess = ($permissions[0].IsDbOwner -eq 1) -or
+    (($permissions[0].IsDbDataReader -eq 1) -and ($permissions[0].IsDbDataWriter -eq 1))
+if (-not $hasDdl -or -not $hasDataAccess -or $permissions[0].CanAlterDboSchema -ne 1) {
+    throw "SQL QC runner '$($permissions[0].DatabaseUser)' needs db_owner, or db_ddladmin + db_datareader + db_datawriter, in CreatorFlow_QC. No migrations were run."
+}
 Write-Host "QC database guard passed: $($r.StateDesc); CreatorFlow_QC; principal is not sysadmin."

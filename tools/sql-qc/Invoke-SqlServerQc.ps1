@@ -39,9 +39,9 @@ if ($ledgerExists -eq 0 -and $userTableCount -gt 0) {
 }
 
 & (Join-Path $PSScriptRoot '../../database/Apply-Migrations.ps1') -SqlInstance $SqlInstance -Database $Database -IncludeTenantMigrations -ConfirmLegacyWorkspaceAssignment -TrustServerCertificate:$TrustServerCertificate
-if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Applying SQL migrations 001-028 failed.' }
+if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Applying SQL migrations 001-031 failed.' }
 & (Join-Path $PSScriptRoot '../../database/Verify-Database.ps1') -SqlInstance $SqlInstance -Database $Database -RequireTenantMigrations -TrustServerCertificate:$TrustServerCertificate
-if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Database schema verification failed after migrations 001-028.' }
+if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw 'Database schema verification failed after migrations 001-031.' }
 Import-Module SqlServer -ErrorAction Stop
 $result=Invoke-Sqlcmd -ServerInstance $SqlInstance -Database 'CreatorFlow_QC' -TrustServerCertificate:$TrustServerCertificate -Query "SELECT DB_NAME() AS DatabaseName, CAST(SERVERPROPERTY('ProductVersion') AS nvarchar(128)) AS ProductVersion, 1 AS ConnectivityCheck;" -ErrorAction Stop
 if ($result.DatabaseName -cne 'CreatorFlow_QC' -or $result.ConnectivityCheck -ne 1) { throw 'SQL connectivity smoke test failed.' }

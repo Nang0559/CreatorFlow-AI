@@ -43,7 +43,22 @@ if (-not $ffprobeConfiguredExists -and -not [string]::IsNullOrWhiteSpace($env:Vi
     }
 }
 
-$required = @('VideoRendering__StorageRoot','VideoRendering__FFmpegExe','VideoRendering__FFprobeExe')
+# Locate yt-dlp or a Python launcher with the yt-dlp module for public TikTok media resolution.
+$ytDlpConfigured = $env:VideoRendering__YtDlpPath
+if ([string]::IsNullOrWhiteSpace($ytDlpConfigured) -or -not (Test-Path -LiteralPath $ytDlpConfigured -PathType Leaf)) {
+    $ytDlpCommand = Get-Command yt-dlp.exe -ErrorAction SilentlyContinue
+    if ($ytDlpCommand) {
+        $env:VideoRendering__YtDlpPath = $ytDlpCommand.Source
+    } else {
+        $pythonLauncher = Get-Command py.exe -ErrorAction SilentlyContinue
+        if (-not $pythonLauncher) { $pythonLauncher = Get-Command python.exe -ErrorAction SilentlyContinue }
+        if ($pythonLauncher) {
+            $probe = & $pythonLauncher.Source -m yt_dlp --version 2>$null
+            if ($LASTEXITCODE -eq 0 -and $probe) { $env:VideoRendering__YtDlpPath = $pythonLauncher.Source }
+        }
+    }
+}
+$required = @('VideoRendering__StorageRoot','VideoRendering__FFmpegExe','VideoRendering__FFprobeExe','VideoRendering__YtDlpPath')
 foreach ($name in $required) {
     $value = [Environment]::GetEnvironmentVariable($name,'Process')
     if ([string]::IsNullOrWhiteSpace($value)) { throw "Thiếu cấu hình trong .env: $name" }
@@ -60,10 +75,10 @@ $tables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database CreatorFlow_QC 
 SELECT
  CASE WHEN OBJECT_ID(N'dbo.VideoAssets',N'U') IS NOT NULL THEN 1 ELSE 0 END AS AssetsReady,
  CASE WHEN OBJECT_ID(N'dbo.VideoRenderJobs',N'U') IS NOT NULL THEN 1 ELSE 0 END AS JobsReady,
- CASE WHEN EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'017_video_render_pipeline') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'018_tenant_relationship_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'019_business_relationship_tenant_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'020_tenant_scoped_business_uniqueness') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'025_topic_discovery_scheduler') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'026_tenant_scope_topic_scheduler') THEN 1 ELSE 0 END AS MigrationReady;
+ CASE WHEN EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'017_video_render_pipeline') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'018_tenant_relationship_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'019_business_relationship_tenant_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'020_tenant_scoped_business_uniqueness') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'025_topic_discovery_scheduler') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'026_tenant_scope_topic_scheduler') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'031_public_tiktok_share_resolver') THEN 1 ELSE 0 END AS MigrationReady;
 "@ -TrustServerCertificate -ErrorAction Stop)
 if ($tables.Count -ne 1 -or $tables[0].AssetsReady -ne 1 -or $tables[0].JobsReady -ne 1 -or $tables[0].MigrationReady -ne 1) {
-    throw 'Chưa có migration video 017–020 hoặc scheduler 025–026. Chạy Apply-Migrations.ps1 và Verify-Database.ps1 trước.'
+    throw 'Chưa có migration video 017–020, scheduler 025–026 hoặc public share resolver 031. Chạy Apply-Migrations.ps1 và Verify-Database.ps1 trước.'
 }
 $stdout = Join-Path $root 'logs\worker-out.log'
 $stderr = Join-Path $root 'logs\worker-error.log'
