@@ -1,0 +1,107 @@
+@page "/public-media/tiktok"
+@using System.Text.Json
+@using Microsoft.AspNetCore.Components
+@inject IHttpClientFactory HttpClients
+@inject IConfiguration Configuration
+
+<PageTitle>Trình tải video TikTok · CreatorFlow</PageTitle>
+<main class="resolver-shell">
+    <header class="resolver-header"><a class="brand" href="/">Creator<span>Flow</span></a><span class="secure-label">CÔNG CỤ VIDEO CÔNG KHAI</span></header>
+    <section class="resolver-card">
+        <p class="eyebrow">TIKTOK PUBLIC VIDEO</p><h1>Tải video TikTok</h1>
+        <p class="intro">Dán liên kết TikTok hoặc mở trang này từ nút Chia sẻ để CreatorFlow tự phân giải video công khai.</p>
+        <form class="url-form" @onsubmit="ResolveFromFormAsync" @onsubmit:preventDefault>
+            <input aria-label="Liên kết TikTok" @bind="inputUrl" placeholder="Dán liên kết video TikTok tại đây" />
+            <button type="submit" disabled="@busy">@(busy ? "Đang phân giải…" : "Phân giải video")</button>
+        </form>
+        @if (busy) { <div class="state-box" role="status">Đang kiểm tra liên kết và tìm media công khai…</div> }
+        else if (!string.IsNullOrWhiteSpace(error)) { <div class="state-box error" role="alert"><strong>Chưa thể phân giải video</strong><p>@error</p><small>Không vượt đăng nhập, CAPTCHA, DRM hoặc cơ chế kiểm soát truy cập.</small></div> }
+        else if (resolved)
+        {
+            <article class="video-result">
+                @if (!string.IsNullOrWhiteSpace(thumbnailUrl)) { <img class="thumbnail" src="@thumbnailUrl" alt="Ảnh bìa video TikTok" /> }
+                <span class="available">Đã tìm thấy media công khai</span><h2>@title</h2>
+                @if (!string.IsNullOrWhiteSpace(description)) { <p class="description">@description</p> }
+                <div class="format-list">
+                    @foreach (var format in formats)
+                    {
+                        <div class="format-row"><div><strong>@format.Label</strong><small>Định dạng MP4 · nguồn công khai</small></div><a href="@format.MediaUrl" target="_blank" rel="noopener noreferrer">Tải video ↗</a></div>
+                    }
+                </div>
+                <p class="download-note">@note</p>
+            </article>
+        }
+        else { <div class="empty-state"><div class="video-icon">▶</div><strong>Chưa có video được phân giải</strong><span>Chia sẻ một video TikTok công khai sang CreatorFlow để bắt đầu.</span></div> }
+    </section>
+    <footer>Chỉ tải và sử dụng nội dung khi bạn có quyền phù hợp. Chỉ hiển thị định dạng mà nguồn công khai thực sự cung cấp.</footer>
+</main>
+<style>
+.resolver-shell{min-height:100vh;background:linear-gradient(145deg,#101b65,#1e40af 60%,#172554);padding:24px 16px 40px;color:#fff}
+.resolver-header{max-width:760px;margin:0 auto 28px;display:flex;justify-content:space-between;align-items:center}
+.brand{font-size:25px;font-weight:850;color:white;text-decoration:none;letter-spacing:-1px}.brand span{color:#f97316}.secure-label{font-size:10px;letter-spacing:1.2px;color:#c7d2fe}
+.resolver-card{max-width:760px;margin:0 auto;background:white;color:#172033;border-radius:22px;padding:clamp(20px,5vw,38px);box-shadow:0 24px 70px #02061755}
+.eyebrow{font-size:11px;letter-spacing:1.5px;font-weight:800;color:#4f46e5;margin:0 0 8px}h1{font-size:clamp(27px,6vw,38px);margin:0 0 8px;letter-spacing:-1px}.intro{color:#64748b;margin:0 0 22px;line-height:1.55}
+.url-form{display:flex;gap:9px;flex-wrap:wrap}.url-form input{flex:1;min-width:190px;border:1px solid #cbd5e1;border-radius:12px;padding:14px;font:inherit;color:#0f172a}.url-form button{border:0;border-radius:12px;background:#f97316;color:white;font-weight:800;padding:14px 18px;cursor:pointer}
+.state-box,.empty-state{margin-top:22px;padding:22px;border-radius:15px;background:#f1f5f9;color:#334155}.error{background:#fff1f2;color:#9f1239}.error p{margin:8px 0}
+.empty-state{display:grid;justify-items:center;text-align:center;gap:8px;padding:34px 18px}.empty-state span{color:#64748b;font-size:14px}.video-icon{width:48px;height:48px;border-radius:50%;background:#e0e7ff;color:#4338ca;display:grid;place-items:center;font-size:20px}
+.thumbnail{display:block;width:100%;max-height:320px;object-fit:contain;background:#0f172a;border-radius:15px;margin-bottom:18px}.available{color:#15803d;font-size:12px;font-weight:800}.video-result h2{font-size:20px;margin:6px 0}.description{color:#64748b;white-space:pre-wrap}
+.format-list{display:grid;gap:10px;margin-top:20px}.format-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #e2e8f0;border-radius:13px;padding:15px}.format-row strong,.format-row small{display:block}.format-row small{color:#64748b;margin-top:4px;font-size:12px}.format-row a{background:#f97316;color:white;padding:11px 14px;border-radius:10px;text-decoration:none;font-weight:800;white-space:nowrap}
+.download-note,footer{font-size:12px;color:#64748b;line-height:1.5;margin-top:16px}footer{max-width:760px;margin:18px auto 0;color:#c7d2fe;text-align:center}
+@media(max-width:480px){.resolver-header{margin-bottom:18px}.format-row{align-items:flex-start;flex-direction:column}.format-row a{width:100%;text-align:center;box-sizing:border-box}.url-form button{width:100%}}
+</style>
+@code {
+    [SupplyParameterFromQuery(Name = "url")] public string? SharedUrl { get; set; }
+    private string inputUrl = "", title = "", description = "", note = "";
+    private string? thumbnailUrl, error, lastResolvedUrl;
+    private bool busy, resolved;
+    private readonly List<DownloadFormat> formats = [];
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(SharedUrl) && !string.Equals(SharedUrl, lastResolvedUrl, StringComparison.Ordinal))
+        { inputUrl = SharedUrl; await ResolveAsync(SharedUrl); }
+    }
+    private Task ResolveFromFormAsync() => ResolveAsync(inputUrl);
+    private async Task ResolveAsync(string? sourceUrl)
+    {
+        error = null; resolved = false; formats.Clear();
+        if (string.IsNullOrWhiteSpace(sourceUrl) || sourceUrl.Length > 2048 ||
+            !Uri.TryCreate(sourceUrl, UriKind.Absolute, out var parsed) || parsed.Scheme != Uri.UriSchemeHttps ||
+            !(parsed.Host.Equals("tiktok.com", StringComparison.OrdinalIgnoreCase) || parsed.Host.EndsWith(".tiktok.com", StringComparison.OrdinalIgnoreCase) ||
+              parsed.Host.Equals("tiktokv.com", StringComparison.OrdinalIgnoreCase) || parsed.Host.EndsWith(".tiktokv.com", StringComparison.OrdinalIgnoreCase)))
+        { error = "Vui lòng nhập liên kết HTTPS thuộc TikTok."; return; }
+        busy = true; lastResolvedUrl = sourceUrl;
+        try
+        {
+            var apiBase = Configuration["CreatorFlowApi:BaseUrl"];
+            if (!Uri.TryCreate(apiBase, UriKind.Absolute, out var baseUri)) throw new InvalidOperationException("Web chưa cấu hình CreatorFlowApi:BaseUrl.");
+            var client = HttpClients.CreateClient("PublicTikTokResolver");
+            if (client.BaseAddress is null) client.BaseAddress = baseUri;
+            using var response = await client.GetAsync("/public-media/tiktok/resolve?url=" + Uri.EscapeDataString(sourceUrl));
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var root = json.RootElement;
+            if (!response.IsSuccessStatusCode)
+            {
+                error = root.TryGetProperty("error", out var e) ? e.GetString() : root.TryGetProperty("detail", out var d) ? d.GetString() : "Không tìm thấy media công khai có thể tải.";
+                return;
+            }
+            title = root.TryGetProperty("title", out var t) ? t.GetString() ?? "Video TikTok" : "Video TikTok";
+            description = root.TryGetProperty("description", out var desc) ? desc.GetString() ?? "" : "";
+            thumbnailUrl = root.TryGetProperty("thumbnailUrl", out var thumb) ? thumb.GetString() : null;
+            note = root.TryGetProperty("note", out var n) ? n.GetString() ?? "" : "";
+            if (root.TryGetProperty("availableFormats", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                foreach (var item in arr.EnumerateArray())
+                {
+                    var media = item.TryGetProperty("mediaUrl", out var m) ? m.GetString() : null;
+                    var label = item.TryGetProperty("label", out var l) ? l.GetString() : null;
+                    if (!string.IsNullOrWhiteSpace(media) && Uri.TryCreate(media, UriKind.Absolute, out var mediaUri) && mediaUri.Scheme == "https")
+                        formats.Add(new DownloadFormat(label ?? "MP4", media));
+                }
+            if (formats.Count == 0) { error = "Nguồn không trả về định dạng video có thể tải."; return; }
+            resolved = true;
+        }
+        catch (HttpRequestException) { error = "Không kết nối được dịch vụ phân giải. Vui lòng thử lại."; }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private sealed record DownloadFormat(string Label, string MediaUrl);
+}

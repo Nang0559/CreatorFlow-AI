@@ -38,3 +38,11 @@ Phím tắt nhận URL TikTok từ Share Sheet, gọi endpoint phân giải côn
 ## Giai đoạn 2 (chưa bật)
 
 Sau khi xác nhận tải Photos ổn định, mới bổ sung hành động gửi tệp lên CreatorFlow, lưu Share Inbox, xác nhận quyền và tạo đúng 3 render jobs. Không tự động dựng video trong giai đoạn 1.
+
+
+## Trang tải công khai từ Share Sheet
+
+- Shortcut nhận URL TikTok và mở `https://CreatorFlow.fcc-vn.com.vn/public-media/tiktok?url=<URL_ENCODED>`.
+- Trang tự phân giải và hiển thị tiêu đề, ảnh bìa (nếu có) cùng định dạng MP4 mà metadata công khai xác nhận.
+- Nút tải mở URL media CDN. Trên iPhone Safari thường lưu vào Files; để lưu trực tiếp Photos cần Shortcut riêng dùng Get Contents of URL → Save to Photo Album.
+- Không gắn nhãn HD/SD/không watermark nếu resolver không xác minh được các biến thể. Bản này chỉ hiển thị MP4 nguồn công khai.

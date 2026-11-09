@@ -74,10 +74,13 @@ public static class PublicTikTokResolverEndpoints
                 {
                     success = true,
                     title = ExtractMeta(html, "og:title") ?? "TikTok public video",
+                    description = ExtractMeta(html, "og:description") ?? "",
+                    thumbnailUrl = SafeThumbnail(ExtractMeta(html, "og:image")),
                     mediaUrl = mediaUri.ToString(),
                     contentType = "video/mp4",
+                    availableFormats = new[] { new { id = "source", label = "MP4 · nguồn công khai", mediaUrl = mediaUri.ToString() } },
                     downloadMode = "direct-public-cdn",
-                    note = "URL media có thời hạn và có thể không tải được trên mọi thiết bị hoặc khu vực."
+                    note = "Chỉ có định dạng MP4 được metadata công khai xác nhận; URL có thể hết hạn hoặc không truy cập được trên mọi thiết bị."
                 });
             }
         }
@@ -100,12 +103,22 @@ public static class PublicTikTokResolverEndpoints
         return null;
     }
 
+    private static string? SafeThumbnail(string? value)
+    {
+        if (Uri.TryCreate(WebUtility.HtmlDecode(value), UriKind.Absolute, out var uri) &&
+            uri.Scheme == "https" && string.IsNullOrEmpty(uri.UserInfo) &&
+            (HostIs(uri.Host, "tiktokcdn.com") || HostIs(uri.Host, "tiktok.com") ||
+             HostIs(uri.Host, "byteoversea.com") || HostIs(uri.Host, "ibytedtos.com")))
+            return uri.ToString();
+        return null;
+    }
+
     private static bool AllowedPageHost(Uri uri) => uri.Scheme == "https" && uri.IsDefaultPort && string.IsNullOrEmpty(uri.UserInfo) &&
         (HostIs(uri.Host, "tiktok.com") || HostIs(uri.Host, "tiktokv.com"));
 
     private static bool AllowedMediaHost(Uri uri) => uri.Scheme == "https" && uri.IsDefaultPort && string.IsNullOrEmpty(uri.UserInfo) &&
         (HostIs(uri.Host, "tiktokcdn.com") || HostIs(uri.Host, "tiktokcdn-us.com") || HostIs(uri.Host, "tiktokcdn-eu.com") ||
-         HostIs(uri.Host, "tiktokv.com") || HostIs(uri.Host, "byteoversea.com") || HostIs(uri.Host, "ibytedtos.com") || HostIs(uri.Host, "muscdn.com"));
+         HostIs(uri.Host, "tiktok.com") || HostIs(uri.Host, "tiktokv.com") || HostIs(uri.Host, "byteoversea.com") || HostIs(uri.Host, "ibytedtos.com") || HostIs(uri.Host, "muscdn.com"));
 
     private static bool HostIs(string host, string suffix) => host.Equals(suffix, StringComparison.OrdinalIgnoreCase) ||
         host.EndsWith("." + suffix, StringComparison.OrdinalIgnoreCase);
