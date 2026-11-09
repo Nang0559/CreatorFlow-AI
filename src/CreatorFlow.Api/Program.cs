@@ -1219,3 +1219,13 @@ public sealed record CreateTrendCandidateOutcomeObservationRequest(string Outcom
 public sealed record TrendCandidateOutcomeObservationResponse(Guid Id, Guid FeedbackId, string OutcomeKind,
     string? OutcomeValue, string MetricsSnapshotJson, string Source, DateTimeOffset ObservedAt);
 public sealed record TrendSelectionFeedbackResponse(Guid Id, Guid DouyinVideoCandidateId, string Decision, string ReasonCode, string? ReasonNote, string CandidateSnapshotJson, string FeatureSnapshotJson, DateTimeOffset ReviewedAt);
+    options.AddPolicy("public-tiktok-resolver", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            "public-tiktok:" + (context.Connection.RemoteIpAddress?.ToString() ?? "unknown"),
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));

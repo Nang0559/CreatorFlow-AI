@@ -93,8 +93,8 @@ public static class PublicTikTokResolverEndpoints
         var escaped = Regex.Escape(key);
         var patterns = new[]
         {
-            $@"<meta\\b(?=[^>]*(?:property|name)=[\\\"']{escaped}[\\\"'])[^>]*content=[\\\"']([^\\\"']+)[\\\"'][^>]*>",
-            $@"<meta\\b(?=[^>]*content=[\\\"']([^\\\"']+)[\\\"'])[^>]*(?:property|name)=[\\\"']{escaped}[\\\"'][^>]*>"
+            $"<meta\\\\b(?=[^>]*(?:property|name)=['\\\"]{escaped}['\\\"])[^>]*content=['\\\"]([^'\\\"]+)['\\\"][^>]*>",
+            $"<meta\\\\b(?=[^>]*content=['\\\"]([^'\\\"]+)['\\\"])[^>]*(?:property|name)=['\\\"]{escaped}['\\\"][^>]*>"
         };
         foreach (var pattern in patterns)
         {
@@ -105,8 +105,7 @@ public static class PublicTikTokResolverEndpoints
     }
 
     private static bool AllowedPageHost(Uri uri) => uri.Scheme == "https" && uri.IsDefaultPort && string.IsNullOrEmpty(uri.UserInfo) &&
-        HostIs(uri.Host, "tiktok.com") || uri.Scheme == "https" && uri.IsDefaultPort && string.IsNullOrEmpty(uri.UserInfo) &&
-        (HostIs(uri.Host, "tiktokv.com") || HostIs(uri.Host, "vm.tiktok.com") || HostIs(uri.Host, "vt.tiktok.com"));
+        (HostIs(uri.Host, "tiktok.com") || HostIs(uri.Host, "tiktokv.com"));
 
     private static bool AllowedMediaHost(Uri uri) => uri.Scheme == "https" && uri.IsDefaultPort && string.IsNullOrEmpty(uri.UserInfo) &&
         (HostIs(uri.Host, "tiktokcdn.com") || HostIs(uri.Host, "tiktokcdn-us.com") || HostIs(uri.Host, "tiktokcdn-eu.com") ||
