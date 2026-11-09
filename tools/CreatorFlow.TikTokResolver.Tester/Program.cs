@@ -213,6 +213,8 @@ public class Program
                 return Results.BadRequest(new { error = "Dữ liệu CDN không có chữ ký MP4 (ftyp)." });
             context.Response.ContentType = "video/mp4";
             context.Response.Headers.ContentDisposition = "attachment; filename=\"creatorflow-tiktok-video.mp4\"";
+            if (response.Content.Headers.ContentLength.HasValue)
+                context.Response.ContentLength = response.Content.Headers.ContentLength.Value;
             await context.Response.Body.WriteAsync(prefix.AsMemory(0, prefixRead), ct);
             var buffer = new byte[64 * 1024];
             long total = prefixRead;
