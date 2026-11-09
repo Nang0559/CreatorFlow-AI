@@ -60,6 +60,7 @@ public class Program
         try
         {
             string? title = null, description = null, thumbnail = null, mediaUrl = null, method = null;
+            var ytDlpCanDownload = false;
             try
             {
                 diagnostics["htmlAttempted"] = true;
@@ -105,6 +106,7 @@ public class Program
                 if (extracted.Success)
                 {
                     mediaUrl = extracted.MediaUrl;
+                    ytDlpCanDownload = true;
                     title ??= extracted.Title;
                     description ??= extracted.Description;
                     thumbnail ??= extracted.Thumbnail;
@@ -112,7 +114,7 @@ public class Program
                 }
             }
 
-            if (!TryAllowedMediaUri(mediaUrl, out var mediaUri))
+            if (!TryAllowedMediaUri(mediaUrl, out var mediaUri) && !ytDlpCanDownload)
             {
                 return Results.UnprocessableEntity(new
                 {
@@ -129,10 +131,10 @@ public class Program
                 title = title ?? "TikTok public video",
                 description = description ?? "",
                 thumbnailUrl = SafeThumbnail(thumbnail),
-                mediaUrl = mediaUri!.ToString(),
+                mediaUrl = mediaUri?.ToString(),
                 downloadUrl = "/download?url=" + Uri.EscapeDataString(page.ToString()),
-                directDownloadUrl = "/download?mediaUrl=" + Uri.EscapeDataString(mediaUri.ToString()),
-                contentType = "video/mp4",
+                directDownloadUrl = mediaUri is null ? null : "/download?mediaUrl=" + Uri.EscapeDataString(mediaUri.ToString()),
+                contentType = mediaUri is null ? null : "video/mp4",
                 extractionMethod = method ?? "Public media URL",
                 diagnostics,
                 note = "Đã tìm thấy URL media. Chỉ xác nhận tải thành công sau khi kiểm tra tệp MP4 thực tế."
@@ -319,10 +321,8 @@ public class Program
                 return (false, null, ReadString(root, "title"), ReadString(root, "description"), ReadString(root, "thumbnail"),
                     plan.Error ?? "Không tìm thấy luồng video.");
             var media = plan.PreviewUrl;
-            if (!IsAllowedMediaUrl(media))
-                return (false, null, ReadString(root, "title"), ReadString(root, "description"), ReadString(root, "thumbnail"),
-                    "Đã xác định được format " + plan.ChosenFormatId + " nhưng không có URL preview trực tiếp an toàn; hãy dùng nút tải qua yt-dlp.");
-            return (true, media, ReadString(root, "title"), ReadString(root, "description"), ReadString(root, "thumbnail"), null);
+            if (!IsAllowedMediaUrl(media)) media = null;
+            return (true, media, ReadString(root, "title"), ReadString(root, "description"), ReadString(root, "thumbnail"), plan.Warning);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex) { return (false, null, null, null, null, SafeError(ex)); }
