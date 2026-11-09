@@ -174,7 +174,7 @@ static (string? MediaUrl, string? Title, string? Description, string? CoverUrl, 
 {
     foreach (var id in new[] { "__UNIVERSAL_DATA_FOR_REHYDRATION__", "SIGI_STATE", "sigi-persisted-data" })
     {
-        var pattern = @"<script\\b(?=[^>]*\\bid\\s*=\\s*['""]" + Regex.Escape(id) + @"['""])[^>]*>(.*?)</script>";
+        var pattern = @"<script\b(?=[^>]*\bid\s*=\s*['""]" + Regex.Escape(id) + @"['""])[^>]*>(.*?)</script>";
         foreach (Match match in Regex.Matches(html, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline))
         {
             try
@@ -209,7 +209,7 @@ static (string? MediaUrl, string? Title, string? Description, string? CoverUrl) 
                         if (media is null && (name.Equals("playAddr", StringComparison.OrdinalIgnoreCase) ||
                             name.Equals("downloadAddr", StringComparison.OrdinalIgnoreCase) ||
                             name.Equals("play_url", StringComparison.OrdinalIgnoreCase)))
-                            media = value.Replace(@"\\u002F", "/").Replace(@"\\/", "/");
+                            media = value.Replace(@"\u002F", "/").Replace(@"\/", "/");
                         else if (title is null && (name.Equals("desc", StringComparison.OrdinalIgnoreCase) ||
                             name.Equals("title", StringComparison.OrdinalIgnoreCase)) && value.Length < 1000)
                             title = value;
