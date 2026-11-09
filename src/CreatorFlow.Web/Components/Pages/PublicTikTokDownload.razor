@@ -1,4 +1,5 @@
 @page "/public-media/tiktok"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @using System.Text.Json
 @using Microsoft.AspNetCore.Components
 @inject IHttpClientFactory HttpClients
@@ -47,7 +48,7 @@
 .thumbnail{display:block;width:100%;max-height:320px;object-fit:contain;background:#0f172a;border-radius:15px;margin-bottom:18px}.available{color:#15803d;font-size:12px;font-weight:800}.video-result h2{font-size:20px;margin:6px 0}.description{color:#64748b;white-space:pre-wrap}
 .format-list{display:grid;gap:10px;margin-top:20px}.format-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #e2e8f0;border-radius:13px;padding:15px}.format-row strong,.format-row small{display:block}.format-row small{color:#64748b;margin-top:4px;font-size:12px}.format-row a{background:#f97316;color:white;padding:11px 14px;border-radius:10px;text-decoration:none;font-weight:800;white-space:nowrap}
 .download-note,footer{font-size:12px;color:#64748b;line-height:1.5;margin-top:16px}footer{max-width:760px;margin:18px auto 0;color:#c7d2fe;text-align:center}
-@media(max-width:480px){.resolver-header{margin-bottom:18px}.format-row{align-items:flex-start;flex-direction:column}.format-row a{width:100%;text-align:center;box-sizing:border-box}.url-form button{width:100%}}
+@@media(max-width:480px){.resolver-header{margin-bottom:18px}.format-row{align-items:flex-start;flex-direction:column}.format-row a{width:100%;text-align:center;box-sizing:border-box}.url-form button{width:100%}}
 </style>
 @code {
     [SupplyParameterFromQuery(Name = "url")] public string? SharedUrl { get; set; }
