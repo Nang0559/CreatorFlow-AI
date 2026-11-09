@@ -1,41 +1,54 @@
-# CreatorFlow – Tải video TikTok (iPhone)
+# CreatorFlow – Tải video TikTok và lưu vào Ảnh (iPhone)
 
-## Mục tiêu
+## Hai cách sử dụng
 
-Từ TikTok, người dùng chọn Chia sẻ → **CreatorFlow – Tải video**. Shortcut nhận URL và mở trang tải CreatorFlow. Trang tự gọi resolver, hiển thị tiêu đề, thumbnail và định dạng MP4 công khai thực sự tìm được. Người dùng bấm Tải video để tải từ CDN.
+1. **Tải trực tiếp vào Photos bằng Shortcut:** khuyến nghị. Người dùng chọn Chia sẻ → CreatorFlow – Lưu vào Ảnh. Shortcut tự gọi resolver, tải MP4 và chạy Save to Photo Album. Không cần mở Safari.
+2. **Trang tải trên web:** mở `https://CreatorFlow.fcc-vn.com.vn/public-media/tiktok?url=<URL_ENCODED_TIKTOK_URL>` để xem tiêu đề, thumbnail và bấm tải thủ công.
 
-## URL trang tải
+Web BFF: `GET /public-media/tiktok/resolve?url=<encoded TikTok URL>`. API nội bộ: `GET /api/v1/public-media/tiktok/resolve`. JSON thành công có trường `availableFormats[0].mediaUrl`. Không công khai API 7001, AI 8001 hoặc SQL 1433.
 
-`https://CreatorFlow.fcc-vn.com.vn/public-media/tiktok?url=<URL_ENCODED_TIKTOK_URL>`
+## Tạo Shortcut một lần trên iPhone
 
-Trang tải gọi Web BFF nội bộ `/public-media/tiktok/resolve`, BFF chuyển tiếp đến API `/api/v1/public-media/tiktok/resolve`. Không công khai API 7001, AI 8001 hoặc SQL 1433.
+Mở **Phím tắt (Shortcuts)** → dấu **+**, đặt tên **CreatorFlow – Lưu vào Ảnh**.
 
-## Tạo Shortcut trên iPhone
+Trong phần chi tiết Shortcut, bật **Hiển thị trong Bảng chia sẻ (Show in Share Sheet)** và chỉ nhận loại **URLs**.
 
-1. Mở ứng dụng **Phím tắt (Shortcuts)** → dấu + → đặt tên **CreatorFlow – Tải video**.
-2. Mở chi tiết Shortcut → bật **Hiển thị trong Bảng chia sẻ (Show in Share Sheet)**.
-3. Ở Accepted Types, chọn **URLs**.
-4. Thêm action **Get URLs from Shortcut Input**.
-5. Thêm **Get Item from List** → First Item.
-6. Thêm **URL Encode** để mã hóa URL nhận được.
-7. Thêm action **URL** với địa chỉ `https://CreatorFlow.fcc-vn.com.vn/public-media/tiktok?url=` rồi chèn biến đã mã hóa ở cuối.
-8. Thêm **Open URLs**.
-9. Lưu Shortcut. Trong TikTok, mở video → Chia sẻ → chọn **CreatorFlow – Tải video**.
+Thêm các action theo đúng thứ tự sau:
 
-## Tải video và lưu vào iPhone
+1. **Get URLs from Shortcut Input** – lấy URL video được chia sẻ.
+2. **Get Item from List** – chọn **First Item**.
+3. **URL Encode** – mã hóa URL TikTok.
+4. **URL** – nhập địa chỉ `https://CreatorFlow.fcc-vn.com.vn/public-media/tiktok/resolve?url=` rồi nối kết quả URL Encode vào cuối. Nếu action URL có phần Query, có thể thêm key `url` với giá trị URL TikTok thay vì tự nối chuỗi.
+5. **Get Contents of URL** – URL ở bước 4, Method **GET**. Đây là phản hồi JSON của CreatorFlow.
+6. **Get Dictionary Value** – lấy key `availableFormats` từ kết quả JSON.
+7. **Get Item from List** – chọn **First Item**.
+8. **Get Dictionary Value** – lấy key `mediaUrl`.
+9. **URL** – chuyển giá trị `mediaUrl` thành URL.
+10. **Get Contents of URL** – tải nội dung URL media. Method **GET**. Đầu ra phải là nội dung tệp video, không phải văn bản.
+11. **Save to Photo Album** – lưu đầu ra video ở bước 10 vào album **Recents** (hoặc album người dùng chọn nếu iOS cung cấp lựa chọn).
+12. **Show Notification** – thông báo `CreatorFlow: Đã lưu video vào Ảnh` sau khi action Save to Photo Album chạy thành công.
 
-- Trang hiển thị những định dạng MP4 mà metadata công khai xác nhận. Bản hiện tại chỉ có thể hiển thị một URL MP4 nguồn; không tự đặt nhãn HD/SD/không watermark nếu chưa xác minh.
-- Nút Tải video mở URL CDN. Safari thường đưa tệp tải về vào **Files → Downloads**. Người dùng có thể mở tệp video rồi dùng Share → Save Video để đưa vào Photos, nếu iOS cho phép với định dạng đó.
-- Tải từ trang web không tự động lưu thẳng vào Photos. Muốn tự động Save to Photo Album, cần một Shortcut tải riêng (Get Contents of URL → Save to Photo Album); đây là bước tiếp theo sau khi xác minh luồng tải trên iPhone.
+Nếu muốn kiểm tra lỗi trước khi tải, chèn **Get Dictionary Value** với key `success` và action **If**: chỉ chạy bước 6–12 khi success là true; nhánh Otherwise hiển thị `Không tìm thấy video MP4 công khai.`. Với phản hồi lỗi HTTP, Shortcut có thể dừng ngay tại Get Contents of URL; đó là hành vi đúng, không nên lưu dữ liệu lỗi như video.
 
-## Kiểm thử và giới hạn
+## Sử dụng
 
-- Thử với video TikTok công khai không yêu cầu đăng nhập.
-- Chỉ coi thành công khi tệp tải về có dung lượng hợp lý và phát được.
-- Nếu TikTok không cung cấp URL media công khai, trang hiển thị lỗi thay vì tạo link giả.
-- URL CDN có thể hết hạn hoặc yêu cầu header/phiên mà trình duyệt không có. Không vượt login, CAPTCHA, DRM hoặc cơ chế kiểm soát truy cập.
-- Endpoint không lưu video hoặc URL vào database. Resolver có giới hạn request và allowlist HTTPS cho host TikTok/CDN.
+1. Mở video TikTok công khai trong ứng dụng TikTok.
+2. Chọn **Chia sẻ** → **CreatorFlow – Lưu vào Ảnh**.
+3. Chờ Shortcut tải xong. Mở **Ảnh (Photos) → Gần đây (Recents)** để kiểm tra video.
+4. Nếu Shortcut không xuất hiện, mở chi tiết Shortcut và xác nhận Show in Share Sheet + Accepted Types = URLs.
 
-## Giai đoạn 2 (chưa bật)
+## Giới hạn quan trọng
 
-Sau khi xác nhận tải ổn định, mới bổ sung gửi tệp vào Share Inbox, xác nhận quyền và tạo đúng 3 render jobs.
+- iOS có thể yêu cầu cấp quyền cho Shortcut thêm ảnh/video vào Photos ở lần đầu.
+- Shortcut chỉ tải khi CreatorFlow trả về URL media MP4 công khai hợp lệ. Nếu TikTok không cung cấp media URL, trả lỗi, URL CDN hết hạn hoặc CDN từ chối request, Shortcut sẽ thất bại và không có video để lưu.
+- Bản resolver hiện chỉ xác nhận một định dạng MP4 nguồn. Không gắn nhãn HD, SD hoặc không watermark nếu không có dữ liệu chứng minh.
+- Một số CDN có thể yêu cầu header hoặc cookie mà Shortcut không có. Không vượt đăng nhập, CAPTCHA, DRM hay cơ chế kiểm soát truy cập.
+- Nên thử với một video công khai do chính người dùng đăng hoặc có quyền tải và sử dụng.
+- Shortcut này chưa gửi tệp về Share Inbox và chưa tạo render jobs. Đó là giai đoạn tiếp theo sau khi xác nhận tải/lưu Photos hoạt động.
+
+## Kiểm thử đạt
+
+- Chia sẻ video TikTok → Shortcut được gọi với URL đúng.
+- Resolver trả JSON thành công, có `availableFormats[0].mediaUrl`.
+- Get Contents of URL tải được dữ liệu MP4 có dung lượng hợp lý.
+- Save to Photo Album hoàn tất; video xuất hiện trong Photos và phát được.
