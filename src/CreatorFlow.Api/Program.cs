@@ -174,6 +174,7 @@ app.UseMiddleware<TenantRoleGuardMiddleware>();
 app.UseAuthorization();
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapGet("/", () => Results.Ok(new { service = "CreatorFlow.Api", status = "running", version = "0.4.0" })).AllowAnonymous();
+app.MapPublicTikTokResolver();
 app.MapVideoRenderEndpoints();
 app.MapAIProviderRegistry();
 app.MapDiscoveryTopicSchedulerEndpoints();
