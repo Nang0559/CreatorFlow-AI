@@ -60,10 +60,10 @@ $tables = @(Invoke-Sqlcmd -ServerInstance $SqlInstance -Database CreatorFlow_QC 
 SELECT
  CASE WHEN OBJECT_ID(N'dbo.VideoAssets',N'U') IS NOT NULL THEN 1 ELSE 0 END AS AssetsReady,
  CASE WHEN OBJECT_ID(N'dbo.VideoRenderJobs',N'U') IS NOT NULL THEN 1 ELSE 0 END AS JobsReady,
- CASE WHEN EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'017_video_render_pipeline') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'018_tenant_relationship_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'019_business_relationship_tenant_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'020_tenant_scoped_business_uniqueness') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'025_topic_discovery_scheduler') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'026_tenant_scope_topic_scheduler') THEN 1 ELSE 0 END AS MigrationReady;
+ CASE WHEN EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'017_video_render_pipeline') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'018_tenant_relationship_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'019_business_relationship_tenant_integrity') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'020_tenant_scoped_business_uniqueness') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'025_topic_discovery_scheduler') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'026_tenant_scope_topic_scheduler') AND EXISTS(SELECT 1 FROM dbo.SchemaMigrations WHERE MigrationId=N'031_public_tiktok_share_resolver') THEN 1 ELSE 0 END AS MigrationReady;
 "@ -TrustServerCertificate -ErrorAction Stop)
 if ($tables.Count -ne 1 -or $tables[0].AssetsReady -ne 1 -or $tables[0].JobsReady -ne 1 -or $tables[0].MigrationReady -ne 1) {
-    throw 'Chưa có migration video 017–020 hoặc scheduler 025–026. Chạy Apply-Migrations.ps1 và Verify-Database.ps1 trước.'
+    throw 'Chưa có migration video 017–020, scheduler 025–026 hoặc public share resolver 031. Chạy Apply-Migrations.ps1 và Verify-Database.ps1 trước.'
 }
 $stdout = Join-Path $root 'logs\worker-out.log'
 $stderr = Join-Path $root 'logs\worker-error.log'
