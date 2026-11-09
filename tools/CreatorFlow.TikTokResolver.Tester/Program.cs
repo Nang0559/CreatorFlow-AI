@@ -29,7 +29,8 @@ public class Program
         {
             status = "ok",
             service = "CreatorFlow.TikTokResolver.Tester",
-            ytDlpConfigured = FindYtDlp() is not null
+            ytDlpConfigured = FindYtDlp() is not null,
+            ytDlpLauncher = FindYtDlp() is null ? "not-found" : Path.GetFileName(FindYtDlp())
         }));
         app.MapGet("/api/resolve", ResolveAsync);
         app.MapGet("/download", DownloadAsync);
@@ -98,6 +99,7 @@ public class Program
                 var extracted = await TryYtDlpMetadataAsync(page!, ct);
                 diagnostics["ytDlpSucceeded"] = extracted.Success;
                 if (extracted.Error is not null) diagnostics["ytDlpError"] = extracted.Error;
+                diagnostics["ytDlpInstallHint"] = "py -m pip install --upgrade yt-dlp";
                 if (extracted.Success)
                 {
                     mediaUrl = extracted.MediaUrl;
@@ -151,7 +153,7 @@ public class Program
                 return Results.BadRequest(new { success = false, error });
             var executable = FindYtDlp();
             if (executable is null)
-                return Results.Problem("Chưa cài yt-dlp. Cài yt-dlp và đặt lệnh yt-dlp trong PATH hoặc CREATORFLOW_YTDLP_PATH.", statusCode: 503);
+                return Results.Problem("Không tìm thấy yt-dlp/Python. Cài bằng: py -m pip install --upgrade yt-dlp; sau đó khởi động lại tester.", statusCode: 503);
 
             var tempDir = Path.Combine(Path.GetTempPath(), "CreatorFlowTikTok", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(tempDir);
@@ -235,7 +237,7 @@ public class Program
         TryYtDlpMetadataAsync(Uri page, CancellationToken ct)
     {
         var executable = FindYtDlp();
-        if (executable is null) return (false, null, null, null, null, "yt-dlp chưa được cài đặt hoặc không nằm trong PATH.");
+        if (executable is null) return (false, null, null, null, null, "Không tìm thấy yt-dlp. Nếu đã cài bằng pip, hãy kiểm tra Python launcher; cài bằng: py -m pip install --upgrade yt-dlp.");
         try
         {
             var result = await RunYtDlpAsync(executable, new[]
@@ -277,6 +279,16 @@ public class Program
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        var launcherName = Path.GetFileName(executable);
+        if (launcherName.Equals("py.exe", StringComparison.OrdinalIgnoreCase) ||
+            launcherName.Equals("python.exe", StringComparison.OrdinalIgnoreCase) ||
+            launcherName.Equals("python3.exe", StringComparison.OrdinalIgnoreCase) ||
+            launcherName.Equals("python", StringComparison.OrdinalIgnoreCase) ||
+            launcherName.Equals("python3", StringComparison.OrdinalIgnoreCase))
+        {
+            start.ArgumentList.Add("-m");
+            start.ArgumentList.Add("yt_dlp");
+        }
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
         if (!process.Start()) throw new InvalidOperationException("Không khởi chạy được yt-dlp.");
@@ -298,11 +310,14 @@ public class Program
     {
         var configured = Environment.GetEnvironmentVariable("CREATORFLOW_YTDLP_PATH");
         if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured)) return configured;
-        var names = OperatingSystem.IsWindows() ? new[] { "yt-dlp.exe", "yt-dlp" } : new[] { "yt-dlp" };
+
+        var names = OperatingSystem.IsWindows()
+            ? new[] { "yt-dlp.exe", "yt-dlp", "py.exe", "python.exe", "python3.exe" }
+            : new[] { "yt-dlp", "python3", "python" };
         foreach (var directory in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
             foreach (var name in names)
             {
-                var candidate = Path.Combine(directory.Trim('"'), name);
+                var candidate = Path.Combine(directory.Trim().Trim('"'), name);
                 if (File.Exists(candidate)) return candidate;
             }
         return null;
