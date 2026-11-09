@@ -77,7 +77,7 @@ internal static class YtDlpFormatPlanner
             .FirstOrDefault();
         if (progressive is not null)
         {
-            var needs = progressive.IsManifest || !progressive.IsMp4Family;
+            var needs = progressive.IsManifest || !string.Equals(progressive.Ext, "mp4", StringComparison.OrdinalIgnoreCase);
             if (!needs || ffmpegAvailable)
                 return Ok(progressive.Id, needs, null, progressive, summaries);
         }
@@ -97,7 +97,7 @@ internal static class YtDlpFormatPlanner
 
         if (videoOnly is not null)
         {
-            var needs = videoOnly.IsManifest || !videoOnly.IsMp4Family;
+            var needs = videoOnly.IsManifest || !string.Equals(videoOnly.Ext, "mp4", StringComparison.OrdinalIgnoreCase);
             if (needs && !ffmpegAvailable)
                 return Fail(FfmpegRequired, "Luồng video cần FFmpeg để chuyển container sang MP4.", summaries);
             return Ok(videoOnly.Id, needs, "Nguồn chỉ có luồng hình ảnh; MP4 tải về sẽ không có tiếng.", videoOnly, summaries);
